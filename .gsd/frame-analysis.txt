@@ -1,0 +1,6 @@
+Left side frames: 232
+Right side frames: 223
+Assuming average delay of 0.04s per frame:
+Left side duration: 232 * 0.04 = 9.28s
+Right side duration: 223 * 0.04 = 8.92s
+Total hero transition duration (max): ~9.5s (accounting for longer delays)

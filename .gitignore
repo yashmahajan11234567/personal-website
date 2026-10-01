@@ -1,0 +1,49 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- Phase 1 rebuild (2026-10-01) ---
+
+# Playwright
+test-results/
+playwright-report/
+qa-screenshots/
+qa/phase1-final/
+
+# Legacy QA screenshot dumps at repo root (hundreds of qa-*.png from the
+# superseded 2026-09-30 attempt)
+/qa-*.png
+/qa-video-*.png
+/qa-selection-*.png
+/qa-reference-*.png
+
+# Scratch/debug frame extraction
+debug_frames/
+debug_selection/
+qa-selection-analysis/
+
+# Reference-only source material (D1: secondary visual asset references).
+# Kept in-repo for QA comparison, out of the shipped bundle.
+/reference/frames/
+/public/analysis/

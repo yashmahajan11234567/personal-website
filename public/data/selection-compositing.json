@@ -1,0 +1,18 @@
+{
+  "strategy": "single-canvas-path-specific",
+  "phases": {
+    "intro": { "progress": [0, 0.23], "mode": "single", "source": "left" },
+    "diverging": { "progress": [0.23, 0.31], "mode": "crossfade", "source": "pendingPath" },
+    "dual": { "progress": [0.31, 0.72], "mode": "single", "source": "pendingPath" },
+    "selection": { "progress": [0.72, 0.86], "mode": "single", "source": "pendingPath", "hotspots": true },
+    "transition": { "progress": [0.86, 1.0], "mode": "single", "source": "chosen" }
+  },
+  "hotspots": {
+    "data": { "x": 0.08, "y": 0.08, "width": 0.25, "height": 0.12 },
+    "cloud": { "x": 0.08, "y": 0.22, "width": 0.25, "height": 0.12 }
+  },
+  "progressMapping": {
+    "left": { "selectionStart": 0.725, "selectionEnd": 0.86, "transitionEnd": 1.0 },
+    "right": { "selectionStart": 0.711, "selectionEnd": 0.794, "transitionEnd": 1.0 }
+  }
+}
