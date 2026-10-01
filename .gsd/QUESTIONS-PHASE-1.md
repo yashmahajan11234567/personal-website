@@ -17,27 +17,32 @@ Full plan: `.gsd/plans/phase-1-cinematic-rebuild.md`
 
 ---
 
-## Q6 — OPEN (blocks Task 8 only)
+## Q6 — RESOLVED 2026-10-01, IMPLEMENTED (Task 8)
 
-### Approve the world handoff?
+### World handoff — approved as a restrained coded handoff
 
 The authoritative reference video **ends at the selection hold** — t = 4.0 s to 8.0 s is static
 (< 1.5 % frame diff), and the last frame is still the two-board selection, not a world entry.
-There is no evidence for post-selection motion.
+There is no evidence for post-selection motion, and none was invented.
 
-Proposed (§19) — my invention, not derived from the reference:
+**What shipped** — an 820 ms dissolve, not the 1.6–2.0 s proposal sketched below:
 
-1. `selectedPath` set, scroll killed and locked
-2. Non-selected plate desaturates, drops back 8 px (240 ms)
-3. Selected plate expands as camera pushes in — ground scale `1.00 → 1.12`;
-   selected accent glow rises toward 0.30 alpha
-4. World word resolves large and centred
-5. Hold ~400 ms
-6. Cross-fade to the world mount; `currentWorld` + hash set
+1. Chosen plate scales to 1.045; the other recedes to 0.972 and 0.3 opacity
+2. Headline drops to 0.22; the figure dims to 0.45 (and is never transformed)
+3. The chosen world's accent blooms, peak alpha 0.16 → 0.22
+4. A monochrome veil dissolves `#0a0a0a` from opacity 0 to 1 over the final 533 ms
+5. The world mounts on that identical colour — the swap is invisible
 
-Total 1.6–2.0 s, skippable by key or click, `Escape`-revertible to the selection hold.
+The veil landing on exactly the world's own background is what removes the need for a
+loading state: there is nothing to wait for, and no flash. Reduced motion mounts the
+world immediately with no transition at all.
 
-**Approve as-is, or supply a reference for post-selection motion?**
+**The proposal this replaced** — my invention, explicitly not derived from the reference,
+and specifically rejected by Q6: a camera push (`ground scale 1.00 → 1.12`), a large centred
+world word, a 400 ms hold, and an accent rising to 0.30. Q6 forbade an arbitrary camera
+animation and a large coloured overlay, and D4 caps the resting accent at 0.16. A test
+now asserts the ground transform is byte-identical throughout, so the camera push cannot
+come back unnoticed.
 
 ---
 

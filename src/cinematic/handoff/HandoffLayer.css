@@ -1,0 +1,149 @@
+/*
+ * Handoff — the cinematic resolving into the selected world (Q6, Task 8).
+ *
+ * Sequencing, over HANDOFF_MS total (see handoffTiming.ts):
+ *   0.00 - 0.35   the chosen plate rises to dominance, the other recedes, the
+ *                 world's accent blooms. Nothing has moved visually yet.
+ *   0.35 - 1.00   the monochrome veil dissolves to #0a0a0a.
+ *   1.00          the world mounts on the identical colour. Invisible swap.
+ *
+ * The veil is the ONLY overlay. There is no camera move: the ground does not
+ * pan or scale during the handoff, and the figure never moves at all (D5
+ * holds through the handoff, not just through the scroll).
+ */
+
+.cinematic-handoff {
+  position: absolute;
+  inset: 0;
+  /* Above the grain (6) and the board targets (5): nothing stays interactive
+     once a world is chosen, and the veil must be the last thing painted. */
+  z-index: 7;
+  pointer-events: none;
+  background: #0a0a0a;
+  opacity: 0;
+}
+
+/* --- Chosen plate becomes dominant ------------------------------------- */
+
+/*
+ * The scale lives on the SLOT (the parent), not on the plate. BoardLayer writes
+ * an inline transform on the plate itself from scroll progress, so animating
+ * the parent's transform composes with it instead of fighting it. After
+ * destroy() the progress is frozen, so the plate holds its seated position.
+ */
+.cinematic-hero[data-handoff][data-selected='data'] .cinematic-boards__slot--data,
+.cinematic-hero[data-handoff][data-selected='cloud'] .cinematic-boards__slot--cloud {
+  animation: cinematic-handoff-dominant var(--handoff-ms) cubic-bezier(0.22, 1, 0.36, 1)
+    forwards;
+}
+
+@keyframes cinematic-handoff-dominant {
+  0%,
+  35% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.045);
+  }
+}
+
+/* --- The other plate recedes ------------------------------------------- */
+
+.cinematic-hero[data-handoff][data-selected='data'] .cinematic-boards__slot--cloud,
+.cinematic-hero[data-handoff][data-selected='cloud'] .cinematic-boards__slot--data {
+  animation: cinematic-handoff-recede var(--handoff-ms) cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes cinematic-handoff-recede {
+  0%,
+  35% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.972);
+    opacity: 0.3;
+  }
+}
+
+/* --- Typography recedes so the plate reads as the subject ---------------- */
+
+.cinematic-hero[data-handoff] .cinematic-type {
+  animation: cinematic-handoff-type var(--handoff-ms) cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes cinematic-handoff-type {
+  0%,
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.22;
+  }
+}
+
+/*
+ * The figure dims but is NEVER transformed. D5 says the central figure is
+ * fixed; that guarantee is not relaxed just because the cinematic is leaving.
+ */
+.cinematic-hero[data-handoff] .cinematic-figure {
+  animation: cinematic-handoff-figure var(--handoff-ms) linear forwards;
+}
+
+@keyframes cinematic-handoff-figure {
+  0%,
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.45;
+  }
+}
+
+/* --- The dissolve ------------------------------------------------------- */
+
+.cinematic-hero[data-handoff]:not([data-handoff-static]) .cinematic-handoff {
+  animation: cinematic-handoff-dissolve var(--handoff-ms) cubic-bezier(0.4, 0, 0.2, 1)
+    forwards;
+}
+
+/* Held at zero for the first 35% so the dominance beat is legible first. */
+@keyframes cinematic-handoff-dissolve {
+  0%,
+  35% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/*
+ * The hero must keep covering the viewport for the whole handoff. The pinned
+ * ScrollTrigger has already been destroyed at this point, so the hero is back in
+ * normal flow inside <main> at whatever scroll offset the user was at — without
+ * this it would slide away instead of dissolving.
+ */
+.cinematic-hero[data-handoff] {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  width: 100%;
+  height: 100vh;
+  height: 100svh;
+}
+
+/* --- Reduced motion: no dissolve, no dwell, no transform ---------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-hero[data-handoff] .cinematic-handoff {
+    animation: none;
+    opacity: 0;
+  }
+
+  .cinematic-hero[data-handoff] .cinematic-boards__slot,
+  .cinematic-hero[data-handoff] .cinematic-type,
+  .cinematic-hero[data-handoff] .cinematic-figure {
+    animation: none;
+  }
+}

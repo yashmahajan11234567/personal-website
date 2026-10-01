@@ -24,6 +24,7 @@ export function AccentGlowLayer() {
   const active = useGameStore(
     (s) => s.hoveredBoard ?? s.focusedBoard ?? s.selectedPath
   );
+  const isHandoff = useGameStore((s) => s.isHandoff);
 
   useEffect(() => {
     const apply = () => {
@@ -43,8 +44,19 @@ export function AccentGlowLayer() {
     apply();
   }, [active]);
 
+  /**
+   * During the handoff the selected world's accent blooms. The [data-intensifying]
+   * hook is a plain attribute rather than a CSS transition on --glow-alpha,
+   * because AccentGlowLayer writes --glow-alpha imperatively and a transition on
+   * it would fight that write.
+   */
   return (
-    <div className="cinematic-glow" aria-hidden="true" data-active={active ?? 'none'}>
+    <div
+      className="cinematic-glow"
+      aria-hidden="true"
+      data-active={active ?? 'none'}
+      data-intensifying={isHandoff || undefined}
+    >
       <div ref={dataRef} className="cinematic-glow__wash cinematic-glow__wash--data" />
       <div ref={cloudRef} className="cinematic-glow__wash cinematic-glow__wash--cloud" />
     </div>

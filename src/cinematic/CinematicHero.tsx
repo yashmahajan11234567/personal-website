@@ -28,6 +28,8 @@ import { TypographyLayer } from './layers/TypographyLayer';
 import { GrainLayer } from './layers/GrainLayer';
 import { WorldBoard } from './selection/WorldBoard';
 import { useWorldSelection } from './selection/useWorldSelection';
+import { HandoffLayer } from './handoff/HandoffLayer';
+import { HANDOFF_MS } from './handoff/handoffTiming';
 import { boardRect, layoutMode } from './selection/selectionGeometry';
 import { WORLD_BOARDS } from './data/boardContent';
 import { useGameStore } from '../store/gameStore';
@@ -37,8 +39,9 @@ import './CinematicHero.css';
 
 export interface CinematicHeroProps {
   /**
-   * Fired once, on explicit world selection. Task 8 owns the handoff; until
-   * then this hands the path to the app so the world can mount.
+   * Fired when the handoff has PLAYED OUT and the world should mount. Not on
+   * the click itself — Task 8 keeps the cinematic on screen for the duration of
+   * the transition and calls this at the end of it.
    */
   onWorldSelected: (path: Path) => void;
 }
@@ -48,6 +51,8 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
   const reducedMotion = useReducedMotion();
   const selectPath = useGameStore((s) => s.selectPath);
   const selectedPath = useGameStore((s) => s.selectedPath);
+  const isHandoff = useGameStore((s) => s.isHandoff);
+  const setHandoff = useGameStore((s) => s.setHandoff);
 
   const [announcement, setAnnouncement] = useState('');
   const viewportWidth = useViewportWidth();
@@ -104,12 +109,38 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
       // ordering cannot fix this reliably, so the kill happens in the handler.
       timeline.current.destroy();
 
+      // Hold the hero on screen and play the handoff (Task 8). The world mounts
+      // when it finishes, not now — see the effect below.
       selectPath(path);
-      setAnnouncement(`${WORLD_BOARDS[path].worldName} world selected. Loading.`);
-      onWorldSelected(path);
+      setHandoff(true);
+      setAnnouncement(`${WORLD_BOARDS[path].worldName} world selected. Entering.`);
     },
-    [selectPath, onWorldSelected, timeline]
+    [selectPath, setHandoff, timeline]
   );
+
+  /**
+   * Mount the world when the handoff has finished.
+   *
+   * The veil dissolves to exactly the world placeholder's background colour, so
+   * the swap is invisible. Under reduced motion there is no transition, so the
+   * world mounts immediately (delay 0) and nothing flashes.
+   */
+  useEffect(() => {
+    if (!isHandoff || !selectedPath) return;
+
+    if (reducedMotion) {
+      onWorldSelected(selectedPath);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      onWorldSelected(selectedPath);
+    }, HANDOFF_MS);
+
+    // If the hero unmounts first (user navigates back mid-transition), do not
+    // fire the callback into an unmounted tree.
+    return () => window.clearTimeout(timer);
+  }, [isHandoff, selectedPath, reducedMotion, onWorldSelected]);
 
   const handlers = useWorldSelection({
     enabled: selectionEnabled,
@@ -124,7 +155,10 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
       data-reduced-motion={reducedMotion || undefined}
       data-selection={selectionEnabled ? 'open' : 'closed'}
       data-selected={selectedPath ?? undefined}
+      data-handoff={isHandoff || undefined}
+      data-handoff-static={reducedMotion || undefined}
       data-mode={layoutMode(viewportWidth)}
+      style={{ '--handoff-ms': `${HANDOFF_MS}ms` } as React.CSSProperties}
     >
       <GroundLayer />
       <AccentGlowLayer />
@@ -134,6 +168,7 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
 
       {/* Interactive controls, positioned over the plates. */}
       {selectionEnabled &&
+        !isHandoff &&
         (['data', 'cloud'] as Path[]).map((path) => (
           <div
             key={path}
@@ -151,6 +186,9 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
         ))}
 
       <GrainLayer />
+
+      {/* Task 8: the dissolve that resolves the cinematic into the world. */}
+      <HandoffLayer reducedMotion={reducedMotion} />
 
       {/* Screen-reader state. Announcements are polite and atomic. */}
       <div className="cinematic-hero__sr" aria-live="polite" aria-atomic="true">

@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { CinematicHero } from './components/Hero';
+import { destroyActiveTimeline } from './cinematic/timeline/activeTimeline';
 import { useGameStore } from './store/gameStore';
 import type { Path } from './store/gameStore';
 import './App.css';
@@ -20,16 +21,43 @@ function App() {
   }, [setCurrentWorld]);
 
   /**
-   * World selection. Task 8 replaces this with the restrained handoff
-   * transition; until then the world mounts directly so the path through the
-   * cinematic can be verified end to end.
+   * Leaving the hero for ANY reason — selection, deep link, back button — must
+   * kill the pinned ScrollTrigger before React deletes the hero's DOM.
+   * ScrollTrigger owns a pin-spacer that React does not know about; if React
+   * removes the hero first it calls removeChild on a node that is already
+   * detached, which throws and unmounts the entire app.
+   *
+   * This MUST happen during the render phase, not in an effect. React commits
+   * the deletion (commitDeletionEffectsOnFiber -> removeChild) before any
+   * effect cleanup runs, so an effect is already too late by the time it fires.
+   * Doing it here means the trigger is dead before React starts removing nodes.
+   *
+   * destroy() is idempotent — it guards on its own `destroyed` flag — so running
+   * it on every render of a non-hero world is safe.
+   */
+  if (currentWorld !== 'hero') {
+    destroyActiveTimeline();
+  }
+
+  /**
+   * World selection (Task 8).
+   *
+   * This now fires at the END of the handoff transition, not on the click —
+   * CinematicHero holds itself on screen while it resolves into the chosen
+   * world, then calls this once. So the hash is only written when the world is
+   * genuinely mounted, which keeps the URL honest about what is on screen.
    */
   const handleWorldSelected = (path: Path) => {
+    // Belt and braces alongside the effect below: the effect covers worlds that
+    // change without going through here, but this guarantees the trigger is
+    // already dead by the time this state change is rendered.
+    destroyActiveTimeline();
     setCurrentWorld(path === 'data' ? 'data-world' : 'cloud-world');
     window.location.hash = `#/${path}-world`;
   };
 
   const returnToHero = () => {
+    destroyActiveTimeline();
     reset();
     window.location.hash = '';
   };

@@ -1,13 +1,14 @@
 # State: Pixel Portfolio Game
 
 ## Current Status
-**Phase**: 1 — REBUILD PLANNED, awaiting approval
-**Status**: Phase 1 rebuild plan complete. Q1–Q5 answered and locked as D1–D5. Q6 (world handoff
-approval) open, blocks Task 8 only. **No application code written or modified.**
+**Phase**: 1 — COMPLETE (Tasks 0–8)
+**Status**: Cinematic hero rebuilt as a continuous code-driven scene, the Q6 world handoff
+built and verified. **58 Playwright tests pass**, 116/116 under `--repeat-each=2`.
 **Last Updated**: 2026-10-01
 
+**Execution report**: `.gsd/REPORT-PHASE-1.md`
 **Rebuild plan**: `.gsd/plans/phase-1-cinematic-rebuild.md`
-**Open questions**: `.gsd/QUESTIONS-PHASE-1.md`
+**Questions**: `.gsd/QUESTIONS-PHASE-1.md` (D1–D5 locked; Q6 resolved and implemented)
 
 ---
 
@@ -31,8 +32,14 @@ Measured from the authoritative reference video (1280×720, 24 fps, 192 frames, 
   (< 1.5 % frame diff). The video **ends at the selection state** — no world-entry transition.
 - **The central figure never moves.** Centroid x 0.491–0.492, y 0.832–0.872 across 32 samples.
 - **Measured selection composition** (fractions of frame): Data board x 0.066–0.342, y 0.247–0.554;
-  Cloud board x 0.634–0.935, y 0.303–0.544; figure x 0.291–0.698, y 0.104–0.912. **Boards are
-  asymmetric** — the Data board is taller (two lines) and sits higher.
+  Cloud board x 0.634–0.935, y 0.303–0.544; figure x 0.291–0.698, y 0.104–0.912.
+  ~~**Boards are asymmetric** — the Data board is taller (two lines) and sits higher.~~
+  **CORRECTED 2026-10-01:** that was a measurement error — thresholding at `luma<110`
+  clipped the plates at their printed-content gaps. Re-measured three independent ways
+  (column scans, plate-band scans, vision): the plates are **symmetric** in size and
+  vertical placement (top delta 0.0028, height delta 0.0042, width delta 0.0060). The
+  visible asymmetry is **content** — line counts, icon rows, type scale. Geometry and
+  tests are corrected in `selectionGeometry.ts` and `BoardLayer.tsx`.
 - **Defect: hit regions do not match the artwork.** Config says Data `0.15–0.45`, Cloud
   `0.55–0.85`. Measured values are wrong on both; the Cloud target overhangs the right edge.
 - **Defect: black-frame offsets are asymmetric.** Code hardcodes left 8 / right 2; measured is

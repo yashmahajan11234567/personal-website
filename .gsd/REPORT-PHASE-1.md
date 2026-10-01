@@ -1,8 +1,8 @@
 # Phase 1 — Cinematic Rebuild: Execution Report
 
 **Date:** 2026-10-01
-**Scope:** Tasks 0–7 complete. Task 8 NOT started (STOP gate, awaiting approval).
-**Status:** ✅ STOP gate reached. Awaiting human approval to proceed to Task 8.
+**Scope:** Tasks 0–8 complete. Task 8 implemented and verified.
+**Status:** ✅ Phase 1 complete. Q6 handoff built, tested, and visually checked.
 
 ---
 
@@ -119,24 +119,113 @@ asymmetry is **content** (line counts, icon rows, type scale), which is asserted
 
 ---
 
-## 7. Task 8 — exact state: **NOT STARTED**
+## 7. Task 8 — world-entry handoff (Q6): **COMPLETE**
 
-Per your instruction, Task 8 was not begun. Current behaviour on selection:
+Q6 was resolved as a restrained coded handoff. The reference video contains no
+world entry — it ends at selection, intentionally — so this was built to Q6's text, not
+against footage.
 
-```
-SELECTION HOLD → user selects → hero unmounts → world mounts immediately
-```
+### What was there to reuse
 
-`App.tsx` calls `setCurrentWorld(...)` and sets the hash. **There is no handoff transition yet.**
-The store fields it will need (`selectedPath`, `isHandoff`) already exist, and
-`CinematicHero` already tears down the pinned ScrollTrigger safely before unmount — which is
-the hard part, and is done.
+Nothing. Phaser is not installed (no `phaser` dependency), and both worlds are
+placeholder `<div>`s in `App.css`. So the handoff is entirely new coded work, as Q6
+anticipated.
 
-Q6 as you specified it — selected plate dominant, subtle accent, brief restrained transition,
-no loading screen, no new cinematic, no invented camera move — remains to be built.
+### The sequence
+
+Over 820 ms (`HANDOFF_MS`), driven entirely by CSS animations keyed off
+`--handoff-ms`, so JS and CSS cannot disagree:
+
+| Phase | Time | What happens |
+|---|---|---|
+| Hold | 0 – 287 ms | Chosen plate scales to 1.045, other plate recedes to 0.972 / 0.3 opacity, headline drops to 0.22, figure dims to 0.45 |
+| Dissolve | 287 – 820 ms | Monochrome veil fades from `#0a0a0a` at opacity 0 → 1 |
+| Mount | 820 ms | World mounts on the identical colour |
+
+The key trick: the veil dissolves to **exactly** the world placeholder's background
+(`rgb(10,10,10)`), so the swap is a true cross-dissolve with no flash, no white
+frame, no loading state. A test asserts `veilColour === worldColour`.
+
+### Q6 prohibitions, each asserted by a test
+
+- **No loading screen** — no `loading`/`please wait` text, no `role="progressbar"`,
+  no `aria-busy`, no spinner/loader/skeleton class, sampled across the transition.
+- **No new card screen** — the overlay contains zero text, zero children, and is
+  `aria-hidden`.
+- **No large coloured overlay** — the veil is `rgb(10,10,10)`, monochrome, and only
+  the *chosen* world's accent glows (Data blue / Cloud orange asserted as the only
+  lit wash).
+- **No new cinematic** — the transition is one 820 ms dissolve; nothing replays.
+- **No arbitrary camera animation** — the ground's transform is asserted byte-identical
+  throughout (`matrix(1.06, …)` at every sample).
+- **No invented video sequence** — nothing is loaded; the request count is unchanged.
+
+### Also upheld
+
+- **D5 holds through the handoff**, not just the scroll: the figure's computed
+  transform is asserted `none` at every sample.
+- **Reduced motion**: no dissolve, no dwell, no plate/type transform. The world mounts
+  within 1 s with nothing flashing.
+- **Nothing auto-selects.** Two boards cannot both be selected; the correct world wins.
+
+### Two real bugs found while building it
+
+1. **The accent dimmed instead of blooming.** The handoff set the wash to
+   `opacity: 0.3`, but the gradient already peaks at 0.16 alpha and hover drives
+   opacity to 1 — so 0.3 made it *darker* at exactly the moment it was meant to be
+   most present. `--intensify` in the same block was dead code. Fixed by raising the
+   gradient's own peak alpha to 0.22 (a restrained step above the 0.16 hover ceiling)
+   instead of the element's opacity. A test now asserts the peak alpha *rises* during
+   the handoff and never exceeds 0.22.
+
+2. **A crash on the deep-link path** — `NotFoundError: removeChild` — which predates
+   Task 8 and was not covered by any test. Deep-linking to `#/data-world` and
+   navigating back unmounted a still-pinned hero; React then called `removeChild` on
+   a node ScrollTrigger had already detached, taking down the whole app.
+
+   The earlier fix (destroying in the click handler) could not help here, because no
+   click happens. Moving the teardown into an effect *also* failed: React commits
+   `commitDeletionEffectsOnFiber → removeChild` **before** effect cleanup runs, so an
+   effect is already too late. The fix is a module-level registry
+   (`activeTimeline.ts`) with `destroyActiveTimeline()`, called **during App's render
+   phase** whenever `currentWorld !== 'hero'`. `destroy()` is idempotent, so calling it
+   on every such render is safe. This covers every world-change path — selection, deep
+   link, back button — from one place.
+
+### Task 8 files
+
+- `src/cinematic/handoff/HandoffLayer.tsx` + `.css` — the veil and the animations
+- `src/cinematic/handoff/handoffTiming.ts` — `HANDOFF_MS`, shared with CSS
+- `src/cinematic/timeline/activeTimeline.ts` — the teardown registry
+- `qa/phase1/handoff.spec.ts` — 18 tests
+- `qa/capture-handoff.mjs`, `qa/probe-handoff.mjs`, `qa/probe-handoff-timing.mjs` — visual capture and instrumentation
 
 ---
 
-## 8. STOP
+## 8. Test results — 58 passed, 0 failed
 
-Tasks 0–7 are complete and verified. **Task 8 has not been started.** Awaiting your approval.
+| Suite | Tests |
+|---|---|
+| `cinematic.spec.ts` | 24 |
+| `handoff.spec.ts` (Task 8) | 18 |
+| `reduced-motion-responsive.spec.ts` | 13 |
+| `touch.spec.ts` | 3 |
+
+Verified twice: **58 passed (2.4 m)**, then **116 passed (4.8 m)** with
+`--repeat-each=2` — no flake, no ordering dependence.
+
+---
+
+## 9. Performance
+
+- App JS **16.5 kB** (5.7 kB gzip) — up 0.7 kB from Task 8.
+- **Zero** requests for `/frames/` or `.mp4` — asserted by a test.
+- No frame sequence in the bundle; reference assets live in `reference/` (gitignored, 32 MB).
+
+---
+
+## 10. Open items
+
+None blocking. The known cosmetic deviations in section 5 stand: mean luma 137 vs 147,
+a CSS-stack typeface instead of the reference's cut stencil, and no cracked-hex plate
+texture. All three are art-direction calls, not defects.

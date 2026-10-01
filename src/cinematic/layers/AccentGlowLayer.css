@@ -59,18 +59,40 @@
   transform: scale(1);
 }
 
-/* During the handoff the selected world's accent may intensify (D4). */
-.cinematic-glow[data-active='data'][data-intensifying],
-.cinematic-glow[data-active='cloud'][data-intensifying] {
-  --intensify: 1.9;
-}
-
+/*
+ * During the handoff the selected world's accent BLOOMS.
+ *
+ * The wash colour already peaks at 0.16 alpha and hover drives it to
+ * opacity: 1, so 0.16 is the resting ceiling. Raising the element's opacity
+ * cannot brighten it further — an earlier revision set opacity 0.3 here, which
+ * actually made the accent DIMMER at exactly the moment it should have been
+ * most present. The bloom has to come from the gradient's own alpha instead.
+ *
+ * 0.22 is a deliberate, small step above the 0.16 hover ceiling: enough to read
+ * as the world asserting itself, not enough to flood the scene. The veil
+ * dissolves to near-black immediately after, so this is only ever seen for the
+ * first third of the transition.
+ */
 .cinematic-glow[data-active='data'][data-intensifying] .cinematic-glow__wash--data {
-  opacity: 0.3;
+  background: radial-gradient(
+    ellipse 64% 60% at 50% 50%,
+    rgba(96, 174, 232, 0.22) 0%,
+    rgba(96, 174, 232, 0.1) 42%,
+    rgba(96, 174, 232, 0) 74%
+  );
+  opacity: 1;
+  transform: scale(1.06);
 }
 
 .cinematic-glow[data-active='cloud'][data-intensifying] .cinematic-glow__wash--cloud {
-  opacity: 0.3;
+  background: radial-gradient(
+    ellipse 64% 60% at 50% 50%,
+    rgba(240, 156, 84, 0.22) 0%,
+    rgba(240, 156, 84, 0.1) 42%,
+    rgba(240, 156, 84, 0) 74%
+  );
+  opacity: 1;
+  transform: scale(1.06);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -13,6 +13,7 @@ import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { progressBus } from './progressBus';
+import { setActiveTimeline } from './activeTimeline';
 import { SELECTION_START, trackHeightVh } from './beats';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -136,13 +137,18 @@ export function useHeroTimeline({
           ScrollTrigger.refresh();
         },
       };
+
+      // Register so any world change can tear this down synchronously.
+      setActiveTimeline(handleRef.current);
     }, container);
 
     return () => {
-      // destroy() may already have run (React ran its cleanup before the DOM
-      // was removed). Guard so the trigger is reverted exactly once.
+      // destroy() may already have run (the click handler or destroyActiveTimeline
+      // tore it down before React got here). Guard so the trigger is reverted
+      // exactly once.
       if (destroyed) {
         unsubscribe = undefined;
+        setActiveTimeline(null);
         return;
       }
       destroyed = true;
@@ -150,6 +156,9 @@ export function useHeroTimeline({
       context.revert();
       triggerRef.current = null;
       inSelectionRef.current = false;
+      // Backstop: whatever unmounts a pinned hero must not leave a stale
+      // handle registered for the next one.
+      setActiveTimeline(null);
     };
   }, [containerRef, enabled]);
 
