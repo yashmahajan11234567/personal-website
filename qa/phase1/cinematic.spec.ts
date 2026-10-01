@@ -871,26 +871,41 @@ test.describe('opening state regression (default motion)', () => {
       });
 
     /*
-     * Settle by fixed interval, not by polling for convergence.
+     * Read the plate position once the scrub easing has actually settled.
      *
-     * The timeline runs `scrub: 0.85`, so progress eases toward the scroll
-     * position rather than tracking it instantly. A poll that stops as soon as
-     * two consecutive reads agree can stop MID-CREEP -- the plate is still
-     * moving but has not moved between two samples -- which yields a flat
-     * series and a spurious monotonicity failure.
+     * Two things make a naive single wait unreliable here:
      *
-     * A fixed settle longer than the scrub duration reads the state the user
-     * actually perceives after scrolling stops.
+     * 1. The timeline is created in an effect after mount and refreshed again on
+     *    font load, and `scrub: 0.85` keeps easing after that. Sampling inside
+     *    either window reads the parked position.
+     * 2. Immediately after `scrollTo`, the plate may not have started moving
+     *    yet -- so "the value stopped changing" is also true while it is still
+     *    parked, and a poll that stops on that reads the parked value.
+     *
+     * So the wait has two gates: movement must have STARTED (the value must
+     * differ from the parked position) and then STOPPED (several consecutive
+     * stable reads).
      */
+    const PARKED = 0.8324; // measured resting position, below the frame
+
     const at = async (frac: number) => {
-      await page.evaluate((f) =>
-        window.scrollTo(
-          0,
-          Math.round((document.documentElement.scrollHeight - window.innerHeight) * f)
-        )
-      );
-      await page.waitForTimeout(1100);
-      return top();
+      await page.evaluate((f) => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        window.scrollTo(0, Math.round(max * f));
+      }, frac);
+
+      let last = Number.NaN;
+      let stable = 0;
+      let moved = false;
+      for (let i = 0; i < 40; i++) {
+        await page.waitForTimeout(150);
+        const cur = await top();
+        if (Math.abs(cur - PARKED) > 0.002) moved = true;
+        stable = moved && Math.abs(cur - last) < 0.002 ? stable + 1 : 0;
+        last = cur;
+        if (stable >= 3) return cur;
+      }
+      return last;
     };
 
     /*

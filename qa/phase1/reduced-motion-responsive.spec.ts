@@ -81,46 +81,57 @@ test.describe('reduced motion', () => {
         return el.getBoundingClientRect().top / window.innerHeight;
       });
 
-    async function at(frac: number) {
-      await page.evaluate((f) =>
-        window.scrollTo(
-          0,
-          Math.round((document.documentElement.scrollHeight - window.innerHeight) * f)
-        )
-      );
-      await page.waitForTimeout(1100);
-      return plateTop();
-    }
+    /*
+     * Read the plate position once the scrub easing has actually settled.
+     *
+     * Two gates are needed. The timeline is created in an effect after mount
+     * and refreshed on font load, and `scrub: 0.85` keeps easing after that --
+     * sampling inside either window reads the parked position. And immediately
+     * after `scrollTo` the plate may not have started moving yet, so "the value
+     * stopped changing" is also true while it is still parked.
+     *
+     * So: movement must have STARTED (value differs from the parked position)
+     * and then STOPPED (several consecutive stable reads).
+     */
+    const PARKED = 0.8324; // measured resting position, below the frame
+
+    const at = async (frac: number) => {
+      await page.evaluate((f) => {
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        window.scrollTo(0, Math.round(max * f));
+      }, frac);
+      let last = Number.NaN;
+      let stable = 0;
+      let moved = false;
+      for (let i = 0; i < 40; i++) {
+        await page.waitForTimeout(150);
+        const cur = await plateTop();
+        if (Math.abs(cur - PARKED) > 0.002) moved = true;
+        stable = moved && Math.abs(cur - last) < 0.002 ? stable + 1 : 0;
+        last = cur;
+        if (stable >= 3) return cur;
+      }
+      return last;
+    };
 
     await expect(plate).toHaveCSS('visibility', 'hidden');
 
     /*
-     * Sample the rise by scroll position, then let it settle.
+     * Sample the rise, then prove it seats and holds.
      *
-     * `at()` polls until two consecutive reads agree. That is correct for the
-     * settled hold, but WRONG inside the rise: with `scrub: 0.85` the plate
-     * creeps for a while, two reads can match mid-creep, and the poll returns a
-     * value that is not the resting one -- producing a flat series and a
-     * spurious monotonicity failure.
+     * The scrub easing (`scrub: 0.85`) means progress eases toward the scroll
+     * position instead of tracking it instantly, so each sample waits out the
+     * easing before reading. Polling for "two consecutive reads agree" is
+     * WRONG here: two reads can agree mid-creep while the plate is still
+     * moving, which yields a flat series and a spurious monotonicity failure.
      *
-     * So: poll to convergence at the END of the rise (to prove it seats), and
-     * use a plain fixed settle for the intermediate samples, whose only job is
-     * to show the position strictly decreasing.
+     * Samples stay INSIDE the board beat (0.23-0.50 measured). Before the beat
+     * the plates are parked below frame at a constant position, so sampling
+     * there measures nothing.
      */
-    const sample = async (frac: number) => {
-      await page.evaluate((f) =>
-        window.scrollTo(
-          0,
-          Math.round((document.documentElement.scrollHeight - window.innerHeight) * f)
-        )
-      );
-      await page.waitForTimeout(1100);
-      return plateTop();
-    };
-
     const samples: number[] = [];
     for (const frac of [0.3, 0.35, 0.4, 0.45]) {
-      samples.push(await sample(frac));
+      samples.push(await at(frac));
     }
 
     // The plate must rise monotonically through the board beat.
