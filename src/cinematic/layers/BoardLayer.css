@@ -164,8 +164,52 @@
   padding-left: 13.5%;
 }
 
+/*
+ * CLOUD WORDMARK -> THE PLATE'S OPTICAL CENTRE.
+ *
+ * Measured with qa/probe-plates.mjs, the DEVOPS / CLOUD block was NOT
+ * horizontally off-centre: its centre sat at x 0.4875 of the plate, which is
+ * exactly 0.5 less this file's own 2.5% inward inset. The lower-left anchoring
+ * was entirely VERTICAL -- the block's centre was at y 0.653 of the plate while
+ * the plate's own centre is 0.500, i.e. 15% of the plate height too low.
+ * `.cinematic-plate` is `justify-content: flex-end` with padding `14% 11% 11%`,
+ * which pushes the block down to the bottom content edge.
+ *
+ * WHY `justify-content: center` RATHER THAN A PADDING VALUE
+ *
+ * A padding percentage cannot express this. CSS percentage padding resolves
+ * against the plate WIDTH, but the target is a fraction of plate HEIGHT, and
+ * the ratio between them shifts with viewport aspect. Measured with
+ * qa/solve-cloud-centre.mjs, the best padding-bottom for the target was 26% at
+ * 1280x720 (error 0.5%) but had to exceed 30% at 1024x768 and still missed by
+ * 9.1% -- the value simply could not reach the target there.
+ *
+ * Flex centring uses no percentage padding, so it holds across aspects.
+ * Measured block centres after centring: 0.4608 / 0.4575 / 0.4527 / 0.4607 /
+ * 0.4351 at 1920x1080 / 1440x900 / 1280x720 / 1024x768 / 768x1024. The spread
+ * is 0.026 of plate height with a mean of 0.4533 -- already sitting just above
+ * true centre, which is where a two-line title reads as optically centred, since
+ * the ascenders above the first line carry less weight than the block's bulk
+ * below it. No additional bias was needed, so none is applied.
+ *
+ * SIDE PADDING IS RESTORED TO SYMMETRIC
+ *
+ * `13.5%` on the right (the inward nudge) is what offset the centre to 0.4875,
+ * so the Cloud plate's own centring wants symmetric sides. The nudge already
+ * did its job -- it moved the plate's text toward the figure while the plate
+ * itself is fixed -- and centring the block is the more correct reading of the
+ * brief ("toward the visual center of the right plate"), which names the PLATE
+ * as the centring reference rather than the viewport.
+ *
+ * The status line moves with the block and now sits at y ~0.61-0.62 of the
+ * plate, still clear of the plate's bottom artwork.
+ *
+ * Only the Cloud plate changes. The Data plate keeps its measured y 0.658, and
+ * the mobile stack keeps its existing centred layout.
+ */
 .cinematic-plate[data-plate='cloud'] {
-  padding-right: 13.5%;
+  padding-right: 11%;
+  justify-content: center;
 }
 
 /* Mobile: stacked plates below the figure get horizontal type. */

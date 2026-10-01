@@ -941,15 +941,21 @@ test.describe("opening state regression (default motion)", () => {
     }
 
     /*
-     * And it matches the reference's measured opening ink extents
+     * And it stays within the reference's measured opening ink extents
      * (PERSONAL x 0.0367..0.3789, PORTFOLIO x 0.6117..0.9719, from reference
-     * frame f0003). A 0.02 tolerance absorbs the font-metric difference while
-     * still failing the old off-frame layout, which sat at -0.09..1.10.
+     * frame f0003).
+     *
+     * These are BOX extents, not ink, and the boxes were deliberately widened
+     * ~4% by the size restore, which pushes the outer edges outward by ~0.014.
+     * So the tolerance is 0.035 rather than 0.02: it still fails the old
+     * off-frame layout (which sat at -0.09..1.10) while accommodating the
+     * intentional enlargement. Pixel-level margins and figure clearance are
+     * asserted in typography-refine.spec.ts against measured baselines.
      */
-    expect(words[0].left).toBeGreaterThan(0.0367 - 0.02);
-    expect(words[0].right).toBeLessThan(0.3789 + 0.02);
-    expect(words[1].left).toBeGreaterThan(0.6117 - 0.02);
-    expect(words[1].right).toBeLessThan(0.9719 + 0.02);
+    expect(words[0].left).toBeGreaterThan(0.0367 - 0.035);
+    expect(words[0].right).toBeLessThan(0.3789 + 0.035);
+    expect(words[1].left).toBeGreaterThan(0.6117 - 0.035);
+    expect(words[1].right).toBeLessThan(0.9719 + 0.035);
   });
 
   test("scroll produces continuous, reversible change", async ({ page }) => {
@@ -1478,19 +1484,25 @@ test.describe("typography polish", () => {
     expect(inkR, "PORTFOLIO right edge").toBeLessThan(band.vw - 0.5);
   });
 
-  test("the nudge changed position only, not the type", async ({ page }) => {
+  test("the size restore enlarged the type without distorting it", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/");
     await page.waitForTimeout(900);
 
     /*
-     * The brief says "do not change font size again unless absolutely necessary"
-     * and "preserve the improved readability and letter spacing". Since the box
-     * width and height are unchanged, the fit must solve the SAME font size and
-     * the SAME positive tracking it solved before the nudge.
+     * The size restore deliberately enlarged the headline, so this test now pins
+     * the POST-restore solve rather than the pre-restore one it originally
+     * asserted ("the nudge changed position only, not the type").
      *
-     * The reference values are the pre-nudge measurements from the typography
-     * polish pass: PERSONAL 86.06px / 12.25px, PORTFOLIO 86.02px / 11.00px.
+     * What still must hold is the part of that original intent that survives:
+     * the enlargement came from the RECT, not from a transform. `scaleX` stays
+     * 1, so no horizontal stretch has been reintroduced -- the defect that made
+     * the original type look compressed and clipped. Tracking stays positive.
+     *
+     * Measured post-restore at 1280x720: PERSONAL 94.25px / 10.63px,
+     * PORTFOLIO 91.82px / 10.22px.
      */
     const type = await page.evaluate(() => {
       const out: Array<Record<string, number | string>> = [];
@@ -1510,8 +1522,8 @@ test.describe("typography polish", () => {
     });
 
     const EXPECTED = [
-      { side: "left", fontSize: 86.06, track: 12.25 },
-      { side: "right", fontSize: 86.02, track: 11.0 },
+      { side: "left", fontSize: 94.25, track: 10.63 },
+      { side: "right", fontSize: 91.82, track: 10.22 },
     ];
     for (const [i, e] of EXPECTED.entries()) {
       const t = type[i];
@@ -1522,11 +1534,17 @@ test.describe("typography polish", () => {
       expect(Math.abs(t.track - e.track), `${e.side} tracking`).toBeLessThan(
         0.6,
       );
+      // The invariant that outlives the resize: no horizontal distortion.
       expect(Math.abs(t.scaleX - 1), `${e.side} scaleX`).toBeLessThan(0.02);
+      expect(t.track, `${e.side} tracking stays positive`).toBeGreaterThan(0);
     }
+
+    // And the enlargement is real, relative to the pre-restore measurements.
+    expect(type[0].fontSize, "PERSONAL grew").toBeGreaterThan(86.06);
+    expect(type[1].fontSize, "PORTFOLIO grew").toBeGreaterThan(86.02);
   });
 
-  test("role wordmarks are inset toward the figure, even when stacked", async ({
+  test("Data wordmark stays inset toward the figure; Cloud is centred on its plate", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -1535,13 +1553,18 @@ test.describe("typography polish", () => {
     await scrollToProgress(page, 0.9);
 
     /*
-     * The same principle one level down: the wordmarks were inset evenly (11%
-     * both sides), so each sat against its plate's OUTER edge. Data gains inset
-     * on its left, Cloud on its right.
+     * The two plates now have DIFFERENT horizontal intents, deliberately.
      *
-     * Asserted as a directional difference rather than an exact value: the Data
-     * plate's left inset must exceed its right, and the Cloud plate's right
-     * inset must exceed its left.
+     * Data keeps the inward nudge: its left inset exceeds its right, moving
+     * DATA ANALYST / DATA ENGINEER toward the figure.
+     *
+     * Cloud does NOT. The size/placment pass re-centred the DEVOPS / CLOUD block
+     * within its own plate (measured centre x exactly 0.500 at every viewport),
+     * which means its two insets are now even. An earlier assertion that the
+     * Cloud right inset exceeded its left was asserting the superseded nudge and
+     * is replaced by the centring assertion below. The plate itself is still
+     * mirrored, so centring on the plate is what moves the text toward the
+     * figure's side of the frame.
      */
     const inset = await page.evaluate(() => {
       const out: Record<string, { l: number; r: number }> = {};
@@ -1563,9 +1586,10 @@ test.describe("typography polish", () => {
       inset.data.l,
       "DATA ANALYST inset on the figure side",
     ).toBeGreaterThan(inset.data.r);
-    expect(inset.cloud.r, "DEVOPS inset on the figure side").toBeGreaterThan(
-      inset.cloud.l,
-    );
+    expect(
+      Math.abs(inset.cloud.l - inset.cloud.r),
+      "DEVOPS centred on its plate",
+    ).toBeLessThan(0.5);
 
     // Mobile stacks the plates BELOW the figure, so even insets are correct
     // there: "inward" means toward the stacked centre line, not toward a figure

@@ -199,7 +199,7 @@ export const FIGURE_RECT: Rect = {
  * an inner clearance of 0.0305 beside PERSONAL and 0.0422 beside PORTFOLIO.
  *
  * So both words move INWARD by the same 0.012, which:
- *   - opens the outer margins to 4.9% and 4.0%, closer to balanced;
+ *   - opens the outer margins to ~5%, closer to balanced;
  *   - leaves 0.0185 (23.7px at 1280) of clearance from the figure, still
  *     clearly separated;
  *   - is symmetric, so the words' spacing to each other and their type sizes
@@ -210,12 +210,36 @@ export const FIGURE_RECT: Rect = {
  * the 0.0185 residual clearance is the safety margin against the eroded edges
  * the distressed mask cuts into the glyphs.
  *
- * The box WIDTH and HEIGHT are unchanged, so the fit in TypographyLayer solves
- * exactly the same font-size and tracking as before.
+ * SIZE RESTORE (the numbers above are the PREVIOUS values)
+ *
+ * After the nudge the headline read as correctly placed but slightly undersized,
+ * and growing it back is constrained from BOTH sides at once, because each word
+ * is hemmed in between the frame edge and the figure:
+ *
+ *   left budget  = 524px (frame edge -> figure silhouette, which starts at 524)
+ *   right budget = 551px
+ *
+ * PERSONAL spends 424px of ink and PORTFOLIO 446px, and the nudge above already
+ * spent ~64px of margin plus 36/41px of figure clearance. Measured spare width
+ * was therefore 0px: a naive 10-15% width increase overlaps the figure by 6-26px
+ * at every size tried, which is why the brief's own 10-15% could not be taken
+ * literally.
+ *
+ * Hence the split that IS available -- roughly 8% more cap height and 4% more
+ * width. The rects below grow 4% in width and 8% in height, and because
+ * TypographyLayer solves the type FROM the rect (cap height first, then
+ * tracking into whatever width is left over), that yields cap height ~+8% with
+ * tracking trimmed from ~0.135em to ~0.10em -- still comfortably positive.
+ *
+ * The extra width is split evenly between the two outer margins rather than
+ * taken from one side, because the figure is a shared obstacle: widening
+ * PERSONAL alone would spend its clearance on the left while PORTFOLIO kept its
+ * own. Result: symmetric 4.20% margins (the reference sat at 3.67%), 28-33px of
+ * ink clearance from the figure, and 54px of frame edge to spare at 1280.
  */
 export const HEADLINE_RECTS = {
-  left: { x: 0.0487, y: 0.3542, width: 0.3422, height: 0.1556 } as Rect,
-  right: { x: 0.5997, y: 0.3542, width: 0.3602, height: 0.1556 } as Rect,
+  left: { x: 0.042, y: 0.3542, width: 0.3559, height: 0.168 } as Rect,
+  right: { x: 0.5834, y: 0.3542, width: 0.3746, height: 0.168 } as Rect,
 };
 
 /**
