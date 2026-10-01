@@ -31,6 +31,7 @@ import { useWorldSelection } from './selection/useWorldSelection';
 import { HandoffLayer } from './handoff/HandoffLayer';
 import { HANDOFF_MS } from './handoff/handoffTiming';
 import { boardRect, layoutMode } from './selection/selectionGeometry';
+import { trackHeightVh } from './timeline/beats';
 import { WORLD_BOARDS } from './data/boardContent';
 import { useGameStore } from '../store/gameStore';
 import type { Path } from '../store/gameStore';
@@ -57,15 +58,18 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
   const [announcement, setAnnouncement] = useState('');
   const viewportWidth = useViewportWidth();
 
-  /**
+  /*
    * Selection latches ONCE the hold has been reached.
    *
    * Without this, focusing a board can scroll the page slightly, which drops
    * progress back below the S5 gate, which unmounts the boards and dumps focus
    * onto <body> — producing a Tab loop that can never leave the hero.
+   *
+   * It starts FALSE even under reduced motion: reaching the hold must be
+   * something the user scrolls to, never something handed to them at load.
    */
-  const hasReachedSelectionRef = useRef(reducedMotion);
-  const [selectionLatched, setSelectionLatched] = useState(reducedMotion);
+  const hasReachedSelectionRef = useRef(false);
+  const [selectionLatched, setSelectionLatched] = useState(false);
 
   const handleReached = useCallback(() => {
     if (hasReachedSelectionRef.current) return;
@@ -73,13 +77,22 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
     setSelectionLatched(true);
   }, []);
 
-  // Under reduced motion the final composition is shown immediately and both
-  // boards are live. Nothing is auto-selected (brief section 15).
-  const selectionEnabled = reducedMotion || selectionLatched;
+  const selectionEnabled = selectionLatched;
 
+  /*
+   * The timeline runs under reduced motion too.
+   *
+   * Disabling it is what produced the reported failure: with no ScrollTrigger
+   * the layers fell back to their settled state, so the FINAL Data/Cloud
+   * selection composition rendered at page load and the opening
+   * PERSONAL/PORTFOLIO state never appeared. Reduced motion should remove the
+   * easing, not the scroll-driven progression -- nothing auto-plays either
+   * way, because progress only ever changes when the user scrolls.
+   */
   const timeline = useHeroTimeline({
     containerRef,
-    enabled: !reducedMotion,
+    enabled: true,
+    reducedMotion,
     onReachSelection: handleReached,
   });
 
@@ -149,6 +162,24 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
   });
 
   return (
+    /*
+     * The track wrapper supplies the document's scroll height under reduced
+     * motion, where ScrollTrigger does not pin and therefore contributes no
+     * pin-spacing of its own.
+     *
+     * When the pin IS active (normal motion) the wrapper must contribute NO
+     * height, or the two would add up and the track would be twice as long as
+     * intended. Hence the conditional height.
+     */
+    <div
+      className="cinematic-track"
+      data-reduced-motion={reducedMotion || undefined}
+      style={
+        reducedMotion
+          ? ({ height: `${trackHeightVh(viewportWidth)}vh` } as React.CSSProperties)
+          : undefined
+      }
+    >
     <div
       ref={containerRef}
       className="cinematic-hero"
@@ -162,9 +193,15 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
     >
       <GroundLayer />
       <AccentGlowLayer />
-      <BoardLayer settled={reducedMotion} />
+      {/*
+       * No `settled` prop. Passing `settled={reducedMotion}` forced both layers
+       * into their final frame at load, which is what put the Data/Cloud
+       * selection composition on screen before the user scrolled anything.
+       * Both layers now read progress from the bus like every other path.
+       */}
+      <BoardLayer />
       <FigureLayer />
-      <TypographyLayer settled={reducedMotion} />
+      <TypographyLayer />
 
       {/* Interactive controls, positioned over the plates. */}
       {selectionEnabled &&
@@ -197,6 +234,7 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
             ? 'Choose your path: Data, or Cloud and DevOps.'
             : '')}
       </div>
+    </div>
     </div>
   );
 }

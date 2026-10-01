@@ -161,12 +161,37 @@ export const FIGURE_RECT: Rect = {
 };
 
 /**
- * Headline word boxes, measured at the S1 anchor. The head block spans
- * x 0.403-0.578, so the words must stay clear of that range.
+ * Headline word boxes, measured from the reference's opening frame (f0003,
+ * 1280x720) by ink-column and ink-row profiling with the figure's column band
+ * excluded.
+ *
+ * Measured ink extents (fraction of frame):
+ *   PERSONAL   x 0.0367 .. 0.3789   (width 0.3422)
+ *   PORTFOLIO  x 0.6117 .. 0.9719   (width 0.3602)
+ *   both       y 0.3542 .. 0.5097   (height ~0.154)
+ *
+ * Two corrections against the previous values, both of which produced visible
+ * clipping:
+ *
+ * 1. HEIGHT OF THE BOX, not the type. The old rects declared height 0.13 at
+ *    y 0.06, placing the headline near the very top of the frame. The reference
+ *    puts it at y 0.354-0.510, level with the figure's chest and the board it
+ *    holds. The old placement also meant the words had to be shrunk to fit,
+ *    which is what pushed them past the frame edges.
+ *
+ * 2. WIDTH. The old boxes were 0.27/0.29 wide with `white-space: nowrap` and a
+ *    fixed `8.2vw` size. The rendered glyph run overflowed the box in every
+ *    direction, producing "SONA" and "PORT" instead of the full words. The
+ *    boxes are now wide enough to hold the measured ink, and the type is sized
+ *    to FIT its box (see TypographyLayer.css) rather than being given a fixed
+ *    size that could overflow it.
+ *
+ * The head block spans x 0.403-0.578, so the words stay clear of that range:
+ * PERSONAL ends at 0.379 and PORTFOLIO begins at 0.612.
  */
 export const HEADLINE_RECTS = {
-  left: { x: 0.03, y: 0.06, width: 0.27, height: 0.13 } as Rect,
-  right: { x: 0.68, y: 0.06, width: 0.29, height: 0.13 } as Rect,
+  left: { x: 0.0367, y: 0.3542, width: 0.3422, height: 0.1556 } as Rect,
+  right: { x: 0.6117, y: 0.3542, width: 0.3602, height: 0.1556 } as Rect,
 };
 
 /**

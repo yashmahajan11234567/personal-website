@@ -18,20 +18,70 @@
 .cinematic-type__word {
   position: absolute;
   display: block;
+  /*
+   * The BOX. It has an explicit width from the measured rect, and the type
+   * inside is fitted to it.
+   */
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+/*
+ * The fit wrapper.
+ *
+ * This element is the container query context, so `cqw` inside it resolves
+ * against ITS OWN inline size -- the measured headline box -- not the viewport.
+ * That is the whole point of the wrapper.
+ *
+ * A previous attempt put `container-type: inline-size` on `.cinematic-type__word`
+ * itself. That cannot work: an element cannot be a query container for its own
+ * `cqw`-based `font-size`, because the container's inline size is defined by
+ * the very text it is meant to size. The result resolved against the viewport
+ * and overflowed the box by 2.3x (measured `scrollWidth` 991px in a 438px box),
+ * which clipped the words to a few letters -- exactly the "PERS"/"PORT"
+ * truncation that was reported.
+ *
+ * The inner `.cinematic-type__glyphs` is fitted to the box with `cqw`; the
+ * `fit` class added by the component applies the final auto-fit correction.
+ */
+.cinematic-type__fit {
+  /*
+   * MUST be a block.
+   *
+   * Size containment and `container-type` only apply to block-level boxes: an
+   * inline `<span>` ignores both `width: 100%` and `container-type`, so the
+   * container query resolved against the viewport instead (measured font-size
+   * 262px, i.e. 20.5% of 1280) and the run still overflowed. `display: block`
+   * is load-bearing here, not decoration.
+   */
+  display: block;
+  container-type: inline-size;
+  width: 100%;
+}
+
+/*
+ * FIT THE GLYPH RUN TO THE BOX.
+ *
+ * `20.5cqw` is the reference's measured cap-height-to-box-width ratio for the
+ * display face, so at the measured box the word fills it exactly. `nowrap`
+ * keeps the run on one line.
+ */
+.cinematic-type__glyphs {
+  /*
+   * inline-block, so the layout width is the natural glyph width rather than
+   * the box width. The auto-fit then scales that natural width onto the box.
+   */
+  display: inline-block;
+  white-space: nowrap;
   font-family: 'Archivo Black', 'Anton', Impact, 'Haettenschweiler',
     'Arial Narrow Bold', 'Arial Black', sans-serif;
   font-weight: 900;
-  font-size: clamp(2.6rem, 8.2vw, 11rem);
   line-height: 0.86;
   letter-spacing: -0.02em;
   text-transform: uppercase;
   color: #0a0a0a;
-  white-space: nowrap;
-  transform-origin: 50% 50%;
-  will-change: transform, opacity;
-  /* Backface hidden avoids a sub-pixel shimmer while scrubbing. */
-  backface-visibility: hidden;
-
+  font-size: 20.5cqw;
   /*
    * Distressed edge. An SVG turbulence displacement mask gives the eroded
    * stencil quality of the reference without shipping a font file.
@@ -44,35 +94,52 @@
   mask-repeat: no-repeat;
 }
 
+/*
+ * Both words fill their box from the LEFT.
+ *
+ * The previous revision set `text-align: right` on the right-hand word. That
+ * pushed the inline-block glyph run to the right edge of its box (measured
+ * offset: box left 783 + (box width 461 - glyph width 383) = 861px), and the
+ * auto-fit's `scaleX` with `transform-origin: 0 50%` then extended it from
+ * there to 1322px -- 42px past the 1280px frame, truncating PORTFOLIO.
+ *
+ * The auto-fit already scales the glyph run to exactly fill the measured box,
+ * so no text alignment is needed or wanted: the box defines the extent.
+ */
+.cinematic-type__word--left,
+.cinematic-type__word--right {
+  text-align: left;
+}
+
 .cinematic-type__word--left {
   transform-origin: 20% 50%;
-  text-align: left;
 }
 
 .cinematic-type__word--right {
   transform-origin: 80% 50%;
-  text-align: right;
 }
 
 /*
- * Tablet: the figure clears above and the words tighten.
- * The head block spans x 0.403-0.578 in the reference, so the words must stay
- * outside that range at every width.
+ * Responsive behaviour no longer needs per-breakpoint font sizes.
+ *
+ * The type is sized from its own box (see `font-size: 20.5cqw` above), and the
+ * box itself is a fraction of the frame, so the word scales with the viewport
+ * automatically and cannot overflow. The old `clamp()` overrides here fought
+ * that mechanism and are what allowed the words to be pushed past the frame
+ * edges on smaller viewports.
+ *
+ * What DOES still need adjusting per breakpoint is the vertical relationship:
+ * the boxes are fractions of the SCENE, and on short/wide viewports the type
+ * must still clear the figure's head block.
  */
-@media (max-width: 1279px) {
-  .cinematic-type__word {
-    font-size: clamp(2.2rem, 6.5vw, 6rem);
-  }
-}
-
 @media (max-width: 1023px) {
-  .cinematic-type__word {
-    font-size: clamp(1.9rem, 5.5vw, 4rem);
-  }
-}
-
-@media (max-width: 767px) {
-  .cinematic-type__word {
-    font-size: clamp(1.6rem, 4.6vw, 2.6rem);
+  /*
+   * The reference keeps the words level with the board at 16:9. On narrower
+   * frames the same fractions would push them into the figure, so the words
+   * lift slightly and tighten.
+   */
+  .cinematic-type__word--left,
+  .cinematic-type__word--right {
+    top: 30%;
   }
 }

@@ -381,12 +381,34 @@ test.describe('Q6 handoff — teardown and navigation', () => {
 test.describe('Q6 handoff — reduced motion', () => {
   test.use({ reducedMotion: 'reduce' });
 
-  test('the world mounts immediately with no dissolve', async ({ page }) => {
+  /*
+   * Reduced motion reaches the selection hold by SCROLLING, exactly as the
+   * default path does. It does not skip to the end of the cinematic.
+   *
+   * These tests previously clicked a board immediately after load, which only
+   * worked because the boards used to be present at scroll 0 -- the behaviour
+   * that was reported as "the page opens directly into the final composition".
+   * The handoff requirement (no dissolve, explicit choice, nothing
+   * auto-selected) is unchanged and is what is asserted here.
+   */
+  async function scrollToHold(page: import('@playwright/test').Page) {
+    await page.evaluate(() =>
+      window.scrollTo(0, document.documentElement.scrollHeight - window.innerHeight)
+    );
+    await page.waitForTimeout(700);
+  }
+
+  test('the world mounts with no dissolve once scrolled to the hold', async ({
+    page,
+  }) => {
     const errors = collectErrors(page);
     await page.goto('/');
     await page.waitForTimeout(400);
 
-    // Both boards live immediately; no scroll choreography needed.
+    // Not selectable before the hold is reached.
+    await expect(page.locator('[data-testid="world-board-data"]')).toHaveCount(0);
+
+    await scrollToHold(page);
     await expect(page.locator('[data-testid="world-board-data"]')).toBeAttached();
     await page.click('[data-testid="world-board-data"]');
 
@@ -403,27 +425,35 @@ test.describe('Q6 handoff — reduced motion', () => {
     // Sitting on the page must not enter a world by itself.
     await expect(page.locator('.placeholder-world')).toHaveCount(0);
 
+    await scrollToHold(page);
     await page.click('[data-testid="world-board-cloud"]');
     await expect(page.locator('.placeholder-world h1')).toHaveText(/Cloud World/i, {
       timeout: 1000,
     });
   });
 
-  test('no plate or type transform is applied under reduced motion', async ({ page }) => {
+  test('no dissolve transform is applied during the handoff', async ({ page }) => {
     await page.goto('/');
     await page.waitForTimeout(400);
 
-    const idle = await page.evaluate(() => ({
-      data: getComputedStyle(document.querySelector('.cinematic-boards__slot--data')!).transform,
-      type: getComputedStyle(document.querySelector('.cinematic-type')!).opacity,
-    }));
-    expect(idle.data).toBe('none');
+    await scrollToHold(page);
 
-    // Kick off the handoff and confirm the transforms stay off.
+    /*
+     * At the HOLD the composition is static, so the plate must not be
+     * translating. (Read at load it is legitimately parked below the frame as
+     * `matrix(1,0,0,1,0,567.9)` -- that is the rise, not a dissolve, and is
+     * asserted separately in the progression test.)
+     */
+    const idle = await page.evaluate(() => ({
+      data: getComputedStyle(document.querySelector('[data-plate="data"]')!).transform,
+      type: getComputedStyle(document.querySelector('.cinematic-type__word--left')!).opacity,
+    }));
+    expect(['none', 'matrix(1, 0, 0, 1, 0, 0)']).toContain(idle.data);
+
     await page.click('[data-testid="world-board-data"]');
     await page.waitForTimeout(120);
     const during = await page.evaluate(() => {
-      const el = document.querySelector('.cinematic-boards__slot--data');
+      const el = document.querySelector('[data-plate="data"]');
       return el ? getComputedStyle(el).transform : 'mounted';
     });
     expect(['none', 'matrix(1, 0, 0, 1, 0, 0)', 'mounted']).toContain(during);

@@ -51,11 +51,37 @@
 }
 
 /*
- * Reduced motion (Task 7): the final locked composition is shown immediately.
- * There is no pin and no scrub, so the scene is a static 100vh box the user can
- * read and act on directly. Both boards are live; nothing is auto-selected.
+ * The scroll track wrapper.
+ *
+ * Only contributes height under reduced motion, where ScrollTrigger does not
+ * pin and so adds no pin-spacing of its own. In the default (pinned) case the
+ * track must be zero-height, or the pin-spacing and this wrapper would add up
+ * and the scroll range would be double the intended length.
+ */
+.cinematic-track {
+  position: relative;
+  width: 100%;
+}
+
+/*
+ * Reduced motion: no scrub smoothing, but the SCROLL-DRIVEN TIMELINE STAYS.
+ *
+ * This previously collapsed the scene to a bare 100vh. Combined with
+ * `settled={reducedMotion}` on the board and typography layers, the result was
+ * the FINAL Data/Cloud selection composition rendered at page load, with the
+ * scroll range collapsed to zero and the opening PERSONAL/PORTFOLIO state
+ * never appearing at all.
+ *
+ * That is the opposite of what reduced motion should do. It means "do not
+ * animate me toward it", not "skip to the end". So: keep the track, keep the
+ * timeline, drop only the scrub easing. Nothing auto-plays, and nothing is
+ * auto-selected -- the user still scrolls to the choice.
  */
 .cinematic-hero[data-reduced-motion] {
+  /* No pin. Sticky positioning keeps the scene in view while the track above
+     provides the scroll range. */
+  position: sticky;
+  top: 0;
   height: 100vh;
   height: 100svh;
 }

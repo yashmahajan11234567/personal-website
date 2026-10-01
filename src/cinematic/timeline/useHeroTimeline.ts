@@ -24,8 +24,18 @@ const SCRUB = 0.6;
 export interface HeroTimelineOptions {
   /** Container the cinematic lives in. */
   containerRef: React.RefObject<HTMLElement | null>;
-  /** Disabled for reduced motion (Task 7) and after a world is selected. */
+  /** Disabled only after a world is selected. */
   enabled: boolean;
+  /**
+   * Drop the scrub easing and the pin, but KEEP the scroll-driven timeline.
+   *
+   * Reduced motion must not skip the cinematic to its final frame. Doing that
+   * was the reported defect: the opening PERSONAL/PORTFOLIO state never
+   * rendered and the Data/Cloud selection appeared immediately. Here the
+   * timeline still tracks the scrollbar 1:1, so progression is identical --
+   * there is simply no easing, and no pin to fight with.
+   */
+  reducedMotion?: boolean;
   /**
    * Called when the cinematic reaches the selection hold (beat S5).
    * Fires once per entry into the beat.
@@ -56,6 +66,7 @@ export interface HeroTimelineHandle {
 export function useHeroTimeline({
   containerRef,
   enabled,
+  reducedMotion = false,
   onReachSelection,
   onLeaveSelection,
 }: HeroTimelineOptions): React.RefObject<HeroTimelineHandle> {
@@ -88,10 +99,19 @@ export function useHeroTimeline({
         trigger: container,
         start: 'top top',
         end: () => `+=${window.innerHeight * (trackHeightVh(window.innerWidth) / 100)}`,
-        pin: true,
-        pinSpacing: true,
-        anticipatePin: 1,
-        scrub: SCRUB,
+        /*
+         * Under reduced motion: no pin (the hero uses sticky positioning, which
+         * keeps the same scroll range without ScrollTrigger rewriting the box)
+         * and no scrub, so progress tracks the scrollbar exactly.
+         *
+         * `start: 'top top'` still resolves to 0 under sticky, because the
+         * track wrapper above provides the full range; what the end value
+         * describes is the same document distance as the pinned case.
+         */
+        pin: !reducedMotion,
+        pinSpacing: !reducedMotion,
+        anticipatePin: reducedMotion ? 0 : 1,
+        scrub: reducedMotion ? true : SCRUB,
         invalidateOnRefresh: true,
         onUpdate: (self) => {
           // The only write path for scroll progress. No React setState.
@@ -160,7 +180,7 @@ export function useHeroTimeline({
       // handle registered for the next one.
       setActiveTimeline(null);
     };
-  }, [containerRef, enabled]);
+  }, [containerRef, enabled, reducedMotion]);
 
   // Resize + font-load refresh, debounced.
   useEffect(() => {

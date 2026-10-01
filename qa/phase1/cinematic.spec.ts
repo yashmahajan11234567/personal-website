@@ -781,3 +781,170 @@ test.describe('plate interior treatment', () => {
     expect(baseChroma).toBeLessThanOrEqual(2);
   });
 });
+
+/*
+ * Regression: the reported defect.
+ *
+ * "The page opens directly into the final Data/Cloud board composition. There
+ * is effectively NO visible scroll-driven cinematic transition. PERSONAL is
+ * visibly clipped. PORTFOLIO is visibly clipped."
+ *
+ * Three distinct causes, all covered below:
+ *   1. Reduced motion collapsed the scroll track to zero AND forced the layers
+ *      to their settled frame, so the final composition rendered at load.
+ *   2. The headline had an invented lateral entrance (-14vw / +14vw) that put
+ *      it off-frame at scroll 0, rendering "SONA" and "PORT".
+ *   3. The headline boxes were narrower and higher than the reference's
+ *      measured ink extents, so even in place it overflowed the frame.
+ */
+test.describe('opening state regression (default motion)', () => {
+  test('loads on the OPENING composition, not the final selection', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(900);
+
+    // No selection controls mounted at scroll 0.
+    await expect(page.locator('[data-testid="world-board-data"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="world-board-cloud"]')).toHaveCount(0);
+
+    // Both plates are off-stage.
+    await expect(page.locator('[data-plate="data"]')).toHaveCSS('visibility', 'hidden');
+    await expect(page.locator('[data-plate="cloud"]')).toHaveCSS('visibility', 'hidden');
+
+    // There IS a real scroll track.
+    const scrollable = await page.evaluate(
+      () => document.documentElement.scrollHeight - window.innerHeight
+    );
+    expect(scrollable).toBeGreaterThan(1000);
+  });
+
+  test('headline is fully visible and un-clipped at load', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(900);
+
+    const words = await page.evaluate(() =>
+      ['left', 'right'].map((side) => {
+        const el = document.querySelector(`.cinematic-type__word--${side}`)!;
+        const r = el.getBoundingClientRect();
+        return {
+          side,
+          left: r.left / window.innerWidth,
+          right: r.right / window.innerWidth,
+          opacity: Number(getComputedStyle(el).opacity),
+        };
+      })
+    );
+
+    for (const w of words) {
+      expect(w.opacity, `${w.side} opacity`).toBeGreaterThan(0.95);
+      expect(w.left, `${w.side} left edge`).toBeGreaterThan(0);
+      expect(w.right, `${w.side} right edge`).toBeLessThan(1);
+    }
+
+    /*
+     * And it matches the reference's measured opening ink extents
+     * (PERSONAL x 0.0367..0.3789, PORTFOLIO x 0.6117..0.9719, from reference
+     * frame f0003). A 0.02 tolerance absorbs the font-metric difference while
+     * still failing the old off-frame layout, which sat at -0.09..1.10.
+     */
+    expect(words[0].left).toBeGreaterThan(0.0367 - 0.02);
+    expect(words[0].right).toBeLessThan(0.3789 + 0.02);
+    expect(words[1].left).toBeGreaterThan(0.6117 - 0.02);
+    expect(words[1].right).toBeLessThan(0.9719 + 0.02);
+  });
+
+  test('scroll produces continuous, reversible change', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(900);
+
+    const plate = page.locator('[data-plate="data"]');
+    /*
+     * Viewport-relative top, read via `getBoundingClientRect()`.
+     *
+     * Sample INSIDE the board beat (0.23-0.50 by measurement). Before 0.23 the
+     * plates are parked below the frame at a constant position, so sampling
+     * there returns the same value and asserts nothing about the rise.
+     */
+    const top = () =>
+      page.evaluate(() => {
+        const el = document.querySelector('[data-plate="data"]')!;
+        return el.getBoundingClientRect().top / window.innerHeight;
+      });
+
+    /*
+     * Settle by fixed interval, not by polling for convergence.
+     *
+     * The timeline runs `scrub: 0.85`, so progress eases toward the scroll
+     * position rather than tracking it instantly. A poll that stops as soon as
+     * two consecutive reads agree can stop MID-CREEP -- the plate is still
+     * moving but has not moved between two samples -- which yields a flat
+     * series and a spurious monotonicity failure.
+     *
+     * A fixed settle longer than the scrub duration reads the state the user
+     * actually perceives after scrolling stops.
+     */
+    const at = async (frac: number) => {
+      await page.evaluate((f) =>
+        window.scrollTo(
+          0,
+          Math.round((document.documentElement.scrollHeight - window.innerHeight) * f)
+        )
+      );
+      await page.waitForTimeout(1100);
+      return top();
+    };
+
+    /*
+     * Sample INSIDE the board beat (0.23-0.50 measured), not at 0/0.2. Before
+     * the beat starts the plates are parked below frame at a constant position,
+     * so those samples are identical and assert nothing about the rise.
+     */
+    const s25 = await at(0.25);
+    const s32 = await at(0.32);
+    const s40 = await at(0.4);
+    const s50 = await at(0.5);
+
+    // Strictly rising through the board beat: each step differs from the last.
+    // Identical screenshots across the rise are the failure this guards.
+    expect(s32).toBeLessThan(s25!);
+    expect(s40).toBeLessThan(s32!);
+    expect(s50).toBeLessThan(s40!);
+
+    // The hold is static.
+    const s75 = await at(0.75);
+    const s100 = await at(1.0);
+    expect(s100).toBeCloseTo(s75!, 3);
+
+    // Scrolling back reverses all the way to the opening state.
+    const back = await at(0);
+    expect(back).toBeGreaterThan(s50!);
+    await expect(plate).toHaveCSS('visibility', 'hidden');
+  });
+
+  test('the figure stays stationary across the whole track', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(900);
+
+    const figTop = async () =>
+      page.evaluate(() => {
+        const el =
+          document.querySelector('.cinematic-figure img') ||
+          document.querySelector('[class*="figure"]');
+        return el ? el.getBoundingClientRect().top / window.innerHeight : null;
+      });
+
+    const samples: (number | null)[] = [];
+    for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+      await page.evaluate((frac) =>
+        window.scrollTo(
+          0,
+          Math.round((document.documentElement.scrollHeight - window.innerHeight) * frac)
+        )
+      );
+      await page.waitForTimeout(600);
+      samples.push(await figTop());
+    }
+
+    const spread = Math.max(...samples.map((s) => s!)) - Math.min(...samples.map((s) => s!));
+    expect(spread).toBeLessThan(0.01);
+  });
+});
