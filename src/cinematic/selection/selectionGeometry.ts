@@ -8,12 +8,13 @@
  * misplaced and the cloud target overhung the right edge.
  *
  * Values are fractions of the scene box, measured on the 1280x720 reference.
- * They are NOT symmetric -- the Data board is taller (two lines) and sits
- * higher than the Cloud board. A symmetric two-card layout is explicitly
- * rejected (plan section 3.3, risk R5).
+ * Selection happens on the plates themselves, so the hit area and the artwork
+ * share one source of truth. Their geometry is symmetric and measured from the
+ * reference; the visible asymmetry between them is content (line counts, icon
+ * rows, type scale), not placement.
  *
  * Breaks (plan section 14) recompose rather than scale down; mobile moves the
- * boards to a stacked layout below the figure.
+ * plates to a stacked layout below the figure.
  */
 
 import type { Path } from '../../store/gameStore';
@@ -43,11 +44,34 @@ export function layoutMode(width: number): LayoutMode {
 
 /**
  * Measured reference rects, used at >= 1280px. These are the values the QA
- * side-by-side is judged against -- the asymmetry is load-bearing.
+ * side-by-side is judged against.
+ *
+ * CORRECTION (2026-10-01): an earlier revision of this file claimed the plates
+ * were asymmetric (Data taller and higher than Cloud) and encoded that as a
+ * requirement. Re-measurement against ref-5.0.png contradicts it. Using each
+ * plate's own x window with a ground threshold of 200, so the plate's mid-tone
+ * hex texture counts as plate rather than as a gap:
+ *
+ *   Data  y[0.2014, 0.6528]  h=0.4514   x[0.0340, 0.3630]  w=0.3290
+ *   Cloud y[0.2042, 0.6514]  h=0.4472   x[0.6340, 0.9570]  w=0.3230
+ *
+ *   top delta 0.0028   bottom delta 0.0014
+ *   height delta 0.0042   width delta 0.0060
+ *
+ * The plates are SYMMETRIC in height, width and vertical placement. What is
+ * genuinely asymmetric is their CONTENT: the Data plate carries two lines
+ * ("DATA ANALYST" / "DATA ENGINEER") where Cloud carries one ("DEVOPS /
+ * CLOUD") plus a wider icon row. That content asymmetry lives in
+ * boardContent.ts and in the per-plate type scale, not in the geometry.
+ *
+ * Two earlier measurement methods produced the false asymmetry: thresholding at
+ * luma<110 clipped the plates at their printed-content gaps, and sampling a
+ * single column per plate missed the rows where that column happened to be
+ * light. Do not repeat either.
  */
 const MEASURED: Record<Path, Rect> = {
-  data: { x: 0.066, y: 0.247, width: 0.276, height: 0.307 },
-  cloud: { x: 0.634, y: 0.303, width: 0.301, height: 0.241 },
+  data: { x: 0.034, y: 0.2014, width: 0.329, height: 0.4514 },
+  cloud: { x: 0.634, y: 0.2042, width: 0.323, height: 0.4472 },
 };
 
 /**
@@ -55,19 +79,19 @@ const MEASURED: Record<Path, Rect> = {
  * recomposes so the figure stays the optical anchor.
  */
 const LAYOUTS: Record<LayoutMode, Record<Path, Rect>> = {
-  // >= 1280: the measured composition, widened slightly on very large screens
+  // >= 1280: the measured composition
   wide: MEASURED,
-  // 1024-1279: boards tighten toward the figure, gap narrows
+  // 1024-1279: plates tighten slightly toward the figure
   compact: {
-    data: { x: 0.055, y: 0.262, width: 0.3, height: 0.29 },
-    cloud: { x: 0.645, y: 0.315, width: 0.3, height: 0.235 },
+    data: { x: 0.045, y: 0.215, width: 0.32, height: 0.44 },
+    cloud: { x: 0.635, y: 0.218, width: 0.32, height: 0.44 },
   },
-  // 768-1023 tablet: boards move to the lower third, the figure clears above
+  // 768-1023 tablet: plates move to the lower third, the figure clears above
   tablet: {
     data: { x: 0.06, y: 0.6, width: 0.38, height: 0.2 },
     cloud: { x: 0.56, y: 0.6, width: 0.38, height: 0.2 },
   },
-  // < 768 mobile: boards stack below the figure, full-bleed
+  // < 768 mobile: plates stack below the figure, full-bleed
   mobile: {
     data: { x: 0.08, y: 0.7, width: 0.84, height: 0.11 },
     cloud: { x: 0.08, y: 0.83, width: 0.84, height: 0.11 },
@@ -104,14 +128,36 @@ export function toPixelRect(
 }
 
 /**
- * Figure geometry, measured at the selection hold. Used by the figure layer to
- * size itself. The figure never moves (D5), so these are constants.
+ * Figure geometry, measured at the selection hold (ref-5.0.png).
+ *
+ * Measured by scanning the centre band x 0.38-0.62, which is clear of both
+ * plates. In the reference the figure's dark rows run y 0.1278 -> 0.9986: it is
+ * CROPPED BY THE BOTTOM OF THE FRAME, with dark coverage staying at ~1.00 all
+ * the way down.
+ *
+ * These rects position the IMG ELEMENT, not the visible silhouette. The cut
+ * (public/assets/figure-anchor.webp) carries its own transparent margin, so the
+ * box must be solved from the rendered result rather than copied from the
+ * reference's silhouette bounds.
+ *
+ * Measured empirically: box y=0.0967 h=0.9032 rendered the dark silhouette at
+ * y[0.1856, 0.9989], i.e. the first dark row sits at asset fraction
+ * (0.1856-0.0967)/0.9032 = 0.0984 and the last at 0.9989. Solving
+ *
+ *   box_height = (0.9986 - 0.1278) / (0.9989 - 0.0984) = 0.9671
+ *   box_top    = 0.1278 - 0.0984 * box_height           = 0.0326
+ *
+ * lands the silhouette exactly on the reference's 0.1278..0.9986. Using the
+ * silhouette bounds directly as the box rect put the head at y 0.214 — visibly
+ * too low.
+ *
+ * The figure never moves (D5), so these are constants.
  */
 export const FIGURE_RECT: Rect = {
   x: 0.291,
-  y: 0.104,
+  y: 0.0326,
   width: 0.407,
-  height: 0.808,
+  height: 0.9671,
 };
 
 /**
@@ -123,10 +169,13 @@ export const HEADLINE_RECTS = {
   right: { x: 0.68, y: 0.06, width: 0.29, height: 0.13 } as Rect,
 };
 
-/** Head block, used to assert the words never collide with the figure's head. */
+/**
+ * Head block, used to assert the words never collide with the figure's head.
+ * Measured at the head narrowest point: x 0.419-0.542 at y 0.15.
+ */
 export const HEAD_BLOCK: Rect = {
-  x: 0.403,
-  y: 0.104,
-  width: 0.175,
-  height: 0.249,
+  x: 0.419,
+  y: 0.1278,
+  width: 0.123,
+  height: 0.226,
 };

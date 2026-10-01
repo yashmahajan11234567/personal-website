@@ -5,9 +5,10 @@
  * surface, no drop shadow, no card grid. A near-black plate with hairline
  * technical chrome, floating on the white ground.
  *
- * Placement is set inline from the measured asymmetric rects
- * (selectionGeometry.ts). The Data board is taller and sits higher than the
- * Cloud board — that asymmetry is intentional and asserted by a test.
+ * Placement is set inline from the measured rects in selectionGeometry.ts.
+ * The plates are symmetric in size and vertical placement; what differs between
+ * them is content — line counts, icon rows and type scale — and that asymmetry
+ * is asserted by a test so it cannot be flattened by accident.
  */
 
 .cinematic-boards {

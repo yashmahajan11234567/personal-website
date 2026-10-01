@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { useProgressBus, readProgress } from '../timeline/progressBus';
+import { subscribeToProgress, readProgress } from '../timeline/progressBus';
 import { BEATS } from '../timeline/beats';
 import './GroundLayer.css';
 
@@ -28,22 +28,12 @@ export function GroundLayer() {
       const span = BEATS[BEATS.length - 1].start;
       const t = span > 0 ? Math.min(1, progress / span) : 0;
       const eased = t * t * (3 - 2 * t); // smoothstep, matches the reference's settle
-      const scale = SCALE_FROM + (SCALE_TO - SCALE_FROM) * eased;
-      const falloff = FALLOFF_FROM + (FALLOFF_TO - FALLOFF_FROM) * eased;
-      el.style.setProperty('--ground-scale', scale.toFixed(4));
-      el.style.setProperty('--ground-falloff', falloff.toFixed(2) + '%');
+      el.style.setProperty('--ground-scale', (SCALE_FROM + (SCALE_TO - SCALE_FROM) * eased).toFixed(4));
+      el.style.setProperty('--ground-falloff', (FALLOFF_FROM + (FALLOFF_TO - FALLOFF_FROM) * eased).toFixed(2) + '%');
     };
 
     apply(readProgress());
-    return useProgressBus(({ progress }) => apply(progress));
-  }, []);
-
-  // Reduced motion (Task 7): hold the locked composition, no drift.
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    el.style.setProperty('--ground-scale', String(SCALE_TO));
-    el.style.setProperty('--ground-falloff', FALLOFF_TO + '%');
+    return subscribeToProgress(({ progress }) => apply(progress));
   }, []);
 
   return (

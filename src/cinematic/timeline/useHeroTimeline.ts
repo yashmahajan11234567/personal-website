@@ -39,6 +39,15 @@ export interface HeroTimelineHandle {
   resume: () => void;
   /** Permanently stop scroll control (world selected). */
   stop: () => void;
+  /**
+   * Destroy the trigger outright.
+   *
+   * MUST be called before the hero unmounts. ScrollTrigger's pin wraps the
+   * pinned element in a pin-spacer and mutates that DOM directly; if React
+   * unmounts the hero first, ScrollTrigger's cleanup throws
+   * "Failed to execute 'removeChild' on 'Node'" and takes the whole tree down.
+   */
+  destroy: () => void;
   /** Recompute geometry. */
   refresh: () => void;
 }
@@ -53,6 +62,7 @@ export function useHeroTimeline({
   const handleRef = useRef<HeroTimelineHandle>({
     resume: () => {},
     stop: () => {},
+    destroy: () => {},
     refresh: () => {},
   });
   const inSelectionRef = useRef(false);
@@ -66,6 +76,11 @@ export function useHeroTimeline({
     if (!enabled) return;
     const container = containerRef.current;
     if (!container) return;
+
+    // Declared OUTSIDE the context callback: referencing `context` from inside
+    // its own initialiser is a temporal-dead-zone error.
+    let unsubscribe: (() => void) | undefined;
+    let destroyed = false;
 
     const context = gsap.context(() => {
       const st = ScrollTrigger.create({
@@ -88,7 +103,7 @@ export function useHeroTimeline({
 
       triggerRef.current = st;
 
-      const unsubscribe = progressBus.subscribe(({ progress }) => {
+      unsubscribe = progressBus.subscribe(({ progress }) => {
         const nowIn = progress >= SELECTION_START;
         if (nowIn && !inSelectionRef.current) {
           inSelectionRef.current = true;
@@ -107,19 +122,31 @@ export function useHeroTimeline({
         stop: () => {
           st.disable(false);
         },
+        destroy: () => {
+          // Idempotent. React may also run the effect cleanup, which calls
+          // context.revert(); killing twice makes ScrollTrigger remove the
+          // pin-spacer a second time and throw.
+          if (destroyed) return;
+          destroyed = true;
+          unsubscribe?.();
+          context.revert();
+          ScrollTrigger.refresh();
+        },
         refresh: () => {
           ScrollTrigger.refresh();
         },
       };
-
-      // Store the unsubscribe for cleanup via a closure variable.
-      (context as unknown as { _unsub?: () => void })._unsub = unsubscribe;
     }, container);
 
-    // Cleanup
     return () => {
-      const unsub = (context as unknown as { _unsub?: () => void })._unsub;
-      unsub?.();
+      // destroy() may already have run (React ran its cleanup before the DOM
+      // was removed). Guard so the trigger is reverted exactly once.
+      if (destroyed) {
+        unsubscribe = undefined;
+        return;
+      }
+      destroyed = true;
+      unsubscribe?.();
       context.revert();
       triggerRef.current = null;
       inSelectionRef.current = false;

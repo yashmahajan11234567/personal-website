@@ -11,7 +11,6 @@
  * progress from their own tween callbacks without waiting a frame.
  */
 
-import { useEffect, useRef } from 'react';
 import type { CinematicPhase } from './beats';
 import { clamp01, phaseAt } from './beats';
 
@@ -85,19 +84,18 @@ class ProgressBus {
 }
 
 export const progressBus = new ProgressBus();
-
 /**
  * Subscribe to progress changes outside React's render cycle.
+ *
  * The returned callback fires at most once per animation frame.
+ *
+ * NOTE: this is a plain subscription helper, not a hook. Layers call it from
+ * inside a useEffect and return the unsubscribe function as the effect cleanup.
+ * Calling it from within an effect body (i.e. treating it as a hook) is an
+ * invalid hook call.
  */
-export function useProgressBus(listener: (snapshot: ProgressSnapshot) => void): void {
-  const ref = useRef(listener);
-  ref.current = listener;
-
-  useEffect(() => {
-    const unsubscribe = progressBus.subscribe((snapshot) => ref.current(snapshot));
-    return unsubscribe;
-  }, []);
+export function subscribeToProgress(listener: (snapshot: ProgressSnapshot) => void): () => void {
+  return progressBus.subscribe(listener);
 }
 
 /** Read the latest progress without subscribing. Safe inside tween callbacks. */

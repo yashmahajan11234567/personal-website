@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { useProgressBus, readProgress } from '../timeline/progressBus';
+import { subscribeToProgress, readProgress } from '../timeline/progressBus';
 import { beatProgress, beat } from '../timeline/beats';
 import { HEADLINE } from '../data/boardContent';
 import { HEADLINE_RECTS as RECTS } from '../selection/selectionGeometry';
@@ -35,11 +35,37 @@ const WORDS: WordSpec[] = [
   { text: HEADLINE.right, side: 'right', enterX: 14 },
 ];
 
-export function TypographyLayer() {
+export interface TypographyLayerProps {
+  /**
+   * Skip the entrance and exit and hold the anchored composition.
+   *
+   * Passed explicitly rather than sniffed via matchMedia inside this layer:
+   * under reduced motion there is no ScrollTrigger, so progressBus never fires
+   * and the words would otherwise be frozen at their ignition state (scale
+   * 0.86, translated off-frame) rather than legible.
+   */
+  settled?: boolean;
+}
+
+export function TypographyLayer({ settled = false }: TypographyLayerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const wordRefs = useRef<Record<string, HTMLSpanElement | null>>({});
 
   useEffect(() => {
+    const anchor = () => {
+      for (const spec of WORDS) {
+        const el = wordRefs.current[spec.side];
+        if (!el) continue;
+        el.style.transform = 'translate3d(0, 0, 0) scale(1)';
+        el.style.opacity = '1';
+      }
+    };
+
+    if (settled) {
+      anchor();
+      return;
+    }
+
     const apply = (progress: number) => {
       // Entrance spans ignition + the first half of anchor (reference S0-S1).
       const inT = clampSpan(progress, IGNITION.start, ANCHOR.start + (ANCHOR.end - ANCHOR.start) * 0.5);
@@ -70,21 +96,8 @@ export function TypographyLayer() {
     };
 
     apply(readProgress());
-    return useProgressBus(({ progress }) => apply(progress));
-  }, []);
-
-  // Reduced motion (Task 7): hold the anchor state, no entrance or exit.
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    for (const spec of WORDS) {
-      const el = wordRefs.current[spec.side];
-      if (!el) continue;
-      el.style.transform = 'translate3d(0, 0, 0) scale(1)';
-      el.style.opacity = '1';
-    }
-  }, []);
+    return subscribeToProgress(({ progress }) => apply(progress));
+  }, [settled]);
 
   return (
     <div ref={rootRef} className="cinematic-type" aria-hidden="false">

@@ -4,9 +4,10 @@
  * Plan section 9. Key constraints:
  * - Monochrome. World colour appears only via the hover accent glow
  *   (AccentGlowLayer, D4), never as a card fill or border tint.
- * - ASYMMETRIC placement, matching the measured reference. The Data board is
- *   taller (two lines) and sits higher than the Cloud board. A symmetric
- *   two-card grid is explicitly rejected (risk R5).
+ * - Placement measured from the reference. The plates are symmetric in size
+ *   and vertical placement; the Data plate's two-line wordmark and the Cloud
+ *   plate's wider icon row create the visible asymmetry, and Cloud's type is
+ *   scaled up to hold its weight against Data's two lines.
  * - Copy is externalised to boardContent.ts, so text is replaceable without
  *   touching pixels.
  * - Chrome (corner ticks, rules, glyphs) is inline SVG, drawn not bitmap.
@@ -16,7 +17,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { useProgressBus, readProgress } from '../timeline/progressBus';
+import { subscribeToProgress, readProgress } from '../timeline/progressBus';
 import { beat } from '../timeline/beats';
 import { WORLD_BOARDS } from '../data/boardContent';
 import { boardRect, layoutMode } from '../selection/selectionGeometry';
@@ -98,7 +99,7 @@ export function BoardLayer({ settled = false }: BoardLayerProps) {
     }
 
     apply(readProgress());
-    return useProgressBus(({ progress }) => apply(progress));
+    return subscribeToProgress(({ progress }) => apply(progress));
   }, [settled]);
 
   return (

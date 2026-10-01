@@ -47,8 +47,16 @@ export function FigureLayer({ enableSpecular = false }: FigureLayerProps) {
         width={781}
         height={668}
         decoding="async"
-        /* The cut is already trimmed to the silhouette; keep it that way. */
-        style={{ objectFit: 'contain' }}
+        /*
+         * object-fit is explicitly `fill` (the default), NOT `contain`.
+         *
+         * The cut is already trimmed to the silhouette, and the measured
+         * reference has the figure cropped by the bottom frame edge — its dark
+         * rows run to y 0.9986. `contain` letterboxes the image inside its box,
+         * which left the figure floating with empty ground beneath it.
+         * `fill` stretches the image to exactly the measured rect.
+         */
+        style={{ objectFit: 'fill' }}
       />
       {enableSpecular && <span className="cinematic-figure__specular" />}
     </div>
