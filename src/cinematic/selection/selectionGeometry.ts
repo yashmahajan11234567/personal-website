@@ -186,13 +186,44 @@ export const FIGURE_RECT: Rect = {
  *    to FIT its box (see TypographyLayer.css) rather than being given a fixed
  *    size that could overflow it.
  *
- * The head block spans x 0.403-0.578, so the words stay clear of that range:
- * PERSONAL ends at 0.379 and PORTFOLIO begins at 0.612.
+ * INWARD NUDGE.
+ *
+ * The measured reference boxes sit close to the frame edges -- PERSONAL starts
+ * at 0.0367 and PORTFOLIO ends at 0.9719, so the outer margins are 3.7% and
+ * 2.8% while the words read as pushed out to the viewport edges rather than
+ * composed around the figure.
+ *
+ * The figure's silhouette AT THE HEADLINE'S OWN BAND was measured separately,
+ * because HEAD_BLOCK (below) only covers head height: scanning frame f0003
+ * across rows y 0.354-0.510, the figure spans x 0.4094 .. 0.5695. That leaves
+ * an inner clearance of 0.0305 beside PERSONAL and 0.0422 beside PORTFOLIO.
+ *
+ * So both words move INWARD by the same 0.012, which:
+ *   - opens the outer margins to 4.9% and 4.0%, closer to balanced;
+ *   - leaves 0.0185 (23.7px at 1280) of clearance from the figure, still
+ *     clearly separated;
+ *   - is symmetric, so the words' spacing to each other and their type sizes
+ *     are completely untouched -- only their position changes.
+ *
+ * Deliberately a nudge rather than a recentre: the reference's own asymmetry
+ * (the left word is closer to the figure than the right one) is preserved, and
+ * the 0.0185 residual clearance is the safety margin against the eroded edges
+ * the distressed mask cuts into the glyphs.
+ *
+ * The box WIDTH and HEIGHT are unchanged, so the fit in TypographyLayer solves
+ * exactly the same font-size and tracking as before.
  */
 export const HEADLINE_RECTS = {
-  left: { x: 0.0367, y: 0.3542, width: 0.3422, height: 0.1556 } as Rect,
-  right: { x: 0.6117, y: 0.3542, width: 0.3602, height: 0.1556 } as Rect,
+  left: { x: 0.0487, y: 0.3542, width: 0.3422, height: 0.1556 } as Rect,
+  right: { x: 0.5997, y: 0.3542, width: 0.3602, height: 0.1556 } as Rect,
 };
+
+/**
+ * How far the headline was nudged inward from the reference's measured boxes.
+ * Exported so the role-word nudge below and the tests can be checked against
+ * the same constant rather than a repeated literal.
+ */
+export const HEADLINE_INWARD = 0.012;
 
 /**
  * Head block, used to assert the words never collide with the figure's head.

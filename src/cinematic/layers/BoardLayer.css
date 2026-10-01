@@ -143,10 +143,46 @@
   letter-spacing: 0.1em;
 }
 
+/*
+ * The wordmark is nudged INWARD, toward the figure.
+ *
+ * Both plates used symmetric `11%` side padding, so DATA ANALYST / DATA
+ * ENGINEER sat hard against the left plate edge (which faces the viewport edge)
+ * while DEVOPS / CLOUD sat against the right plate edge -- the same
+ * edge-anchored imbalance the headline had, one level down.
+ *
+ * So the padding is made asymmetric: the Data plate gains inset on its LEFT
+ * side and the Cloud plate on its RIGHT, each by 2.5% of the plate width
+ * (~10.5px at 1280). That moves both wordmarks toward the central figure
+ * without touching the plate geometry, its interior artwork, or the status
+ * line's own inset.
+ *
+ * Deliberately small: the reference's wordmarks are already well inside their
+ * plates, so this is a nudge rather than a re-layout.
+ */
+.cinematic-plate[data-plate='data'] {
+  padding-left: 13.5%;
+}
+
+.cinematic-plate[data-plate='cloud'] {
+  padding-right: 13.5%;
+}
+
 /* Mobile: stacked plates below the figure get horizontal type. */
 .cinematic-boards[data-mode='mobile'] .cinematic-plate {
   padding: 8% 8%;
   justify-content: center;
+}
+
+/*
+ * The mobile plates stack BELOW the figure, so "inward" means toward the
+ * stacked centre line rather than toward the figure, which no longer sits
+ * between them. Even insets keep both wordmarks aligned on a shared axis.
+ */
+.cinematic-boards[data-mode='mobile'] .cinematic-plate[data-plate='data'],
+.cinematic-boards[data-mode='mobile'] .cinematic-plate[data-plate='cloud'] {
+  padding-left: 8%;
+  padding-right: 8%;
 }
 
 .cinematic-boards[data-mode='mobile'] .cinematic-plate__body,

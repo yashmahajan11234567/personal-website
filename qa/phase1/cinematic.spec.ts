@@ -7,13 +7,13 @@
  * Reference: .gsd/plans/phase-1-cinematic-rebuild.md
  */
 
-import { test, expect, type Page } from '@playwright/test';
-import { beat } from '../../src/cinematic/timeline/beats';
+import { test, expect, type Page } from "@playwright/test";
+import { beat } from "../../src/cinematic/timeline/beats";
 
 /** Total scrollable distance of the cinematic track. */
 async function scrollTrack(page: Page): Promise<number> {
   return page.evaluate(
-    () => document.documentElement.scrollHeight - window.innerHeight
+    () => document.documentElement.scrollHeight - window.innerHeight,
   );
 }
 
@@ -22,7 +22,7 @@ async function scrollToProgress(page: Page, fraction: number): Promise<void> {
   const track = await scrollTrack(page);
   await page.evaluate(
     ([y]) => window.scrollTo(0, y as number),
-    [Math.round(track * fraction)]
+    [Math.round(track * fraction)],
   );
   // scrub 0.6 needs time to catch up
   await page.waitForTimeout(900);
@@ -38,34 +38,42 @@ async function figureBox(page: Page) {
   });
 }
 
-test.describe('structure', () => {
-  test('renders every layer and no console errors', async ({ page }) => {
+test.describe("structure", () => {
+  test("renders every layer and no console errors", async ({ page }) => {
     const errors: string[] = [];
-    page.on('console', (m) => {
-      if (m.type() === 'error') errors.push(m.text());
+    page.on("console", (m) => {
+      if (m.type() === "error") errors.push(m.text());
     });
-    page.on('pageerror', (e) => errors.push(String(e)));
+    page.on("pageerror", (e) => errors.push(String(e)));
 
-    await page.goto('/');
+    await page.goto("/");
     await page.waitForTimeout(1200);
 
-    await expect(page.locator('.cinematic-hero')).toBeVisible();
-    await expect(page.locator('.cinematic-ground')).toBeAttached();
-    await expect(page.locator('[data-testid="cinematic-figure"]')).toBeAttached();
-    await expect(page.locator('[data-testid="cinematic-grain"]')).toBeAttached();
+    await expect(page.locator(".cinematic-hero")).toBeVisible();
+    await expect(page.locator(".cinematic-ground")).toBeAttached();
+    await expect(
+      page.locator('[data-testid="cinematic-figure"]'),
+    ).toBeAttached();
+    await expect(
+      page.locator('[data-testid="cinematic-grain"]'),
+    ).toBeAttached();
     await expect(page.locator('[data-plate="data"]')).toBeAttached();
     await expect(page.locator('[data-plate="cloud"]')).toBeAttached();
-    await expect(page.locator('.cinematic-type__word')).toHaveCount(2);
+    await expect(page.locator(".cinematic-type__word")).toHaveCount(2);
 
-    expect(errors, `console errors:\n${errors.join('\n')}`).toEqual([]);
+    expect(errors, `console errors:\n${errors.join("\n")}`).toEqual([]);
   });
 
-  test('the figure image actually loads', async ({ page }) => {
-    await page.goto('/');
+  test("the figure image actually loads", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(1000);
     const info = await page.evaluate(() => {
-      const img = document.querySelector<HTMLImageElement>('.cinematic-figure__image');
-      return img ? { complete: img.complete, w: img.naturalWidth, h: img.naturalHeight } : null;
+      const img = document.querySelector<HTMLImageElement>(
+        ".cinematic-figure__image",
+      );
+      return img
+        ? { complete: img.complete, w: img.naturalWidth, h: img.naturalHeight }
+        : null;
     });
     expect(info).not.toBeNull();
     expect(info!.complete).toBe(true);
@@ -73,21 +81,21 @@ test.describe('structure', () => {
     expect(info!.h).toBeGreaterThan(100);
   });
 
-  test('no frame-sequence or video asset is shipped', async ({ page }) => {
+  test("no frame-sequence or video asset is shipped", async ({ page }) => {
     const requests: string[] = [];
-    page.on('request', (r) => requests.push(r.url()));
-    await page.goto('/');
+    page.on("request", (r) => requests.push(r.url()));
+    await page.goto("/");
     await page.waitForTimeout(1500);
     const bad = requests.filter(
-      (u) => u.includes('/frames/') || u.endsWith('.mp4')
+      (u) => u.includes("/frames/") || u.endsWith(".mp4"),
     );
-    expect(bad, `bitmap media requested:\n${bad.join('\n')}`).toEqual([]);
+    expect(bad, `bitmap media requested:\n${bad.join("\n")}`).toEqual([]);
   });
 });
 
-test.describe('D5 — the figure never moves', () => {
-  test('figure box is identical at every scroll position', async ({ page }) => {
-    await page.goto('/');
+test.describe("D5 — the figure never moves", () => {
+  test("figure box is identical at every scroll position", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(1000);
 
     const first = await figureBox(page);
@@ -105,30 +113,40 @@ test.describe('D5 — the figure never moves', () => {
     }
   });
 
-  test('figure has no CSS transform at any scroll position', async ({ page }) => {
-    await page.goto('/');
+  test("figure has no CSS transform at any scroll position", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
     for (const f of [0, 0.25, 0.5, 0.75, 1]) {
       await scrollToProgress(page, f);
       const t = await page.evaluate(
-        () => getComputedStyle(document.querySelector('[data-testid="cinematic-figure"]')!).transform
+        () =>
+          getComputedStyle(
+            document.querySelector('[data-testid="cinematic-figure"]')!,
+          ).transform,
       );
-      expect(['none', 'matrix(1, 0, 0, 1, 0, 0)'], `transform at ${f} was ${t}`).toContain(t);
+      expect(
+        ["none", "matrix(1, 0, 0, 1, 0, 0)"],
+        `transform at ${f} was ${t}`,
+      ).toContain(t);
     }
   });
 });
 
-test.describe('scroll drives the timeline', () => {
-  test('the page provides a multi-viewport scroll track', async ({ page }) => {
-    await page.goto('/');
+test.describe("scroll drives the timeline", () => {
+  test("the page provides a multi-viewport scroll track", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
     const track = await scrollTrack(page);
     // 700vh track means ~6 viewport heights of scroll on desktop.
     expect(track).toBeGreaterThan(900 * 4);
   });
 
-  test('boards are hidden early and seated at the selection hold', async ({ page }) => {
-    await page.goto('/');
+  test("boards are hidden early and seated at the selection hold", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
 
     // Measured against the reference (VIDEO-TRANSITION-ANALYSIS.md S5): there is
@@ -143,7 +161,7 @@ test.describe('scroll drives the timeline', () => {
       const cs = getComputedStyle(el);
       return { visibility: cs.visibility, opacity: Number(cs.opacity) };
     });
-    expect(early.visibility).toBe('hidden');
+    expect(early.visibility).toBe("hidden");
 
     await scrollToProgress(page, 0.9);
     const late = await page.evaluate(() => {
@@ -151,24 +169,28 @@ test.describe('scroll drives the timeline', () => {
       const cs = getComputedStyle(el);
       return { visibility: cs.visibility, opacity: Number(cs.opacity) };
     });
-    expect(late.visibility).toBe('visible');
+    expect(late.visibility).toBe("visible");
     expect(late.opacity).toBeGreaterThan(0.95);
     // Seated: the rise has completed, so the plate is at its resting transform.
     // Read it off the computed style rather than the inline attribute -- the
     // browser normalises `translate3d(0, 0.000vh, 0)` to `translate3d(0px, 0vh, 0px)`.
     const seated = await page.evaluate(
-      () => getComputedStyle(document.querySelector('[data-plate="data"]')!).transform
+      () =>
+        getComputedStyle(document.querySelector('[data-plate="data"]')!)
+          .transform,
     );
     expect(seated).toMatch(/matrix\(1, 0, 0, 1, 0, 0\)|^none$/);
   });
 
-  test('headline words exit upward rather than fading in place', async ({ page }) => {
-    await page.goto('/');
+  test("headline words exit upward rather than fading in place", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
 
     const readWord = () =>
       page.evaluate(() => {
-        const el = document.querySelector('.cinematic-type__word--left')!;
+        const el = document.querySelector(".cinematic-type__word--left")!;
         const cs = getComputedStyle(el);
         return { transform: cs.transform, opacity: Number(cs.opacity) };
       });
@@ -184,39 +206,48 @@ test.describe('scroll drives the timeline', () => {
   });
 });
 
-test.describe('D4 — monochrome at rest, accent on hover only', () => {
-  test('no glow is visible before interaction', async ({ page }) => {
-    await page.goto('/');
+test.describe("D4 — monochrome at rest, accent on hover only", () => {
+  test("no glow is visible before interaction", async ({ page }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
     const alpha = await page.evaluate(() => {
-      const w = document.querySelector('.cinematic-glow__wash--data') as HTMLElement;
+      const w = document.querySelector(
+        ".cinematic-glow__wash--data",
+      ) as HTMLElement;
       return Number(getComputedStyle(w).opacity);
     });
     expect(alpha).toBeLessThan(0.02);
   });
 
-  test('hovering Data produces a blue wash and Cloud an orange one', async ({ page }) => {
-    await page.goto('/');
+  test("hovering Data produces a blue wash and Cloud an orange one", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
 
     await page.locator('[data-testid="world-board-data"]').hover();
     await page.waitForTimeout(500);
     const dataState = await page.evaluate(() => {
-      const root = document.querySelector('.cinematic-glow')!;
-      const w = document.querySelector('.cinematic-glow__wash--data') as HTMLElement;
+      const root = document.querySelector(".cinematic-glow")!;
+      const w = document.querySelector(
+        ".cinematic-glow__wash--data",
+      ) as HTMLElement;
       return {
-        active: root.getAttribute('data-active'),
+        active: root.getAttribute("data-active"),
         opacity: Number(getComputedStyle(w).opacity),
         bg: getComputedStyle(w).backgroundImage,
       };
     });
-    expect(dataState.active).toBe('data');
+    expect(dataState.active).toBe("data");
     expect(dataState.opacity).toBeGreaterThan(0.5);
     // Blue channel dominant in the wash colour.
     const blueMatch = dataState.bg.match(/rgba?\((\d+), (\d+), (\d+)/);
     if (blueMatch) {
       const [, r, g, b] = blueMatch.map(Number);
-      expect(b, `data wash rgb(${r},${g},${b}) should be blue-dominant`).toBeGreaterThan(r);
+      expect(
+        b,
+        `data wash rgb(${r},${g},${b}) should be blue-dominant`,
+      ).toBeGreaterThan(r);
     }
 
     await page.mouse.move(5, 5);
@@ -225,26 +256,33 @@ test.describe('D4 — monochrome at rest, accent on hover only', () => {
     await page.locator('[data-testid="world-board-cloud"]').hover();
     await page.waitForTimeout(500);
     const cloudState = await page.evaluate(() => {
-      const root = document.querySelector('.cinematic-glow')!;
-      const w = document.querySelector('.cinematic-glow__wash--cloud') as HTMLElement;
+      const root = document.querySelector(".cinematic-glow")!;
+      const w = document.querySelector(
+        ".cinematic-glow__wash--cloud",
+      ) as HTMLElement;
       return {
-        active: root.getAttribute('data-active'),
+        active: root.getAttribute("data-active"),
         opacity: Number(getComputedStyle(w).opacity),
         bg: getComputedStyle(w).backgroundImage,
       };
     });
-    expect(cloudState.active).toBe('cloud');
+    expect(cloudState.active).toBe("cloud");
     const orangeMatch = cloudState.bg.match(/rgba?\((\d+), (\d+), (\d+)/);
     if (orangeMatch) {
       const [, r, g, b] = orangeMatch.map(Number);
-      expect(r, `cloud wash rgb(${r},${g},${b}) should be red-dominant`).toBeGreaterThan(b);
+      expect(
+        r,
+        `cloud wash rgb(${r},${g},${b}) should be red-dominant`,
+      ).toBeGreaterThan(b);
     }
   });
 });
 
-test.describe('plate geometry matches the reference', () => {
-  test('plates are symmetric in size and vertical placement, per the reference', async ({ page }) => {
-    await page.goto('/');
+test.describe("plate geometry matches the reference", () => {
+  test("plates are symmetric in size and vertical placement, per the reference", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
     const boxes = await page.evaluate(() => {
       const norm = (el: Element) => {
@@ -265,12 +303,16 @@ test.describe('plate geometry matches the reference', () => {
     // Measured reference: top delta 0.0028, height delta 0.0042, width delta
     // 0.0060. An earlier revision of this suite asserted the opposite
     // (asymmetric) on the strength of a mis-measurement.
-    expect(Math.abs(boxes.data.y - boxes.cloud.y), 'tops aligned').toBeLessThan(0.02);
+    expect(Math.abs(boxes.data.y - boxes.cloud.y), "tops aligned").toBeLessThan(
+      0.02,
+    );
     expect(
       Math.abs(boxes.data.h - boxes.cloud.h),
-      'equal heights'
+      "equal heights",
     ).toBeLessThan(0.02);
-    expect(Math.abs(boxes.data.w - boxes.cloud.w), 'equal widths').toBeLessThan(0.02);
+    expect(Math.abs(boxes.data.w - boxes.cloud.w), "equal widths").toBeLessThan(
+      0.02,
+    );
 
     // Data left of centre, Cloud right of centre.
     const dCentre = boxes.data.x + boxes.data.w / 2;
@@ -279,13 +321,15 @@ test.describe('plate geometry matches the reference', () => {
     expect(cCentre).toBeGreaterThan(0.5);
   });
 
-  test('Data plate carries two lines, Cloud two lines at a larger scale', async ({ page }) => {
-    await page.goto('/');
+  test("Data plate carries two lines, Cloud two lines at a larger scale", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
     const data = await page.evaluate(() => {
       const plate = document.querySelector('[data-plate="data"]')!;
-      const lines = plate.querySelectorAll('.cinematic-plate__line');
-      const body = plate.querySelector('.cinematic-plate__body')!;
+      const lines = plate.querySelectorAll(".cinematic-plate__line");
+      const body = plate.querySelector(".cinematic-plate__body")!;
       return {
         count: lines.length,
         text: Array.from(lines).map((l) => l.textContent),
@@ -294,15 +338,15 @@ test.describe('plate geometry matches the reference', () => {
       };
     });
     expect(data.count).toBe(2);
-    expect(data.text).toEqual(['DATA ANALYST', 'DATA ENGINEER']);
+    expect(data.text).toEqual(["DATA ANALYST", "DATA ENGINEER"]);
     expect(Number.isFinite(data.fontSize)).toBe(true);
 
     // The Cloud plate also has two lines, but is a shorter wordmark, so its
     // type is scaled up to hold visual weight against the Data plate's two lines.
     const cloud = await page.evaluate(() => {
       const plate = document.querySelector('[data-plate="cloud"]')!;
-      const lines = plate.querySelectorAll('.cinematic-plate__line');
-      const body = plate.querySelector('.cinematic-plate__body')!;
+      const lines = plate.querySelectorAll(".cinematic-plate__line");
+      const body = plate.querySelector(".cinematic-plate__body")!;
       return {
         count: lines.length,
         fontSize: parseFloat(getComputedStyle(body).fontSize),
@@ -312,26 +356,32 @@ test.describe('plate geometry matches the reference', () => {
     expect(cloud.fontSize).toBeGreaterThan(data.fontSize);
   });
 
-  test('plate copy matches the reference wording and line order', async ({ page }) => {
-    await page.goto('/');
+  test("plate copy matches the reference wording and line order", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
     const cloudText = await page.evaluate(() =>
       Array.from(
-        document.querySelectorAll('[data-plate="cloud"] .cinematic-plate__line')
-      ).map((l) => l.textContent)
+        document.querySelectorAll(
+          '[data-plate="cloud"] .cinematic-plate__line',
+        ),
+      ).map((l) => l.textContent),
     );
     // ref-5.0.png reads DEVOPS on the upper line, CLOUD on the lower. The copy
     // briefly had these reversed; this asserts the reference order.
-    expect(cloudText).toEqual(['DEVOPS', 'CLOUD']);
+    expect(cloudText).toEqual(["DEVOPS", "CLOUD"]);
   });
 
-  test('board hit targets match the plates, not the old hardcoded boxes', async ({ page }) => {
-    await page.goto('/');
+  test("board hit targets match the plates, not the old hardcoded boxes", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
     const alignment = await page.evaluate(() => {
       const pairs = [
-        ['data', '[data-plate="data"]', '[data-testid="world-board-data"]'],
-        ['cloud', '[data-plate="cloud"]', '[data-testid="world-board-cloud"]'],
+        ["data", '[data-plate="data"]', '[data-testid="world-board-data"]'],
+        ["cloud", '[data-plate="cloud"]', '[data-testid="world-board-cloud"]'],
       ] as const;
       return pairs.map(([name, plateSel, btnSel]) => {
         const p = document.querySelector(plateSel)!.getBoundingClientRect();
@@ -346,16 +396,18 @@ test.describe('plate geometry matches the reference', () => {
   });
 });
 
-test.describe('accessibility (brief section 14)', () => {
-  test('both boards are real buttons with labels and >=44px targets', async ({ page }) => {
-    await page.goto('/');
+test.describe("accessibility (brief section 14)", () => {
+  test("both boards are real buttons with labels and >=44px targets", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
 
-    for (const world of ['data', 'cloud']) {
+    for (const world of ["data", "cloud"]) {
       const btn = page.locator(`[data-testid="world-board-${world}"]`);
       await expect(btn).toBeVisible();
-      await expect(btn).toHaveAttribute('type', 'button');
-      const label = await btn.getAttribute('aria-label');
+      await expect(btn).toHaveAttribute("type", "button");
+      const label = await btn.getAttribute("aria-label");
       expect(label, `${world} has no aria-label`).toBeTruthy();
       expect(label!.length).toBeGreaterThan(10);
 
@@ -365,34 +417,37 @@ test.describe('accessibility (brief section 14)', () => {
     }
   });
 
-  test('nothing interactive is aria-hidden', async ({ page }) => {
-    await page.goto('/');
+  test("nothing interactive is aria-hidden", async ({ page }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
     const hidden = await page.evaluate(() => {
       const out: string[] = [];
-      document.querySelectorAll('.world-board').forEach((el) => {
-        if (el.closest('[aria-hidden="true"]')) out.push(el.getAttribute('data-world') || '?');
+      document.querySelectorAll(".world-board").forEach((el) => {
+        if (el.closest('[aria-hidden="true"]'))
+          out.push(el.getAttribute("data-world") || "?");
       });
       return out;
     });
     expect(hidden).toEqual([]);
   });
 
-  test('keyboard: Tab reaches both boards, focus ring is visible', async ({ page }) => {
-    await page.goto('/');
+  test("keyboard: Tab reaches both boards, focus ring is visible", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
 
-    await page.locator('body').click({ position: { x: 5, y: 5 } });
+    await page.locator("body").click({ position: { x: 5, y: 5 } });
     let reached: string[] = [];
     for (let i = 0; i < 12; i++) {
-      await page.keyboard.press('Tab');
+      await page.keyboard.press("Tab");
       const world = await page.evaluate(() =>
-        document.activeElement?.getAttribute('data-world')
+        document.activeElement?.getAttribute("data-world"),
       );
       if (world) reached.push(world);
     }
-    expect(reached, 'Tab never reached the world boards').toContain('data');
-    expect(reached).toContain('cloud');
+    expect(reached, "Tab never reached the world boards").toContain("data");
+    expect(reached).toContain("cloud");
 
     // Focus-visible ring must actually change border colour.
     // The ring is styled with :focus-visible, which only applies to keyboard-driven
@@ -400,21 +455,23 @@ test.describe('accessibility (brief section 14)', () => {
     // Chromium then resumes tabbing from the click point, which skips the boards
     // entirely. Tabbing from a freshly loaded page reaches them reliably.
     for (let i = 0; i < 12; i++) {
-      await page.keyboard.press('Tab');
+      await page.keyboard.press("Tab");
       const isData = await page.evaluate(
-        () => document.activeElement?.getAttribute('data-world') === 'data'
+        () => document.activeElement?.getAttribute("data-world") === "data",
       );
       if (isData) break;
     }
-    await expect(page.locator('[data-testid="world-board-data"]')).toBeFocused();
+    await expect(
+      page.locator('[data-testid="world-board-data"]'),
+    ).toBeFocused();
 
     // :focus-visible must genuinely be engaged, or the ring is not a11y-visible.
     expect(
       await page.evaluate(() =>
         document
           .querySelector('[data-testid="world-board-data"]')!
-          .matches(':focus-visible')
-      )
+          .matches(":focus-visible"),
+      ),
     ).toBe(true);
 
     // Wait for the 180ms ring transition to settle. The border colour is
@@ -422,64 +479,66 @@ test.describe('accessibility (brief section 14)', () => {
     await page.waitForFunction(
       () => {
         const r = document.querySelector(
-          '[data-testid="world-board-data"] .world-board__ring'
+          '[data-testid="world-board-data"] .world-board__ring',
         );
         if (!r) return false;
         const c = getComputedStyle(r).borderTopColor;
-        return c === 'rgb(255, 255, 255)';
+        return c === "rgb(255, 255, 255)";
       },
       undefined,
-      { timeout: 3000 }
+      { timeout: 3000 },
     );
 
     const ring = await page.evaluate(() => {
       const r = document.querySelector(
-        '[data-testid="world-board-data"] .world-board__ring'
+        '[data-testid="world-board-data"] .world-board__ring',
       )!;
       return getComputedStyle(r).borderTopColor;
     });
-    expect(ring).not.toBe('rgba(0, 0, 0, 0)');
-    expect(ring).toBe('rgb(255, 255, 255)');
+    expect(ring).not.toBe("rgba(0, 0, 0, 0)");
+    expect(ring).toBe("rgb(255, 255, 255)");
   });
 
-  test('Enter selects the focused world and routes to it', async ({ page }) => {
-    await page.goto('/');
+  test("Enter selects the focused world and routes to it", async ({ page }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
 
     await page.locator('[data-testid="world-board-data"]').focus();
-    await page.keyboard.press('Enter');
+    await page.keyboard.press("Enter");
     await page.waitForTimeout(600);
 
-    await expect(page.locator('.placeholder-world')).toBeVisible();
+    await expect(page.locator(".placeholder-world")).toBeVisible();
     await expect(page).toHaveURL(/#\/data-world/);
   });
 
-  test('Space selects the focused world', async ({ page }) => {
-    await page.goto('/');
+  test("Space selects the focused world", async ({ page }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
     await page.locator('[data-testid="world-board-cloud"]').focus();
-    await page.keyboard.press('Space');
+    await page.keyboard.press("Space");
     await page.waitForTimeout(600);
     await expect(page).toHaveURL(/#\/cloud-world/);
   });
 
-  test('a polite live region exists', async ({ page }) => {
-    await page.goto('/');
+  test("a polite live region exists", async ({ page }) => {
+    await page.goto("/");
     await scrollToProgress(page, 0.9);
     await expect(page.locator('[aria-live="polite"]')).toBeAttached();
   });
 });
 
-test.describe('nothing is ever auto-selected', () => {
-  test('scrolling to the very end does not select a world', async ({ page }) => {
-    await page.goto('/');
+test.describe("nothing is ever auto-selected", () => {
+  test("scrolling to the very end does not select a world", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await scrollToProgress(page, 1);
     await page.waitForTimeout(800);
-    const selected = await page.evaluate(
-      () => document.querySelector('.cinematic-hero')?.getAttribute('data-selected')
+    const selected = await page.evaluate(() =>
+      document.querySelector(".cinematic-hero")?.getAttribute("data-selected"),
     );
     expect(selected).toBeNull();
-    await expect(page.locator('.placeholder-world')).toHaveCount(0);
+    await expect(page.locator(".placeholder-world")).toHaveCount(0);
   });
 });
 
@@ -496,72 +555,77 @@ test.describe('nothing is ever auto-selected', () => {
 // absence of overshoot, because those are the four things the video fixes.
 // ---------------------------------------------------------------------------
 
-test.describe('reference fidelity: measured video choreography', () => {
+test.describe("reference fidelity: measured video choreography", () => {
   /** Rendered top edge of a plate as a fraction of viewport height. */
-  async function plateTop(page: Page, which: 'data' | 'cloud'): Promise<number | null> {
+  async function plateTop(
+    page: Page,
+    which: "data" | "cloud",
+  ): Promise<number | null> {
     return page.evaluate((w) => {
       const el = document.querySelector(`[data-plate="${w}"]`);
       if (!el) return null;
       const cs = getComputedStyle(el);
-      if (cs.visibility === 'hidden') return null;
+      if (cs.visibility === "hidden") return null;
       const r = el.getBoundingClientRect();
       return r.top / window.innerHeight;
     }, which);
   }
 
-  test('beat boundaries match the video measurement', async () => {
+  test("beat boundaries match the video measurement", async () => {
     // 8s reference: boards rise over t 1.83-3.96s = 23%-50% of the video, and
     // nothing moves after that. These are measurements, not preferences.
-    const beats = await import('../../src/cinematic/timeline/beats');
-    const boards = beats.BEATS.find((b: { id: string }) => b.id === 'boards');
+    const beats = await import("../../src/cinematic/timeline/beats");
+    const boards = beats.BEATS.find((b: { id: string }) => b.id === "boards");
     expect(boards).toBeDefined();
     expect(boards!.start).toBeCloseTo(0.23, 5);
     expect(boards!.end).toBeCloseTo(0.5, 5);
     expect(beats.SELECTION_START).toBeCloseTo(0.5, 5);
     // The video has no separate settle beat after the rise.
-    expect(beats.BEATS.find((b: { id: string }) => b.id === 'lock')).toBeUndefined();
+    expect(
+      beats.BEATS.find((b: { id: string }) => b.id === "lock"),
+    ).toBeUndefined();
     expect(beats.BEATS.length).toBe(5);
   });
 
-  test('plates rise from below the frame bottom', async ({ page }) => {
-    await page.goto('/');
+  test("plates rise from below the frame bottom", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
 
     // Absent before the beat.
     await scrollToProgress(page, 0.1);
-    expect(await plateTop(page, 'data')).toBeNull();
+    expect(await plateTop(page, "data")).toBeNull();
 
     // Low in the frame early in the rise (video t 2.0s: y 0.778), high at the
     // seat (video t 3.96s: y 0.225).
     await scrollToProgress(page, 0.27);
-    const early = await plateTop(page, 'data');
+    const early = await plateTop(page, "data");
     expect(early).not.toBeNull();
     expect(early!).toBeGreaterThan(0.6);
 
     await scrollToProgress(page, 0.9);
-    const seated = await plateTop(page, 'data');
+    const seated = await plateTop(page, "data");
     expect(seated).not.toBeNull();
     expect(seated!).toBeLessThan(0.3);
   });
 
-  test('plates rise in lockstep', async ({ page }) => {
-    await page.goto('/');
+  test("plates rise in lockstep", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
 
     // Measured: the reference's two plates are at identical y to four decimals
     // at every sample of the rise. A stagger would show up here immediately.
     for (const f of [0.28, 0.33, 0.38, 0.43, 0.48]) {
       await scrollToProgress(page, f);
-      const d = await plateTop(page, 'data');
-      const c = await plateTop(page, 'cloud');
+      const d = await plateTop(page, "data");
+      const c = await plateTop(page, "cloud");
       expect(d).not.toBeNull();
       expect(c).not.toBeNull();
       expect(Math.abs(d! - c!)).toBeLessThan(0.02);
     }
   });
 
-  test('the rise never overshoots its seat', async ({ page }) => {
-    await page.goto('/');
+  test("the rise never overshoots its seat", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
 
     // The reference does not rebound after arriving. easeOutBack did, so this
@@ -570,7 +634,7 @@ test.describe('reference fidelity: measured video choreography', () => {
     let moved = 0;
     for (const f of [0.23, 0.27, 0.31, 0.35, 0.39, 0.43, 0.47, 0.5]) {
       await scrollToProgress(page, f);
-      const top = await plateTop(page, 'data');
+      const top = await plateTop(page, "data");
       if (top === null) continue;
       expect(top).toBeLessThanOrEqual(prev + 0.005);
       if (prev - top > 0.005) moved++;
@@ -580,21 +644,25 @@ test.describe('reference fidelity: measured video choreography', () => {
     expect(moved).toBeGreaterThan(3);
   });
 
-  test('the selection hold is static, like the reference after t 4.0s', async ({ page }) => {
-    await page.goto('/');
+  test("the selection hold is static, like the reference after t 4.0s", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
 
     await scrollToProgress(page, 0.6);
-    const a = await plateTop(page, 'data');
+    const a = await plateTop(page, "data");
     await scrollToProgress(page, 1.0);
-    const b = await plateTop(page, 'data');
+    const b = await plateTop(page, "data");
     expect(a).toBeCloseTo(b!, 3);
 
     // And the figure never moves at any point in the cinematic.
     for (const f of [0, 0.2, 0.4, 0.6, 0.8, 1.0]) {
       await scrollToProgress(page, f);
       const tf = await page.evaluate(
-        () => document.querySelector('.figure-layer img')?.getAttribute('style') ?? ''
+        () =>
+          document.querySelector(".figure-layer img")?.getAttribute("style") ??
+          "",
       );
       // No transform of any kind is applied to the figure.
       expect(tf).not.toMatch(/translate3d/);
@@ -612,13 +680,13 @@ test.describe('reference fidelity: measured video choreography', () => {
 // visual mismatch.
 // ---------------------------------------------------------------------------
 
-test.describe('plate interior treatment', () => {
-  test('plates are printed interiors, not flat fills', async ({ page }) => {
-    await page.goto('/');
+test.describe("plate interior treatment", () => {
+  test("plates are printed interiors, not flat fills", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
     await scrollToProgress(page, 0.9);
 
-    for (const side of ['data', 'cloud'] as const) {
+    for (const side of ["data", "cloud"] as const) {
       const interior = page.locator(`[data-interior="${side}"]`);
       await expect(interior).toHaveCount(1);
 
@@ -639,8 +707,8 @@ test.describe('plate interior treatment', () => {
     }
   });
 
-  test('each plate carries its own technical marks', async ({ page }) => {
-    await page.goto('/');
+  test("each plate carries its own technical marks", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
     await scrollToProgress(page, 0.9);
 
@@ -649,21 +717,26 @@ test.describe('plate interior treatment', () => {
     const expectMarks = async (side: string, kinds: string[]) => {
       const found = await page.evaluate((s) => {
         const root = document.querySelector(`[data-interior="${s}"]`)!;
-        return Array.from(root.querySelectorAll('svg g')).map((g) =>
-          Array.from(g.classList).join(' ')
+        return Array.from(root.querySelectorAll("svg g")).map((g) =>
+          Array.from(g.classList).join(" "),
         );
       }, side);
       for (const k of kinds) {
-        expect(found.some((c) => c.includes(k)), `${side} missing ${k}`).toBe(true);
+        expect(
+          found.some((c) => c.includes(k)),
+          `${side} missing ${k}`,
+        ).toBe(true);
       }
     };
 
-    await expectMarks('data', ['mark--bars', 'mark--ring', 'mark--net']);
-    await expectMarks('cloud', ['mark--flow', 'mark--orbit', 'mark--clouds']);
+    await expectMarks("data", ["mark--bars", "mark--ring", "mark--net"]);
+    await expectMarks("cloud", ["mark--flow", "mark--orbit", "mark--clouds"]);
   });
 
-  test('interior artwork is hidden from assistive technology', async ({ page }) => {
-    await page.goto('/');
+  test("interior artwork is hidden from assistive technology", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
     await scrollToProgress(page, 0.9);
 
@@ -671,22 +744,23 @@ test.describe('plate interior treatment', () => {
     // already carry the meaning (D2), so exposing the artwork would double it.
     const ariaHidden = await page.evaluate(() => {
       const el = document.querySelector('[data-interior="data"]')!;
-      return el.getAttribute('aria-hidden');
+      return el.getAttribute("aria-hidden");
     });
-    expect(ariaHidden).toBe('true');
+    expect(ariaHidden).toBe("true");
 
     // The button still names the world for assistive tech. The label lives on
     // aria-label (the plate's visible text is the wordmark, which alone would
     // not say what activating the board does), so assert the attribute rather
     // than text content.
-    await expect(page.locator('[data-testid="world-board-data"]')).toHaveAttribute(
-      'aria-label',
-      /enter the data world/i
-    );
+    await expect(
+      page.locator('[data-testid="world-board-data"]'),
+    ).toHaveAttribute("aria-label", /enter the data world/i);
   });
 
-  test('interiors rise with their plates and never separate', async ({ page }) => {
-    await page.goto('/');
+  test("interiors rise with their plates and never separate", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
 
     // The interior has no transform of its own -- it is a child of the plate,
@@ -695,7 +769,7 @@ test.describe('plate interior treatment', () => {
       await scrollToProgress(page, f);
       const same = await page.evaluate(() => {
         const plate = document.querySelector('[data-plate="data"]')!;
-        const interior = plate.querySelector('.plate-interior')!;
+        const interior = plate.querySelector(".plate-interior")!;
         const pr = plate.getBoundingClientRect();
         const ir = interior.getBoundingClientRect();
         return {
@@ -707,12 +781,15 @@ test.describe('plate interior treatment', () => {
       expect(same.dx).toBeLessThan(1.5);
       expect(same.dy).toBeLessThan(1.5);
       // No independent transform: it can only move with the plate.
-      expect(same.transform === 'none' || same.transform === 'matrix(1, 0, 0, 1, 0, 0)').toBe(true);
+      expect(
+        same.transform === "none" ||
+          same.transform === "matrix(1, 0, 0, 1, 0, 0)",
+      ).toBe(true);
     }
   });
 
-  test('interior opacity is tied to the plate reveal', async ({ page }) => {
-    await page.goto('/');
+  test("interior opacity is tied to the plate reveal", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
 
     // Before the boards beat the plate is gated off, so the interior must be
@@ -720,23 +797,25 @@ test.describe('plate interior treatment', () => {
     await scrollToProgress(page, 0.1);
     const early = await page.evaluate(() => {
       const plate = document.querySelector('[data-plate="data"]')!;
-      const interior = plate.querySelector('.plate-interior')!;
+      const interior = plate.querySelector(".plate-interior")!;
       return {
         plateVisibility: getComputedStyle(plate).visibility,
         interiorOpacity: Number(getComputedStyle(interior).opacity),
       };
     });
-    expect(early.plateVisibility).toBe('hidden');
+    expect(early.plateVisibility).toBe("hidden");
 
     await scrollToProgress(page, 0.9);
-    const late = await page.evaluate(
-      () => Number(getComputedStyle(document.querySelector('.plate-interior')!).opacity)
+    const late = await page.evaluate(() =>
+      Number(
+        getComputedStyle(document.querySelector(".plate-interior")!).opacity,
+      ),
     );
     expect(late).toBeGreaterThan(0.95);
   });
 
-  test('interior treatment stays monochrome', async ({ page }) => {
-    await page.goto('/');
+  test("interior treatment stays monochrome", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(800);
     await scrollToProgress(page, 0.9);
 
@@ -751,11 +830,17 @@ test.describe('plate interior treatment', () => {
     // higher, so neither can slip through.
     const coloured = await page.evaluate(() => {
       const out: string[] = [];
-      for (const side of ['data', 'cloud']) {
+      for (const side of ["data", "cloud"]) {
         const root = document.querySelector(`[data-interior="${side}"]`)!;
         const walk = (el: Element) => {
           const cs = getComputedStyle(el);
-          for (const prop of ['color', 'backgroundColor', 'fill', 'stroke', 'borderTopColor']) {
+          for (const prop of [
+            "color",
+            "backgroundColor",
+            "fill",
+            "stroke",
+            "borderTopColor",
+          ]) {
             const v = cs[prop as keyof CSSStyleDeclaration] as string;
             const m = v?.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
             if (!m) continue;
@@ -775,7 +860,9 @@ test.describe('plate interior treatment', () => {
     // rgb(74,78,82) measured mean chroma 5.4 against the reference's 1.0.
     const baseChroma = await page.evaluate(() => {
       const el = document.querySelector('[data-interior="data"]')!;
-      const m = getComputedStyle(el).backgroundColor.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/)!;
+      const m = getComputedStyle(el).backgroundColor.match(
+        /(\d+)[,\s]+(\d+)[,\s]+(\d+)/,
+      )!;
       const [r, g, b] = [+m[1], +m[2], +m[3]];
       return Math.max(r, g, b) - Math.min(r, g, b);
     });
@@ -798,32 +885,44 @@ test.describe('plate interior treatment', () => {
  *   3. The headline boxes were narrower and higher than the reference's
  *      measured ink extents, so even in place it overflowed the frame.
  */
-test.describe('opening state regression (default motion)', () => {
-  test('loads on the OPENING composition, not the final selection', async ({ page }) => {
-    await page.goto('/');
+test.describe("opening state regression (default motion)", () => {
+  test("loads on the OPENING composition, not the final selection", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await page.waitForTimeout(900);
 
     // No selection controls mounted at scroll 0.
-    await expect(page.locator('[data-testid="world-board-data"]')).toHaveCount(0);
-    await expect(page.locator('[data-testid="world-board-cloud"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="world-board-data"]')).toHaveCount(
+      0,
+    );
+    await expect(page.locator('[data-testid="world-board-cloud"]')).toHaveCount(
+      0,
+    );
 
     // Both plates are off-stage.
-    await expect(page.locator('[data-plate="data"]')).toHaveCSS('visibility', 'hidden');
-    await expect(page.locator('[data-plate="cloud"]')).toHaveCSS('visibility', 'hidden');
+    await expect(page.locator('[data-plate="data"]')).toHaveCSS(
+      "visibility",
+      "hidden",
+    );
+    await expect(page.locator('[data-plate="cloud"]')).toHaveCSS(
+      "visibility",
+      "hidden",
+    );
 
     // There IS a real scroll track.
     const scrollable = await page.evaluate(
-      () => document.documentElement.scrollHeight - window.innerHeight
+      () => document.documentElement.scrollHeight - window.innerHeight,
     );
     expect(scrollable).toBeGreaterThan(1000);
   });
 
-  test('headline is fully visible and un-clipped at load', async ({ page }) => {
-    await page.goto('/');
+  test("headline is fully visible and un-clipped at load", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(900);
 
     const words = await page.evaluate(() =>
-      ['left', 'right'].map((side) => {
+      ["left", "right"].map((side) => {
         const el = document.querySelector(`.cinematic-type__word--${side}`)!;
         const r = el.getBoundingClientRect();
         return {
@@ -832,7 +931,7 @@ test.describe('opening state regression (default motion)', () => {
           right: r.right / window.innerWidth,
           opacity: Number(getComputedStyle(el).opacity),
         };
-      })
+      }),
     );
 
     for (const w of words) {
@@ -853,8 +952,8 @@ test.describe('opening state regression (default motion)', () => {
     expect(words[1].right).toBeLessThan(0.9719 + 0.02);
   });
 
-  test('scroll produces continuous, reversible change', async ({ page }) => {
-    await page.goto('/');
+  test("scroll produces continuous, reversible change", async ({ page }) => {
+    await page.goto("/");
     await page.waitForTimeout(900);
 
     const plate = page.locator('[data-plate="data"]');
@@ -933,17 +1032,19 @@ test.describe('opening state regression (default motion)', () => {
     // Scrolling back reverses all the way to the opening state.
     const back = await at(0);
     expect(back).toBeGreaterThan(s50!);
-    await expect(plate).toHaveCSS('visibility', 'hidden');
+    await expect(plate).toHaveCSS("visibility", "hidden");
   });
 
-  test('the figure stays stationary across the whole track', async ({ page }) => {
-    await page.goto('/');
+  test("the figure stays stationary across the whole track", async ({
+    page,
+  }) => {
+    await page.goto("/");
     await page.waitForTimeout(900);
 
     const figTop = async () =>
       page.evaluate(() => {
         const el =
-          document.querySelector('.cinematic-figure img') ||
+          document.querySelector(".cinematic-figure img") ||
           document.querySelector('[class*="figure"]');
         return el ? el.getBoundingClientRect().top / window.innerHeight : null;
       });
@@ -953,14 +1054,17 @@ test.describe('opening state regression (default motion)', () => {
       await page.evaluate((frac) =>
         window.scrollTo(
           0,
-          Math.round((document.documentElement.scrollHeight - window.innerHeight) * frac)
-        )
+          Math.round(
+            (document.documentElement.scrollHeight - window.innerHeight) * frac,
+          ),
+        ),
       );
       await page.waitForTimeout(600);
       samples.push(await figTop());
     }
 
-    const spread = Math.max(...samples.map((s) => s!)) - Math.min(...samples.map((s) => s!));
+    const spread =
+      Math.max(...samples.map((s) => s!)) - Math.min(...samples.map((s) => s!));
     expect(spread).toBeLessThan(0.01);
   });
 });
@@ -979,13 +1083,13 @@ test.describe('opening state regression (default motion)', () => {
  * So the fit now distributes tracking instead of stretching, and these tests
  * assert the properties that fix was supposed to buy.
  */
-test.describe('typography polish', () => {
+test.describe("typography polish", () => {
   const VIEWPORTS = [
-    { width: 1920, height: 1080, name: '1920x1080' },
-    { width: 1440, height: 900, name: '1440x900' },
-    { width: 1280, height: 720, name: '1280x720' },
-    { width: 1024, height: 768, name: '1024x768' },
-    { width: 390, height: 844, name: '390-mobile' },
+    { width: 1920, height: 1080, name: "1920x1080" },
+    { width: 1440, height: 900, name: "1440x900" },
+    { width: 1280, height: 720, name: "1280x720" },
+    { width: 1024, height: 768, name: "1024x768" },
+    { width: 390, height: 844, name: "390-mobile" },
   ];
 
   /**
@@ -994,12 +1098,12 @@ test.describe('typography polish', () => {
    * `scaleX` is read from the computed transform matrix, so a `none` transform
    * reports 1.0 rather than being missed by a string match on `scaleX(...)`.
    */
-  const readHeadline = (page: import('@playwright/test').Page) =>
+  const readHeadline = (page: import("@playwright/test").Page) =>
     page.evaluate(() => {
       const out: Array<Record<string, number | string>> = [];
-      for (const side of ['left', 'right']) {
+      for (const side of ["left", "right"]) {
         const word = document.querySelector(`.cinematic-type__word--${side}`)!;
-        const glyphs = word.querySelector('.cinematic-type__glyphs')!;
+        const glyphs = word.querySelector(".cinematic-type__glyphs")!;
         const cs = getComputedStyle(glyphs);
         const fontSize = parseFloat(cs.fontSize);
         const track = parseFloat(cs.letterSpacing);
@@ -1010,7 +1114,7 @@ test.describe('typography polish', () => {
         const m = new DOMMatrixReadOnly(cs.transform);
         out.push({
           side,
-          text: glyphs.textContent ?? '',
+          text: glyphs.textContent ?? "",
           scaleX: m.a,
           trackEm: Number.isFinite(track) ? track / fontSize : 0,
           inkLeft: ink.left,
@@ -1027,7 +1131,7 @@ test.describe('typography polish', () => {
       page,
     }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      await page.goto('/');
+      await page.goto("/");
       await page.waitForTimeout(900);
 
       for (const w of await readHeadline(page)) {
@@ -1054,9 +1158,11 @@ test.describe('typography polish', () => {
     });
   }
 
-  test('every headline letter renders as a separate ink island', async ({ page }) => {
+  test("every headline letter renders as a separate ink island", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('/');
+    await page.goto("/");
     await page.waitForTimeout(900);
 
     /*
@@ -1068,19 +1174,21 @@ test.describe('typography polish', () => {
      * nothing is touching. Column-profiling the rendered ink is the ground
      * truth: it counts actual separated glyph islands.
      */
-    for (const side of ['left', 'right']) {
-      const box = await page.locator(`.cinematic-type__word--${side}`).boundingBox();
+    for (const side of ["left", "right"]) {
+      const box = await page
+        .locator(`.cinematic-type__word--${side}`)
+        .boundingBox();
       expect(box, `${side} box`).not.toBeNull();
       const shot = await page.screenshot({ clip: box! });
 
       const runs = await page.evaluate(async (b64) => {
         const img = new Image();
-        img.src = 'data:image/png;base64,' + b64;
+        img.src = "data:image/png;base64," + b64;
         await img.decode();
-        const c = document.createElement('canvas');
+        const c = document.createElement("canvas");
         c.width = img.width;
         c.height = img.height;
-        const g = c.getContext('2d')!;
+        const g = c.getContext("2d")!;
         g.drawImage(img, 0, 0);
         // Headline ink is DARK on a light ground.
         const d = g.getImageData(0, 0, c.width, c.height).data;
@@ -1112,28 +1220,32 @@ test.describe('typography polish', () => {
           gaps.push(merged[i + 1][0] - merged[i][1] - 1);
         }
         return { islands: merged.length, gaps, width: c.width };
-      }, shot.toString('base64'));
+      }, shot.toString("base64"));
 
-      const letters = side === 'left' ? 8 : 9;
+      const letters = side === "left" ? 8 : 9;
       expect(runs.islands, `${side} letter islands`).toBe(letters);
       // Every gap strictly positive => no two letters touch.
-      expect(Math.min(...runs.gaps), `${side} min letter gap`).toBeGreaterThan(0);
+      expect(Math.min(...runs.gaps), `${side} min letter gap`).toBeGreaterThan(
+        0,
+      );
     }
   });
 
-  test('plate role words are positively tracked and fit their plate', async ({ page }) => {
+  test("plate role words are positively tracked and fit their plate", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('/');
+    await page.goto("/");
     await page.waitForTimeout(800);
     await scrollToProgress(page, 0.9);
 
     const lines = await page.evaluate(() => {
       const out: Array<Record<string, number | string>> = [];
-      for (const side of ['data', 'cloud']) {
+      for (const side of ["data", "cloud"]) {
         const plate = document.querySelector(`[data-plate="${side}"]`)!;
-        const body = plate.querySelector('.cinematic-plate__body')!;
+        const body = plate.querySelector(".cinematic-plate__body")!;
         const contentW = body.clientWidth;
-        for (const line of plate.querySelectorAll('.cinematic-plate__line')) {
+        for (const line of plate.querySelectorAll(".cinematic-plate__line")) {
           const cs = getComputedStyle(line);
           const fontSize = parseFloat(cs.fontSize);
           const track = parseFloat(cs.letterSpacing);
@@ -1142,7 +1254,7 @@ test.describe('typography polish', () => {
           const ink = range.getBoundingClientRect();
           out.push({
             side,
-            text: (line.textContent ?? '').trim(),
+            text: (line.textContent ?? "").trim(),
             trackEm: Number.isFinite(track) ? track / fontSize : 0,
             inkW: ink.width,
             contentW,
@@ -1157,22 +1269,29 @@ test.describe('typography polish', () => {
     // DATA ANALYST, DATA ENGINEER, DEVOPS, CLOUD -- all four present.
     const texts = lines.map((l) => l.text);
     expect(texts).toEqual(
-      expect.arrayContaining(['DATA ANALYST', 'DATA ENGINEER', 'DEVOPS', 'CLOUD'])
+      expect.arrayContaining([
+        "DATA ANALYST",
+        "DATA ENGINEER",
+        "DEVOPS",
+        "CLOUD",
+      ]),
     );
 
     for (const l of lines) {
       const where = `${l.side} ${l.text}`;
       expect(l.trackEm, `${where} tracking`).toBeGreaterThan(0.02);
-      expect(l.inkW, `${where} ink vs plate`).toBeLessThan(l.contentW as number);
+      expect(l.inkW, `${where} ink vs plate`).toBeLessThan(
+        l.contentW as number,
+      );
       expect(l.wrapped, `${where} wrapped`).toBe(false);
     }
   });
 
-  test('typography polish does not disturb the scroll choreography', async ({
+  test("typography polish does not disturb the scroll choreography", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await page.goto('/');
+    await page.goto("/");
     await page.waitForTimeout(800);
 
     /*
@@ -1181,9 +1300,9 @@ test.describe('typography polish', () => {
      * untouched. Asserted against the real module, not a copy, so a future
      * retiming has to change this test deliberately.
      */
-    expect(beat('boards').start).toBeCloseTo(0.23, 5);
-    expect(beat('boards').end).toBeCloseTo(0.5, 5);
-    expect(beat('selection').start).toBeCloseTo(0.5, 5);
+    expect(beat("boards").start).toBeCloseTo(0.23, 5);
+    expect(beat("boards").end).toBeCloseTo(0.5, 5);
+    expect(beat("selection").start).toBeCloseTo(0.5, 5);
 
     // And the figure still does not move across the scroll.
     const figTop = () =>
@@ -1197,15 +1316,284 @@ test.describe('typography polish', () => {
         (frac) =>
           window.scrollTo(
             0,
-            Math.round((document.documentElement.scrollHeight - window.innerHeight) * frac)
+            Math.round(
+              (document.documentElement.scrollHeight - window.innerHeight) *
+                frac,
+            ),
           ),
-        f
+        f,
       );
       await page.waitForTimeout(600);
       samples.push((await figTop())!);
     }
-    expect(samples.every((s) => Number.isFinite(s)), 'figure present throughout').toBe(true);
+    expect(
+      samples.every((s) => Number.isFinite(s)),
+      "figure present throughout",
+    ).toBe(true);
     const spread = Math.max(...samples) - Math.min(...samples);
-    expect(spread, 'figure drift across the timeline').toBeLessThan(0.01);
+    expect(spread, "figure drift across the timeline").toBeLessThan(0.01);
+  });
+
+  /*
+   * The inward nudge.
+   *
+   * The headline used to sit hard against the viewport edges: PERSONAL started
+   * at 0.0367 and PORTFOLIO ended at 0.9719, so the outer margins were 3.7% and
+   * 2.8% while the composition read as edge-anchored rather than arranged around
+   * the stationary figure.
+   *
+   * Both boxes moved inward by HEADLINE_INWARD (0.012), which leaves the box
+   * WIDTH and HEIGHT untouched -- so the font size and tracking the fit solves
+   * are identical, and this is purely a positional change.
+   */
+  test("headline sits inward of the frame edges, clear of the figure", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/");
+    await page.waitForTimeout(900);
+
+    /*
+     * Measured from PIXELS, not DOM boxes.
+     *
+     * The figure ELEMENT box is far wider than the figure's silhouette -- the
+     * anchor art carries a transparent margin -- so comparing the headline's
+     * ink against the figure's `getBoundingClientRect()` reports an overlap
+     * where none exists (measured: element left 372px vs silhouette 556px).
+     * Column-profiling the rendered opening frame is the ground truth: dark ink
+     * left of centre is PERSONAL, in the middle the figure, right of centre
+     * PORTFOLIO, and the gap between those runs IS the clearance.
+     */
+    const band = await page.evaluate(() => {
+      const el = document.querySelector(".cinematic-type__word--left")!;
+      const r = el.getBoundingClientRect();
+      return {
+        y0: r.top,
+        y1: r.bottom,
+        vw: window.innerWidth,
+        vh: window.innerHeight,
+      };
+    });
+
+    const shot = await page.screenshot();
+    const runs = await page.evaluate(
+      async ({ b64, y0, y1, vw, vh }) => {
+        const img = new Image();
+        img.src = "data:image/png;base64," + b64;
+        await img.decode();
+        const c = document.createElement("canvas");
+        c.width = img.width;
+        c.height = img.height;
+        const g = c.getContext("2d")!;
+        g.drawImage(img, 0, 0);
+        const sx = img.width / vw;
+        const sy = img.height / vh;
+        const yA = Math.round(y0 * sy);
+        const yB = Math.round(y1 * sy);
+        const d = g.getImageData(0, yA, img.width, yB - yA).data;
+        const dark = new Uint8Array(img.width);
+        for (let x = 0; x < img.width; x++) {
+          let n = 0;
+          for (let y = 0; y < yB - yA; y++) {
+            const i = (y * img.width + x) * 4;
+            // Rec. 601 luma; headline ink is DARK on a light ground.
+            if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 128) n++;
+          }
+          dark[x] = n;
+        }
+        // Column runs, merged across 1px of antialiasing.
+        const merged: Array<[number, number]> = [];
+        let start = -1;
+        for (let x = 0; x <= img.width; x++) {
+          const on = x < img.width && dark[x] > 0;
+          if (on && start < 0) start = x;
+          else if (!on && start >= 0) {
+            const last = merged[merged.length - 1];
+            if (last && start - last[1] <= 1) last[1] = x - 1;
+            else merged.push([start, x - 1]);
+            start = -1;
+          }
+        }
+        // Back to CSS px.
+        return merged.map(([a, z]) => [(a + 1) / sx, (z + 1) / sx]);
+      },
+      {
+        b64: shot.toString("base64"),
+        y0: band.y0,
+        y1: band.y1,
+        vw: band.vw,
+        vh: band.vh,
+      },
+    );
+
+    const left = runs.filter((r) => r[1] < band.vw * 0.42);
+    const centre = runs.filter(
+      (r) => r[0] >= band.vw * 0.42 && r[1] <= band.vw * 0.58,
+    );
+    const right = runs.filter((r) => r[0] > band.vw * 0.58);
+
+    expect(left.length, "PERSONAL ink found").toBeGreaterThan(0);
+    expect(centre.length, "figure ink found").toBeGreaterThan(0);
+    expect(right.length, "PORTFOLIO ink found").toBeGreaterThan(0);
+
+    const inkL = left[0][0];
+    const inkEndL = left[left.length - 1][1];
+    const figStart = centre[0][0];
+    const figEnd = centre[centre.length - 1][1];
+    const inkStartR = right[0][0];
+    const inkR = right[right.length - 1][1];
+
+    /*
+     * Outer margins. The reference measured 3.7% / 2.8%; after the nudge the
+     * rendered ink measures ~5.0% / 5.0%. A floor of 4% catches a regression
+     * that pushes a word back to the edge without over-constraining the value.
+     */
+    const marginL = inkL / band.vw;
+    const marginR = (band.vw - inkR) / band.vw;
+    expect(marginL, "PERSONAL outer margin").toBeGreaterThan(0.04);
+    expect(marginR, "PORTFOLIO outer margin").toBeGreaterThan(0.04);
+
+    // The margins are within 1.5% of each other: "balanced", not recentred.
+    expect(Math.abs(marginL - marginR), "outer margin balance").toBeLessThan(
+      0.015,
+    );
+
+    /*
+     * Clear of the figure. Measured gaps are 68px (PERSONAL) and 81px
+     * (PORTFOLIO) at 1280x720. 12px is wide for regression purposes: the eroded
+     * mask edges and font-metric differences move these by a couple of pixels,
+     * not dozens.
+     */
+    expect(
+      figStart - inkEndL,
+      "PERSONAL clearance to the figure",
+    ).toBeGreaterThan(12);
+    expect(
+      inkStartR - figEnd,
+      "PORTFOLIO clearance to the figure",
+    ).toBeGreaterThan(12);
+
+    // And neither word touches the frame edge.
+    expect(inkL, "PERSONAL left edge").toBeGreaterThan(0.5);
+    expect(inkR, "PORTFOLIO right edge").toBeLessThan(band.vw - 0.5);
+  });
+
+  test("the nudge changed position only, not the type", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/");
+    await page.waitForTimeout(900);
+
+    /*
+     * The brief says "do not change font size again unless absolutely necessary"
+     * and "preserve the improved readability and letter spacing". Since the box
+     * width and height are unchanged, the fit must solve the SAME font size and
+     * the SAME positive tracking it solved before the nudge.
+     *
+     * The reference values are the pre-nudge measurements from the typography
+     * polish pass: PERSONAL 86.06px / 12.25px, PORTFOLIO 86.02px / 11.00px.
+     */
+    const type = await page.evaluate(() => {
+      const out: Array<Record<string, number | string>> = [];
+      for (const side of ["left", "right"]) {
+        const glyphs = document.querySelector(
+          `.cinematic-type__word--${side} .cinematic-type__glyphs`,
+        )!;
+        const cs = getComputedStyle(glyphs);
+        out.push({
+          side,
+          fontSize: parseFloat(cs.fontSize),
+          track: parseFloat(cs.letterSpacing),
+          scaleX: new DOMMatrixReadOnly(cs.transform).a,
+        });
+      }
+      return out;
+    });
+
+    const EXPECTED = [
+      { side: "left", fontSize: 86.06, track: 12.25 },
+      { side: "right", fontSize: 86.02, track: 11.0 },
+    ];
+    for (const [i, e] of EXPECTED.entries()) {
+      const t = type[i];
+      expect(
+        Math.abs(t.fontSize - e.fontSize),
+        `${e.side} font-size`,
+      ).toBeLessThan(1);
+      expect(Math.abs(t.track - e.track), `${e.side} tracking`).toBeLessThan(
+        0.6,
+      );
+      expect(Math.abs(t.scaleX - 1), `${e.side} scaleX`).toBeLessThan(0.02);
+    }
+  });
+
+  test("role wordmarks are inset toward the figure, even when stacked", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto("/");
+    await page.waitForTimeout(800);
+    await scrollToProgress(page, 0.9);
+
+    /*
+     * The same principle one level down: the wordmarks were inset evenly (11%
+     * both sides), so each sat against its plate's OUTER edge. Data gains inset
+     * on its left, Cloud on its right.
+     *
+     * Asserted as a directional difference rather than an exact value: the Data
+     * plate's left inset must exceed its right, and the Cloud plate's right
+     * inset must exceed its left.
+     */
+    const inset = await page.evaluate(() => {
+      const out: Record<string, { l: number; r: number }> = {};
+      for (const side of ["data", "cloud"]) {
+        const plate = document.querySelector(`[data-plate="${side}"]`)!;
+        const pb = plate.getBoundingClientRect();
+        const body = plate
+          .querySelector(".cinematic-plate__body")!
+          .getBoundingClientRect();
+        out[side] = {
+          l: ((body.left - pb.left) / pb.width) * 100,
+          r: ((pb.right - body.right) / pb.width) * 100,
+        };
+      }
+      return out;
+    });
+
+    expect(
+      inset.data.l,
+      "DATA ANALYST inset on the figure side",
+    ).toBeGreaterThan(inset.data.r);
+    expect(inset.cloud.r, "DEVOPS inset on the figure side").toBeGreaterThan(
+      inset.cloud.l,
+    );
+
+    // Mobile stacks the plates BELOW the figure, so even insets are correct
+    // there: "inward" means toward the stacked centre line, not toward a figure
+    // that is no longer between them.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.waitForTimeout(800);
+    await scrollToProgress(page, 0.9);
+    const stacked = await page.evaluate(() => {
+      const out: Record<string, { l: number; r: number }> = {};
+      for (const side of ["data", "cloud"]) {
+        const plate = document.querySelector(`[data-plate="${side}"]`)!;
+        const pb = plate.getBoundingClientRect();
+        const body = plate
+          .querySelector(".cinematic-plate__body")!
+          .getBoundingClientRect();
+        out[side] = {
+          l: ((body.left - pb.left) / pb.width) * 100,
+          r: ((pb.right - body.right) / pb.width) * 100,
+        };
+      }
+      return out;
+    });
+    for (const side of ["data", "cloud"] as const) {
+      expect(
+        Math.abs(stacked[side].l - stacked[side].r),
+        `${side} stacked inset`,
+      ).toBeLessThan(0.5);
+    }
   });
 });
