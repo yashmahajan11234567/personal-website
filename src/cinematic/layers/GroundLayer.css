@@ -1,0 +1,51 @@
+/*
+ * Ground layer — the white stage.
+ *
+ * Scale/position only; no colour of its own. The radial falloff reproduces the
+ * reference's bright centre with a soft grey edge (reference mean luma 175.7 at
+ * the open hold, settling to 147.2 as ink accumulates).
+ */
+
+.cinematic-ground {
+  --ground-scale: 1;
+  --ground-falloff: 44%;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: #f4f4f2;
+}
+
+.cinematic-ground__field {
+  position: absolute;
+  inset: -6%;
+  transform: scale(var(--ground-scale));
+  transform-origin: 50% 58%;
+  will-change: transform;
+  background:
+    radial-gradient(
+      ellipse 62% 58% at 50% var(--ground-falloff),
+      #ffffff 0%,
+      #fdfdfc 38%,
+      #f2f2ef 68%,
+      #e4e4e0 100%
+    );
+}
+
+.cinematic-ground__floor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 22%;
+  transform: scale(var(--ground-scale));
+  transform-origin: 50% 100%;
+  will-change: transform;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.045) 55%,
+    rgba(0, 0, 0, 0.09) 100%
+  );
+}

@@ -1,0 +1,66 @@
+/*
+ * Figure layer — the immobile anchor.
+ *
+ * There is intentionally NO transition or transform here. The figure is placed
+ * once from the measured reference rect and never moved (D5). A test asserts
+ * the computed transform is `none` at every scroll position.
+ */
+
+.cinematic-figure {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  /* No transform, no transition. Position is fixed for the whole cinematic. */
+  transform: none;
+  transition: none;
+  display: block;
+}
+
+.cinematic-figure__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  /* Promote to its own layer so nothing above it can cause a repaint that
+     would read as movement. */
+  transform: translateZ(0);
+  user-select: none;
+  -webkit-user-drag: none;
+  /* The cut already carries its own contrast; do not re-grade it. */
+  filter: none;
+}
+
+/*
+ * Optional specular breath on the plate highlight. Opt-in via
+ * `enableSpecular`, and capped well under 1% so it can never be mistaken for
+ * figure movement.
+ */
+.cinematic-figure--specular .cinematic-figure__specular {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  top: 56%;
+  height: 34%;
+  pointer-events: none;
+  background: linear-gradient(
+    104deg,
+    rgba(255, 255, 255, 0) 38%,
+    rgba(255, 255, 255, 0.16) 50%,
+    rgba(255, 255, 255, 0) 62%
+  );
+  mix-blend-mode: screen;
+  animation: cinematic-figure-specular 9s ease-in-out infinite;
+}
+
+@keyframes cinematic-figure-specular {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateX(0.6%);
+  }
+  50% {
+    opacity: 0.7;
+    transform: translateX(-0.6%);
+  }
+}

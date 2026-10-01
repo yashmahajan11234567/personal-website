@@ -1,0 +1,37 @@
+/*
+ * Grain and vignette — decorative, monochrome, never interactive.
+ * Inline SVG turbulence so there is no image request and no colour drift.
+ */
+
+.cinematic-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.cinematic-grain__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 78% 74% at 50% 46%,
+    rgba(0, 0, 0, 0) 52%,
+    rgba(0, 0, 0, 0.055) 82%,
+    rgba(0, 0, 0, 0.1) 100%
+  );
+}
+
+.cinematic-grain__noise {
+  position: absolute;
+  inset: 0;
+  opacity: 0.038;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 140px 140px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-grain__noise {
+    opacity: 0.03;
+  }
+}

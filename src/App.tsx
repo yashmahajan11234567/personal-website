@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { CinematicHero } from './components/Hero';
 import { useGameStore } from './store/gameStore';
+import type { Path } from './store/gameStore';
 import './App.css';
 
 function App() {
-  const { 
-    currentWorld, 
-    setCurrentWorld,
-  } = useGameStore();
-  const [hasError, setHasError] = useState(false);
+  const currentWorld = useGameStore((s) => s.currentWorld);
+  const setCurrentWorld = useGameStore((s) => s.setCurrentWorld);
+  const reset = useGameStore((s) => s.reset);
 
+  // Deep-link support, retained from the previous implementation.
   useEffect(() => {
     const hash = window.location.hash;
     if (hash === '#/data-world') {
@@ -19,39 +19,44 @@ function App() {
     }
   }, [setCurrentWorld]);
 
-  const handleHeroTransitionComplete = (path: 'data' | 'cloud') => {
-    console.log('[App] Hero transition complete, entering:', path);
-    setCurrentWorld(`${path}-world`);
+  /**
+   * World selection. Task 8 replaces this with the restrained handoff
+   * transition; until then the world mounts directly so the path through the
+   * cinematic can be verified end to end.
+   */
+  const handleWorldSelected = (path: Path) => {
+    setCurrentWorld(path === 'data' ? 'data-world' : 'cloud-world');
     window.location.hash = `#/${path}-world`;
   };
 
-  const handleError = () => {
-    setHasError(true);
+  const returnToHero = () => {
+    reset();
+    window.location.hash = '';
   };
-
-  if (hasError) {
-    return <div style={{ padding: '2rem', color: 'red' }}>An error occurred. Check console.</div>;
-  }
 
   return (
     <div className="app">
-      <a href="#main" className="skip-link">Skip to main content</a>
-      <main id="main" onError={handleError}>
-        {currentWorld === 'hero' && (
-          <CinematicHero onTransitionComplete={handleHeroTransitionComplete} />
-        )}
+      <a href="#main" className="skip-link">
+        Skip to main content
+      </a>
+      <main id="main">
+        {currentWorld === 'hero' && <CinematicHero onWorldSelected={handleWorldSelected} />}
         
         {currentWorld === 'data-world' && (
           <div className="placeholder-world" data-theme="dark">
             <h1>Data World — Phase 2</h1>
-            <button onClick={() => { setCurrentWorld('hero'); window.location.hash = ''; }}>Back to Hero</button>
+            <button type="button" onClick={returnToHero}>
+              Back to Hero
+            </button>
           </div>
         )}
 
         {currentWorld === 'cloud-world' && (
           <div className="placeholder-world" data-theme="dark">
             <h1>Cloud World — Phase 2</h1>
-            <button onClick={() => { setCurrentWorld('hero'); window.location.hash = ''; }}>Back to Hero</button>
+            <button type="button" onClick={returnToHero}>
+              Back to Hero
+            </button>
           </div>
         )}
 

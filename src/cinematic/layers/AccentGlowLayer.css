@@ -1,0 +1,81 @@
+/*
+ * Accent glow — world identity on hover only (D4).
+ *
+ * Two soft radial washes, one per side, sitting below the plates (z-index 1)
+ * and the figure (z-index 3). Alpha is driven by --glow-alpha, set from the
+ * store: 1 when that world is hovered/focused/selected, 0 otherwise.
+ *
+ * Deliberately NOT a card fill, panel, or border tint. Max resting alpha is
+ * 0.16, which reads as atmosphere rather than as a coloured surface.
+ */
+
+.cinematic-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cinematic-glow__wash {
+  --glow-alpha: 0;
+  position: absolute;
+  /* Extends ~14vw beyond the plate edge on each side. */
+  top: 4%;
+  bottom: 16%;
+  width: 46%;
+  opacity: var(--glow-alpha);
+  transform: scale(0.96);
+  transition:
+    opacity 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+
+.cinematic-glow__wash--data {
+  left: -8%;
+  background: radial-gradient(
+    ellipse 58% 54% at 50% 50%,
+    rgba(96, 174, 232, 0.16) 0%,
+    rgba(96, 174, 232, 0.075) 42%,
+    rgba(96, 174, 232, 0) 74%
+  );
+  filter: blur(70px);
+}
+
+.cinematic-glow__wash--cloud {
+  right: -8%;
+  background: radial-gradient(
+    ellipse 58% 54% at 50% 50%,
+    rgba(240, 156, 84, 0.16) 0%,
+    rgba(240, 156, 84, 0.075) 42%,
+    rgba(240, 156, 84, 0) 74%
+  );
+  filter: blur(70px);
+}
+
+/* Active state lifts the wash slightly and opens it up. */
+.cinematic-glow[data-active='data'] .cinematic-glow__wash--data,
+.cinematic-glow[data-active='cloud'] .cinematic-glow__wash--cloud {
+  transform: scale(1);
+}
+
+/* During the handoff the selected world's accent may intensify (D4). */
+.cinematic-glow[data-active='data'][data-intensifying],
+.cinematic-glow[data-active='cloud'][data-intensifying] {
+  --intensify: 1.9;
+}
+
+.cinematic-glow[data-active='data'][data-intensifying] .cinematic-glow__wash--data {
+  opacity: 0.3;
+}
+
+.cinematic-glow[data-active='cloud'][data-intensifying] .cinematic-glow__wash--cloud {
+  opacity: 0.3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-glow__wash {
+    transition: opacity 120ms linear;
+    transform: none;
+  }
+}
