@@ -293,6 +293,19 @@ test.describe('plate geometry matches the reference', () => {
     expect(cloud.fontSize).toBeGreaterThan(data.fontSize);
   });
 
+  test('plate copy matches the reference wording and line order', async ({ page }) => {
+    await page.goto('/');
+    await scrollToProgress(page, 0.9);
+    const cloudText = await page.evaluate(() =>
+      Array.from(
+        document.querySelectorAll('[data-plate="cloud"] .cinematic-plate__line')
+      ).map((l) => l.textContent)
+    );
+    // ref-5.0.png reads DEVOPS on the upper line, CLOUD on the lower. The copy
+    // briefly had these reversed; this asserts the reference order.
+    expect(cloudText).toEqual(['DEVOPS', 'CLOUD']);
+  });
+
   test('board hit targets match the plates, not the old hardcoded boxes', async ({ page }) => {
     await page.goto('/');
     await scrollToProgress(page, 0.9);

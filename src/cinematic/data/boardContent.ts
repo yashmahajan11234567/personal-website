@@ -33,7 +33,9 @@ export const WORLD_BOARDS: Record<Path, WorldBoardContent> = {
   },
   cloud: {
     path: 'cloud',
-    lines: ['CLOUD', 'DEVOPS'],
+    // Order matches the reference artwork (ref-5.0.png), which reads
+    // "DEVOPS" on the upper line and "CLOUD" on the lower one.
+    lines: ['DEVOPS', 'CLOUD'],
     status: 'STATUS: LIVE',
     ariaLabel: 'Enter the Cloud world — cloud and DevOps',
     worldName: 'CLOUD / DEVOPS',
