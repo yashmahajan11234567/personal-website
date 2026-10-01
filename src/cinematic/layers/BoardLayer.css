@@ -82,12 +82,22 @@
   font-family: 'Archivo Black', 'Anton', Impact, 'Arial Narrow Bold',
     'Arial Black', sans-serif;
   font-weight: 900;
-  font-size: clamp(0.95rem, 2.05vw, 2.4rem);
+  /*
+   * Sized from the reference's measured light-pixel distribution, not by eye.
+   * In the reference the wordmark block alone carries ~30% light across the
+   * plate's y 0.4-0.7 band, which requires the type to fill that band densely.
+   * The previous clamp was too small to register: measured at only 1.4-2.1%
+   * light against the reference's 23-38%.
+   */
+  font-size: clamp(1.3rem, 3.05vw, 3.5rem);
   line-height: 0.94;
   letter-spacing: -0.015em;
   text-transform: uppercase;
   /* The wordmark is the loudest thing on the plate. */
   color: #ffffff;
+  /* Sits over the interior's recessed shelf, so keep it fully opaque. */
+  position: relative;
+  z-index: 1;
 }
 
 .cinematic-plate__line {
@@ -111,7 +121,7 @@
  * symmetry-breaking for its own sake.
  */
 .cinematic-plate[data-plate='cloud'] .cinematic-plate__body {
-  font-size: clamp(1.05rem, 2.25vw, 2.6rem);
+  font-size: clamp(1.45rem, 3.35vw, 3.85rem);
 }
 
 /* Mobile: stacked plates below the figure get horizontal type. */

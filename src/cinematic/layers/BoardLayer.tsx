@@ -22,6 +22,7 @@ import { beat } from '../timeline/beats';
 import { WORLD_BOARDS } from '../data/boardContent';
 import { boardRect, layoutMode } from '../selection/selectionGeometry';
 import type { Path } from '../../store/gameStore';
+import { PlateInterior } from './plateArtwork/PlateInterior';
 import './BoardLayer.css';
 
 /**
@@ -164,6 +165,7 @@ export function BoardLayer({ settled = false }: BoardLayerProps) {
               }}
               data-plate={path}
             >
+              <PlateInterior path={path} />
               <PlateChrome side={path} />
               <div className="cinematic-plate__body">
                 {content.lines.map((line) => (

@@ -1,0 +1,303 @@
+/*
+ * Plate interior treatment.
+ *
+ * The reference plates are printed/embedded objects, not flat black fields.
+ * Measured from the authoritative video's selection hold (frame 96), each
+ * plate interior is approximately:
+ *
+ *   light  >150   ~20%    frame, rules, marks, type
+ *   mid 60-150    ~56%    the DOMINANT tone -- printed panels and hatching
+ *   dark  <60     ~23%    shadow bands and deep recesses
+ *
+ * `--plate-base` is therefore a mid-tone (~58 luma), not black. The previous
+ * flat #0b0b0c read as solid black against the reference and was the largest
+ * remaining visual mismatch.
+ *
+ * Structure is deliberately subordinate: the world wordmark is the loudest
+ * element (see .cinematic-plate__body), and the central figure outranks both.
+ *
+ * Everything here is monochrome. World identity comes from the hover glow
+ * (D4) as environmental light, never from the plate itself.
+ *
+ * The interior has NO transform of its own -- it sits inside the plate, so it
+ * rises with the plate and cannot pop in separately. Its opacity is tied to
+ * the plate's --reveal so it can never appear before the plate arrives.
+ */
+
+/* Fill sits on the interior's own base so the plate's flat fallback
+   background is never visible behind it. */
+.plate-interior {
+  position: absolute;
+  inset: 0;
+  background: var(--plate-base, #4e4e4e);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/*
+ * Light frame edges, measured from the reference.
+ *
+ * The reference plate carries ~20% light pixels, but they are NOT evenly
+ * spread. Measured by row band, the light concentrates in four places:
+ *
+ *   y 0.00-0.10   29% light   the bright top frame band
+ *   y 0.10-0.40    5-11%      the mark row (thin line art only)
+ *   y 0.40-0.70   23-38%      the wordmark block
+ *   y 0.70-0.90    6-12%      quiet
+ *   y 0.90-1.00   46-50%      the bright bottom frame band
+ *
+ * So the bands are structural, not decoration: the plate is a bright-edged
+ * panel with a dark body. Reproducing only the line art would land near 3% light
+ * against the reference's 20%, which is why the frame bands are drawn as
+ * actual light areas here rather than left to a 1px border.
+ */
+.plate-interior::before,
+.plate-interior::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 7%;
+  pointer-events: none;
+}
+
+.plate-interior::before {
+  top: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.62),
+    rgba(255, 255, 255, 0)
+  );
+}
+
+.plate-interior::after {
+  bottom: 0;
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 0.54),
+    rgba(255, 255, 255, 0)
+  );
+}
+
+/*
+ * Fine diagonal hatch -- the reference's printed texture -- crossed with a
+ * faint structural grid. Both are low-alpha so they read as surface, not
+ * pattern competing with the type.
+ */
+.plate-interior__texture {
+  position: absolute;
+  inset: 0;
+  background-image:
+    repeating-linear-gradient(
+      135deg,
+      var(--plate-hatch) 0 1px,
+      transparent 1px 5px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      var(--plate-grid) 0 1px,
+      transparent 1px 26px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      var(--plate-grid) 0 1px,
+      transparent 1px 26px
+    );
+}
+
+/*
+ * Recessed band behind the world type.
+ *
+ * In the reference the type sits on a DARK shelf: sampled down the plate's
+ * left edge, the reference runs ~68-80 through the mark row and dips to ~45-66
+ * behind the wordmark, against a mid-tone body. That dark shelf is what makes
+ * the white type read. The reference's tonal split needs BOTH the shelf and the
+ * mid-tone -- lightening it too far measured only 3.4% dark against the
+ * reference's 23.4%, so the shelf stays clearly darker than the body.
+ *
+ * Band extent follows the measured type block (the plate's 0.50-0.84 band) so
+ * the wordmark always has a dark ground under it at any breakpoint.
+ */
+.plate-interior__recess {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  bottom: 16%;
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.52),
+    rgba(0, 0, 0, 0.34)
+  );
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+/*
+ * A second, deeper recess above the wordmark, matching the reference's
+ * dark band between the mark row and the type. This is what supplies the dark
+ * pixel share the single shelf cannot.
+ */
+.plate-interior__texture::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 40%;
+  height: 10%;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+/* Technical mark row across the plate's top band. */
+.plate-interior__marks {
+  position: absolute;
+  top: 7%;
+  left: 9%;
+  right: 9%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6%;
+}
+
+.plate-interior__mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35em;
+  /* The reference's three marks are unequal in width; these weights keep
+     that asymmetry instead of spacing three equal blocks. */
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.plate-interior__mark:nth-child(1) { flex-grow: 0.85; }
+.plate-interior__mark:nth-child(2) { flex-grow: 1.1; }
+.plate-interior__mark:nth-child(3) { flex-grow: 1.25; }
+
+.plate-interior__mark svg {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  overflow: visible;
+}
+
+.plate-interior__caption {
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Consolas, monospace;
+  font-size: clamp(0.34rem, 0.52vw, 0.52rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Marks are line art, not solid fills -- reference treatment. */
+.plate-interior__mark svg :is(rect, circle, polygon, path, line) {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Solid accents stay small so they read as points of emphasis. */
+.plate-interior__mark svg :is(.mark__axis, .mark__ring-hub) {
+  fill: rgba(255, 255, 255, 0.45);
+  stroke: none;
+}
+
+.plate-interior__mark svg .mark__ring-inner {
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-dasharray: 5 4;
+}
+
+.plate-interior__mark svg :is(.mark__net circle, .mark--orbit circle) {
+  fill: rgba(255, 255, 255, 0.85);
+  stroke: none;
+}
+
+.plate-interior__mark svg .mark__net line {
+  stroke: rgba(255, 255, 255, 0.38);
+  stroke-width: 1.1;
+}
+
+.plate-interior__mark svg .mark__label {
+  fill: rgba(255, 255, 255, 0.78);
+  stroke: none;
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Consolas, monospace;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-anchor: middle;
+}
+
+.plate-interior__mark svg .mark__arrow {
+  stroke: rgba(255, 255, 255, 0.62);
+  stroke-width: 1.3;
+}
+
+/* Telemetry strip, lower-left, above the status line. */
+.plate-interior__telemetry {
+  position: absolute;
+  left: 11%;
+  bottom: 12%;
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Consolas, monospace;
+  font-size: clamp(0.34rem, 0.5vw, 0.5rem);
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.42);
+  white-space: nowrap;
+}
+
+/* Corner cog cluster, bottom-right, per the reference. */
+.plate-interior__cog {
+  position: absolute;
+  right: 9%;
+  bottom: 9%;
+  width: 16%;
+  height: auto;
+  aspect-ratio: 1 / 2.1;
+}
+
+.plate-interior__cog :is(circle, polygon) {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.4);
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.plate-interior__cog .mark__ring-inner {
+  stroke-dasharray: 4 4;
+}
+
+/*
+ * The interior is attached to the plate, so it inherits the plate's rise. It
+ * carries no transform of its own -- if it ever needs one, it must remain
+ * derived from the plate's --reveal so the two cannot separate.
+ *
+ * Tied to --reveal rather than given its own opacity so that when the plate is
+ * gated off before the boards beat, the interior goes with it.
+ */
+.cinematic-plate[data-plate] .plate-interior {
+  opacity: var(--reveal, 0);
+}
+
+/* Mobile: stacked plates are short, so drop the mark row rather than let it
+   collide with the type. The base, hatch and recess still read as a printed
+   plate at that size. */
+.cinematic-boards[data-mode='mobile'] .plate-interior__marks,
+.cinematic-boards[data-mode='mobile'] .plate-interior__telemetry {
+  display: none;
+}
+
+.cinematic-boards[data-mode='mobile'] .plate-interior__recess {
+  top: 40%;
+  bottom: 28%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The interior has no animation of its own; nothing to disable. Kept so the
+     reduced-motion block stays exhaustive if marks gain motion later. */
+  .plate-interior {
+    transition: none;
+  }
+}

@@ -600,3 +600,184 @@ test.describe('reference fidelity: measured video choreography', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Plate interior treatment.
+//
+// The reference plates are NOT flat black fields. Measured from the reference
+// video's selection hold, each plate interior is ~56% mid-tone (luma 60-150),
+// ~20% light and ~23% dark. These tests lock that in, because a flat fill is
+// exactly what the previous revision shipped and it was the largest remaining
+// visual mismatch.
+// ---------------------------------------------------------------------------
+
+test.describe('plate interior treatment', () => {
+  test('plates are printed interiors, not flat fills', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(800);
+    await scrollToProgress(page, 0.9);
+
+    for (const side of ['data', 'cloud'] as const) {
+      const interior = page.locator(`[data-interior="${side}"]`);
+      await expect(interior).toHaveCount(1);
+
+      const tone = await page.evaluate((s) => {
+        const el = document.querySelector(`[data-interior="${s}"]`)!;
+        const cs = getComputedStyle(el);
+        // Luma of the plate's base fill, which is the dominant tone.
+        const m = cs.backgroundColor.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+        if (!m) return null;
+        return 0.2126 * +m[1] + 0.7152 * +m[2] + 0.0722 * +m[3];
+      }, side);
+
+      expect(tone, `${side} base fill luma`).not.toBeNull();
+      // Reference mid-tone band is 60-150. A flat black fill lands near 11 and
+      // fails this immediately.
+      expect(tone!).toBeGreaterThan(55);
+      expect(tone!).toBeLessThan(160);
+    }
+  });
+
+  test('each plate carries its own technical marks', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(800);
+    await scrollToProgress(page, 0.9);
+
+    // Data: bars, ring, network map. Cloud: flow, orbit, clouds. The worlds
+    // must not share identical artwork.
+    const expectMarks = async (side: string, kinds: string[]) => {
+      const found = await page.evaluate((s) => {
+        const root = document.querySelector(`[data-interior="${s}"]`)!;
+        return Array.from(root.querySelectorAll('svg g')).map((g) =>
+          Array.from(g.classList).join(' ')
+        );
+      }, side);
+      for (const k of kinds) {
+        expect(found.some((c) => c.includes(k)), `${side} missing ${k}`).toBe(true);
+      }
+    };
+
+    await expectMarks('data', ['mark--bars', 'mark--ring', 'mark--net']);
+    await expectMarks('cloud', ['mark--flow', 'mark--orbit', 'mark--clouds']);
+  });
+
+  test('interior artwork is hidden from assistive technology', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(800);
+    await scrollToProgress(page, 0.9);
+
+    // Decoration must not be announced; the plate's live text and button label
+    // already carry the meaning (D2), so exposing the artwork would double it.
+    const ariaHidden = await page.evaluate(() => {
+      const el = document.querySelector('[data-interior="data"]')!;
+      return el.getAttribute('aria-hidden');
+    });
+    expect(ariaHidden).toBe('true');
+
+    // The button still names the world for assistive tech. The label lives on
+    // aria-label (the plate's visible text is the wordmark, which alone would
+    // not say what activating the board does), so assert the attribute rather
+    // than text content.
+    await expect(page.locator('[data-testid="world-board-data"]')).toHaveAttribute(
+      'aria-label',
+      /enter the data world/i
+    );
+  });
+
+  test('interiors rise with their plates and never separate', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(800);
+
+    // The interior has no transform of its own -- it is a child of the plate,
+    // so attachment is structural. This asserts it holds across the rise.
+    for (const f of [0.26, 0.33, 0.4, 0.47]) {
+      await scrollToProgress(page, f);
+      const same = await page.evaluate(() => {
+        const plate = document.querySelector('[data-plate="data"]')!;
+        const interior = plate.querySelector('.plate-interior')!;
+        const pr = plate.getBoundingClientRect();
+        const ir = interior.getBoundingClientRect();
+        return {
+          dx: Math.abs(ir.left - pr.left) + Math.abs(ir.right - pr.right),
+          dy: Math.abs(ir.top - pr.top) + Math.abs(ir.bottom - pr.bottom),
+          transform: getComputedStyle(interior).transform,
+        };
+      });
+      expect(same.dx).toBeLessThan(1.5);
+      expect(same.dy).toBeLessThan(1.5);
+      // No independent transform: it can only move with the plate.
+      expect(same.transform === 'none' || same.transform === 'matrix(1, 0, 0, 1, 0, 0)').toBe(true);
+    }
+  });
+
+  test('interior opacity is tied to the plate reveal', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(800);
+
+    // Before the boards beat the plate is gated off, so the interior must be
+    // gated with it -- it must never appear before the plate does.
+    await scrollToProgress(page, 0.1);
+    const early = await page.evaluate(() => {
+      const plate = document.querySelector('[data-plate="data"]')!;
+      const interior = plate.querySelector('.plate-interior')!;
+      return {
+        plateVisibility: getComputedStyle(plate).visibility,
+        interiorOpacity: Number(getComputedStyle(interior).opacity),
+      };
+    });
+    expect(early.plateVisibility).toBe('hidden');
+
+    await scrollToProgress(page, 0.9);
+    const late = await page.evaluate(
+      () => Number(getComputedStyle(document.querySelector('.plate-interior')!).opacity)
+    );
+    expect(late).toBeGreaterThan(0.95);
+  });
+
+  test('interior treatment stays monochrome', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(800);
+    await scrollToProgress(page, 0.9);
+
+    // D4: world identity comes from the hover glow as environmental light, never
+    // from the plate itself. Any saturated colour inside the interior is a bug.
+    //
+    // Threshold is anchored to the reference, not chosen by eye: the reference
+    // plate interior measures mean chroma 1.0 with a maximum of 8-10 (a slight
+    // tint in the source artwork). A limit of 12 therefore permits everything
+    // the original contains while still failing loudly on any real hue -- the
+    // Data hover blue (96,174,232) has chroma 136 and the Cloud orange far
+    // higher, so neither can slip through.
+    const coloured = await page.evaluate(() => {
+      const out: string[] = [];
+      for (const side of ['data', 'cloud']) {
+        const root = document.querySelector(`[data-interior="${side}"]`)!;
+        const walk = (el: Element) => {
+          const cs = getComputedStyle(el);
+          for (const prop of ['color', 'backgroundColor', 'fill', 'stroke', 'borderTopColor']) {
+            const v = cs[prop as keyof CSSStyleDeclaration] as string;
+            const m = v?.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+            if (!m) continue;
+            const [r, g, b] = [+m[1], +m[2], +m[3]];
+            const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+            if (chroma > 12) out.push(`${side} ${el.className} ${prop}=${v}`);
+          }
+          for (const c of Array.from(el.children)) walk(c);
+        };
+        walk(root);
+      }
+      return out;
+    });
+    expect(coloured).toEqual([]);
+
+    // And the base fill must be a true neutral, not a tinted grey. An earlier
+    // rgb(74,78,82) measured mean chroma 5.4 against the reference's 1.0.
+    const baseChroma = await page.evaluate(() => {
+      const el = document.querySelector('[data-interior="data"]')!;
+      const m = getComputedStyle(el).backgroundColor.match(/(\d+)[,\s]+(\d+)[,\s]+(\d+)/)!;
+      const [r, g, b] = [+m[1], +m[2], +m[3]];
+      return Math.max(r, g, b) - Math.min(r, g, b);
+    });
+    expect(baseChroma).toBeLessThanOrEqual(2);
+  });
+});
