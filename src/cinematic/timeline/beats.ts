@@ -5,18 +5,28 @@
  * (reference/authoritative-reference.mp4, 1280x720, 24fps, 8.000s) at 8fps.
  * See .gsd/plans/phase-1-cinematic-rebuild.md sections 3 and 4.
  *
- * Reference -> scroll mapping (D1: the video is authoritative):
+ * Reference -> scroll mapping (D1: the video is authoritative).
  *
- *   ref 0.000 - 0.375s  S0  open hold      figure + PERSONAL/PORTFOLIO
- *   ref 0.375 - 1.250s  S1  figure enters  ground lifts, words settle
- *   ref 1.250 - 1.750s  S2  settle
- *   ref 1.750 - 3.125s  S3  boards rise    DATA + CLOUD/DEVOPS enter from below
- *   ref 3.125 - 4.000s  S4  lock           final selection composition
- *   ref 4.000 - 8.000s  S5  selection hold STATIC -- interactive from here
+ * Measured by frame-differencing all 192 frames of the reference video.
+ * See .gsd/VIDEO-TRANSITION-ANALYSIS.md for the full measurement tables.
  *
- * The reference's last four seconds are a static hold (frame diff < 1.5%),
- * so S5 receives the largest share of the scroll track. The user must be
- * able to sit at the choice.
+ *   scroll 0.00-0.04  ref 0.00-0.33s   ignition  static opening, no plates
+ *   scroll 0.04-0.18  ref 0.33-1.42s   anchor    headline EXITS UPWARD
+ *   scroll 0.18-0.23  ref 1.42-1.83s   lift      near-still breath
+ *   scroll 0.23-0.50  ref 1.83-3.96s   boards    both plates RISE from below
+ *   scroll 0.50-1.00  ref 4.00-7.96s   selection STATIC hold, interactive
+ *
+ * Two corrections from the previous revision, both measured against the video:
+ *
+ * 1. The board beat was 0.28-0.46; the video requires 0.23-0.50. Boards were
+ *    arriving roughly 40% of the scroll too late.
+ * 2. The old `lock` beat is GONE. The video has no separate settle window --
+ *    the plates simply finish rising at t 3.96s and are then static for the
+ *    remaining 4 seconds. There is nothing to lock into.
+ *
+ * The reference's last four seconds are a static hold (frame diff <= 1.5%),
+ * so selection receives half the scroll track. The user must be able to sit
+ * at the choice.
  */
 
 export type CinematicPhase =
@@ -24,7 +34,6 @@ export type CinematicPhase =
   | 'anchor'
   | 'lift'
   | 'boards'
-  | 'lock'
   | 'selection';
 
 export interface Beat {
@@ -38,23 +47,34 @@ export interface Beat {
 /**
  * Beat boundaries as fractions of the pinned scroll track.
  *
- * S1 spans 6-20% and S3 spans 28-46% to mirror the reference's 0.875s and
- * 1.375s windows respectively. S5 holds 52-100%.
+ * Measured against the reference video's actual motion -- see
+ * .gsd/VIDEO-TRANSITION-ANALYSIS.md. These are not stylistic choices: each
+ * boundary corresponds to a frame where the reference's motion measurably
+ * starts or stops.
+ *
+ *   boards    0.23-0.50  ref t 1.83-3.96s  plates rise from below frame bottom
+ *   selection 0.50-1.00  ref t 4.00-7.96s  static hold, interactive
+ *
+ * The selection hold gets half the track because the reference spends half its
+ * runtime motionless at the choice.
  */
 export const BEATS: readonly Beat[] = [
-  { id: 'ignition', start: 0.0, end: 0.06 },
-  { id: 'anchor', start: 0.06, end: 0.2 },
-  { id: 'lift', start: 0.2, end: 0.28 },
-  { id: 'boards', start: 0.28, end: 0.46 },
-  { id: 'lock', start: 0.46, end: 0.52 },
-  { id: 'selection', start: 0.52, end: 1.0 },
+  { id: 'ignition', start: 0.0, end: 0.04 },
+  { id: 'anchor', start: 0.04, end: 0.18 },
+  { id: 'lift', start: 0.18, end: 0.23 },
+  { id: 'boards', start: 0.23, end: 0.5 },
+  { id: 'selection', start: 0.5, end: 1.0 },
 ] as const;
 
 /** Progress at which the world boards become interactive. */
 export const SELECTION_START = BEATS[BEATS.length - 1].start;
 
-/** Reference timestamp (seconds) at which the reference reaches its locked composition. */
-export const REFERENCE_LOCK_TIME = 4.0;
+/**
+ * Reference timestamp (seconds) at which the reference reaches its locked
+ * composition. Measured: the plates finish rising at frame 95 (t 3.96s) and
+ * nothing moves after frame 96.
+ */
+export const REFERENCE_LOCK_TIME = 3.96;
 
 export function phaseAt(progress: number): CinematicPhase {
   const p = clamp01(progress);
@@ -84,7 +104,9 @@ export function beatProgress(progress: number, id: CinematicPhase): number {
 
 /**
  * Scroll-track height in viewport units. 700vh desktop / 520vh mobile.
- * S0-S4 consume the first 52% of this; S5 (the selection hold) consumes the rest.
+ *
+ * S0-S4 (ignition -> boards) consume the first 50% of this; the selection hold
+ * consumes the rest, matching the reference's 4s-of-8s motionless ending.
  */
 export function trackHeightVh(viewportWidth: number): number {
   return viewportWidth < 768 ? 520 : 700;

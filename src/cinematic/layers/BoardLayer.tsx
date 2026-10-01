@@ -25,10 +25,28 @@ import type { Path } from '../../store/gameStore';
 import './BoardLayer.css';
 
 /**
- * Boards rise during the `boards` beat, staggered by 4% of the track so they
- * do not arrive in lockstep (reference t 1.75-3.125s shows asymmetric motion).
+ * Both plates rise in PERFECT LOCKSTEP.
+ *
+ * Measured across the reference: at every sampled frame from t 1.83s to 3.96s
+ * the two plates' vertical extents are identical to four decimal places
+ * (e.g. both y 0.6167-0.9986 at t 2.33s). There is no stagger. The previous
+ * revision applied a 4% stagger, which the video does not support.
  */
-const STAGGER: Record<Path, number> = { data: 0, cloud: 0.04 };
+const STAGGER: Record<Path, number> = { data: 0, cloud: 0 };
+
+/**
+ * Start position: 63vh BELOW the seated position.
+ *
+ * Measured from the reference. The plates do not start fully off-screen -- at
+ * t 1.83s (the first frame of the rise) they already occupy y 0.856-0.999,
+ * i.e. the bottom 14% of the frame is showing. They come to rest at y 0.225.
+ * So the travel distance is 0.856 - 0.225 = 0.631 of the viewport height.
+ *
+ * The previous revision used +100vh, which left the plates completely hidden
+ * for the first third of the rise; at scroll 25% they were only 0.3% visible
+ * where the reference already showed 22%.
+ */
+const START_Y_VH = 63.1;
 
 /**
  * Viewport width, updated on resize. Board placement is breakpoint-dependent
@@ -68,22 +86,36 @@ export function BoardLayer({ settled = false }: BoardLayerProps) {
 
   useEffect(() => {
     const boards = beat('boards');
-    const lock = beat('lock');
 
     const apply = (progress: number) => {
       for (const path of ['data', 'cloud'] as Path[]) {
         const el = plateRefs.current[path];
         if (!el) continue;
         const start = boards.start + STAGGER[path];
-        // A short overshoot as each plate seats, matching the reference's
-        // settle between t 3.125s and 4.0s.
-        const t = clampSpan(progress, start, lock.end);
-        const e = easeOutBack(t);
-        const y = (1 - e) * 52;
-        const opacity = Math.min(1, t * 2.4);
+        // The rise spans the whole boards beat and ends exactly where the
+        // selection hold begins -- the reference is motionless from there.
+        const t = clampSpan(progress, start, boards.end);
+        const e = easeOutSine(t);
+        // Rise from below the frame's bottom edge, clipped by the hero's overflow.
+        const y = (1 - e) * START_Y_VH;
         el.style.transform = `translate3d(0, ${y.toFixed(3)}vh, 0)`;
-        el.style.opacity = opacity.toFixed(3);
+        // No opacity ramp: the reference plates are solid black the whole way
+        // up, clipped by the frame edge rather than fading in.
+        el.style.opacity = '1';
         el.style.setProperty('--reveal', t.toFixed(4));
+
+        // Gate visibility to the beat window.
+        //
+        // START_Y_VH is measured from the reference's FIRST RISE FRAME, where a
+        // sliver of plate is already showing at the bottom edge. Holding that
+        // offset before the beat begins would therefore leave the plates
+        // visible through the entire opening, which the reference does not do --
+        // at t 0-1.79s there is no plate on screen at all.
+        //
+        // The reference's arrival is abrupt (frame 43->44 motion jumps to 2.18),
+        // not a fade, so a hard visibility gate matches it. It is set only at
+        // the two ends of the beat, so it cannot flicker mid-scroll.
+        el.style.visibility = t > 0 ? 'visible' : 'hidden';
       }
     };
 
@@ -94,6 +126,7 @@ export function BoardLayer({ settled = false }: BoardLayerProps) {
         el.style.transform = 'translate3d(0, 0, 0)';
         el.style.opacity = '1';
         el.style.setProperty('--reveal', '1');
+        el.style.visibility = 'visible';
       }
       return;
     }
@@ -187,10 +220,21 @@ function clampSpan(progress: number, a: number, b: number): number {
   return (progress - a) / (b - a);
 }
 
-/** Gentle overshoot, matching the reference's settle. */
-function easeOutBack(t: number): number {
-  const c1 = 1.18;
-  const c3 = c1 + 1;
-  const p = t - 1;
-  return 1 + c3 * p * p * p + c1 * p * p;
+/**
+ * Rise easing, fitted numerically to the reference's measured y-travel.
+ *
+ * Reference plate top across the rise (frames 44-95, t 1.83s-3.96s):
+ *   0.856, 0.778, 0.697, 0.617, 0.542, 0.472, 0.353, 0.272, 0.234, 0.225
+ *
+ * Normalising that to an eased fraction and least-squares fitting candidate
+ * curves gave: easeOutSine RMSE 0.021 (best), easeOutQuad 0.023,
+ * easeOutCubic 0.117, linear 0.154, easeOutExpo 0.271.
+ *
+ * So the reference rises at a near-constant rate with soft ends -- NOT the
+ * front-loaded overshoot of easeOutBack, and not the heavy cubic deceleration
+ * that was briefly in place. Worst-case error across the ten samples is 0.038
+ * of the travel distance (under 2.5vh).
+ */
+function easeOutSine(t: number): number {
+  return Math.sin((t * Math.PI) / 2);
 }

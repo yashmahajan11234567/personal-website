@@ -14,7 +14,7 @@
 
 import { useEffect, useRef } from 'react';
 import { subscribeToProgress, readProgress } from '../timeline/progressBus';
-import { beatProgress, beat } from '../timeline/beats';
+import { beat } from '../timeline/beats';
 import { HEADLINE } from '../data/boardContent';
 import { HEADLINE_RECTS as RECTS } from '../selection/selectionGeometry';
 import './TypographyLayer.css';
@@ -22,6 +22,7 @@ import './TypographyLayer.css';
 /** Beats each word is alive for. */
 const IGNITION = beat('ignition');
 const ANCHOR = beat('anchor');
+const LIFT = beat('lift');
 
 interface WordSpec {
   text: string;
@@ -67,10 +68,28 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
     }
 
     const apply = (progress: number) => {
-      // Entrance spans ignition + the first half of anchor (reference S0-S1).
-      const inT = clampSpan(progress, IGNITION.start, ANCHOR.start + (ANCHOR.end - ANCHOR.start) * 0.5);
-      // Exit spans the lift beat entirely (reference S2).
-      const outT = beatProgress(progress, 'lift');
+      // Entrance spans ignition + the first half of anchor.
+      // Measured: the reference's opening type is present from t 0 to 0.33s and
+      // the motion starts at t 0.33s (video frames 0-8).
+      const inT = clampSpan(
+        progress,
+        IGNITION.start,
+        ANCHOR.start + (ANCHOR.end - ANCHOR.start) * 0.5
+      );
+
+      // Exit spans anchor's second half THROUGH lift, i.e. it must COMPLETE by
+      // the end of `lift` at scroll 0.23 -- and per the reference the type is
+      // already clearing the frame by t 1.42s (scroll 0.18).
+      //
+      // The previous revision ran the exit over `lift` ALONE (0.20-0.28), which
+      // left the headline on screen through the first fifth of the scroll while
+      // the reference had cleared it. Running it from the midpoint of anchor
+      // through the end of lift matches the measured t 0.33-1.83s window.
+      const outT = clampSpan(
+        progress,
+        ANCHOR.start + (ANCHOR.end - ANCHOR.start) * 0.5,
+        LIFT.end
+      );
 
       for (const spec of WORDS) {
         const el = wordRefs.current[spec.side];
@@ -82,11 +101,14 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
         const scale = 0.86 + 0.14 * e;
 
         // --- exit: translate up and out of frame, with a slight scale-up ---
-        // Physical departure, not a fade. Opacity only softens the last 15%
-        // so the word does not clip harshly at the frame edge.
+        // Physical departure, not a fade. -120vh carries the word a full
+        // viewport ABOVE its resting place, so it clears the frame's top edge
+        // rather than lingering at head height.
         const o = easeInCubic(outT);
-        const y = -42 * o;
+        const y = -120 * o;
         const exitScale = 1 + 0.14 * o;
+        // Opacity only softens the last 15% so the word does not clip harshly
+        // at the frame edge.
         const opacity = 1 - Math.max(0, (o - 0.85) / 0.15) * 0.35;
 
         const finalScale = scale * exitScale;

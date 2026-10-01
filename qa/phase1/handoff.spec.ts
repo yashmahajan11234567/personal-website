@@ -294,18 +294,35 @@ test.describe('Q6 handoff — the sequence', () => {
     await reachSelection(page);
     await page.click('[data-testid="world-board-data"]');
 
-    for (let i = 0; i < 5; i++) {
-      await page.waitForTimeout(120);
-      const box = await page.locator('.cinematic-hero').evaluate((el) => {
+    // Sample only while the hero is still mounted. The hand-off is 820ms and an
+    // evaluate round-trip costs ~200ms, so a fixed 5x120ms loop can overrun the
+    // animation and then wait forever on a detached node.
+    //
+    // The probe uses a raw querySelector rather than locator.evaluate(): a
+    // locator AUTO-WAITS for the element to reappear and only rejects at the
+    // test's own 45s timeout, which is long enough to fail the whole test even
+    // though the transition completed correctly. querySelector returns null the
+    // instant the hero unmounts, so the loop exits promptly.
+    const deadline = Date.now() + 900;
+    let samples = 0;
+    while (Date.now() < deadline) {
+      const box = await page.evaluate(() => {
+        const el = document.querySelector('.cinematic-hero');
+        if (!el) return null;
         const r = el.getBoundingClientRect();
         return { w: r.width, h: r.height, top: r.top };
       });
-      const vp = page.viewportSize();
+      if (!box) break; // hero unmounted -- world has taken over, transition done
+      const vp = page.viewportSize()!;
       expect(box.w).toBeGreaterThanOrEqual(vp.width - 1);
       expect(box.h).toBeGreaterThanOrEqual(vp.height - 1);
       // Must not have slid up out of view when the pin was released.
       expect(Math.abs(box.top)).toBeLessThan(2);
+      samples++;
+      await page.waitForTimeout(60);
     }
+    // We must have observed the hero intact at least once during the hand-off.
+    expect(samples).toBeGreaterThan(0);
   });
 
   test('nothing stays interactive once a world is chosen', async ({ page }) => {

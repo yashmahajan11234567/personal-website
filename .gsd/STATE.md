@@ -24,6 +24,60 @@ built and verified. **58 Playwright tests pass**, 116/116 under `--repeat-each=2
 
 ---
 
+## Phase 1 — reference-fidelity retiming (2026-10-01)
+
+The reference video was re-measured frame-by-frame (all 192 frames) and the
+scroll choreography was corrected. Documents: `.gsd/VIDEO-TRANSITION-ANALYSIS.md`,
+`.gsd/CURRENT-VS-REFERENCE.md`, `.gsd/PHASE-1-SCROLL-TRANSITION-PLAN.md`.
+
+**The finding**: the beat boundaries never actually matched the video. An earlier
+report claimed they did, but that check compared only the *final* composition —
+the transit itself was unverified. The board reveal was arriving ~40% of the
+scroll track too late, entering from the wrong edge (fade-in at head height
+rather than rising through the frame bottom).
+
+### Corrections applied
+
+| Element | Before | After | Source |
+|---|---|---|---|
+| `boards` beat | 0.28 – 0.46 | **0.23 – 0.50** | video frames 44–96 |
+| `lock` beat | 0.46 – 0.52 | **removed** | video has no settle beat |
+| `SELECTION_START` | 0.52 | **0.50** | motion ends at t 3.96s |
+| Plate start offset | +52vh, opacity ramp | **+63.1vh, visibility gate** | measured travel distance |
+| Plate stagger | 4% | **0 (lockstep)** | identical y to 4dp at every sample |
+| Rise easing | `easeOutBack` (overshoot) | **`easeOutSine`** | least-squares fit, RMSE 0.021 |
+| Headline exit | over `lift` only, −42vh | **anchor mid → `lift` end, −120vh** | clears frame by t 1.42s |
+
+`easeOutSine` was chosen by fitting candidates against the video's ten measured
+plate positions: sine RMSE 0.021, quad 0.023, cubic 0.117, linear 0.154,
+expo 0.271.
+
+### Result
+
+Plate-top deviation across the rise window, video vs implementation:
+
+| Scroll | 25% | 29% | 33.3% | 41.7% | 50% |
+|---|---|---|---|---|---|
+| Δ | −0.018 | +0.000 | +0.004 | +0.001 | −0.024 |
+
+Previously 29% and 33% had **no plate at all**. Figure remains stationary and
+within 0.007 of the reference at every scroll position.
+
+### Method caveat
+
+`vision_analyze` was rate-limited (503) for this pass, so all findings are
+numeric. Element identities are inferred from geometry, not read visually. One
+vision pass over the contact sheet should confirm the wordmark choreography when
+the limit resets.
+
+### New regression tests
+
+Five tests added to `qa/phase1/cinematic.spec.ts` asserting beat boundaries,
+rise-from-below, lockstep, no overshoot, and static hold. These exist because
+every functional test passed while the transit was ~40% wrong.
+
+---
+
 ## Phase 1 Rebuild — Discovery Findings (2026-10-01)
 
 Measured from the authoritative reference video (1280×720, 24 fps, 192 frames, 8.000 s):

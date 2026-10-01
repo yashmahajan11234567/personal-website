@@ -130,17 +130,35 @@ test.describe('scroll drives the timeline', () => {
     await page.goto('/');
     await page.waitForTimeout(800);
 
+    // Measured against the reference (VIDEO-TRANSITION-ANALYSIS.md S5): there is
+    // no plate on screen at all before t 1.83s. The plates therefore start
+    // fully off-position below the frame and are GATED by visibility, rather
+    // than faded in -- the reference's arrival is abrupt, not a fade. These
+    // assertions track visibility, which is the mechanism that now implements
+    // "absent from the opening".
     await scrollToProgress(page, 0);
-    const early = await page.evaluate(
-      () => Number(getComputedStyle(document.querySelector('[data-plate="data"]')!).opacity)
-    );
-    expect(early).toBeLessThan(0.35);
+    const early = await page.evaluate(() => {
+      const el = document.querySelector('[data-plate="data"]')!;
+      const cs = getComputedStyle(el);
+      return { visibility: cs.visibility, opacity: Number(cs.opacity) };
+    });
+    expect(early.visibility).toBe('hidden');
 
     await scrollToProgress(page, 0.9);
-    const late = await page.evaluate(
-      () => Number(getComputedStyle(document.querySelector('[data-plate="data"]')!).opacity)
+    const late = await page.evaluate(() => {
+      const el = document.querySelector('[data-plate="data"]')!;
+      const cs = getComputedStyle(el);
+      return { visibility: cs.visibility, opacity: Number(cs.opacity) };
+    });
+    expect(late.visibility).toBe('visible');
+    expect(late.opacity).toBeGreaterThan(0.95);
+    // Seated: the rise has completed, so the plate is at its resting transform.
+    // Read it off the computed style rather than the inline attribute -- the
+    // browser normalises `translate3d(0, 0.000vh, 0)` to `translate3d(0px, 0vh, 0px)`.
+    const seated = await page.evaluate(
+      () => getComputedStyle(document.querySelector('[data-plate="data"]')!).transform
     );
-    expect(late).toBeGreaterThan(0.95);
+    expect(seated).toMatch(/matrix\(1, 0, 0, 1, 0, 0\)|^none$/);
   });
 
   test('headline words exit upward rather than fading in place', async ({ page }) => {
@@ -461,5 +479,124 @@ test.describe('nothing is ever auto-selected', () => {
     );
     expect(selected).toBeNull();
     await expect(page.locator('.placeholder-world')).toHaveCount(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reference-fidelity regression tests.
+//
+// Each assertion below is derived from a measured frame in the reference video
+// (see .gsd/VIDEO-TRANSITION-ANALYSIS.md). They exist because the board
+// choreography previously diverged from the video by ~40% of the scroll track
+// while every functional test still passed -- the composition at the END
+// matched, so nothing caught the TRANSIT being wrong.
+//
+// They assert the beat boundaries, the rise geometry, lockstep, and the
+// absence of overshoot, because those are the four things the video fixes.
+// ---------------------------------------------------------------------------
+
+test.describe('reference fidelity: measured video choreography', () => {
+  /** Rendered top edge of a plate as a fraction of viewport height. */
+  async function plateTop(page: Page, which: 'data' | 'cloud'): Promise<number | null> {
+    return page.evaluate((w) => {
+      const el = document.querySelector(`[data-plate="${w}"]`);
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      if (cs.visibility === 'hidden') return null;
+      const r = el.getBoundingClientRect();
+      return r.top / window.innerHeight;
+    }, which);
+  }
+
+  test('beat boundaries match the video measurement', async () => {
+    // 8s reference: boards rise over t 1.83-3.96s = 23%-50% of the video, and
+    // nothing moves after that. These are measurements, not preferences.
+    const beats = await import('../../src/cinematic/timeline/beats');
+    const boards = beats.BEATS.find((b: { id: string }) => b.id === 'boards');
+    expect(boards).toBeDefined();
+    expect(boards!.start).toBeCloseTo(0.23, 5);
+    expect(boards!.end).toBeCloseTo(0.5, 5);
+    expect(beats.SELECTION_START).toBeCloseTo(0.5, 5);
+    // The video has no separate settle beat after the rise.
+    expect(beats.BEATS.find((b: { id: string }) => b.id === 'lock')).toBeUndefined();
+    expect(beats.BEATS.length).toBe(5);
+  });
+
+  test('plates rise from below the frame bottom', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(800);
+
+    // Absent before the beat.
+    await scrollToProgress(page, 0.1);
+    expect(await plateTop(page, 'data')).toBeNull();
+
+    // Low in the frame early in the rise (video t 2.0s: y 0.778), high at the
+    // seat (video t 3.96s: y 0.225).
+    await scrollToProgress(page, 0.27);
+    const early = await plateTop(page, 'data');
+    expect(early).not.toBeNull();
+    expect(early!).toBeGreaterThan(0.6);
+
+    await scrollToProgress(page, 0.9);
+    const seated = await plateTop(page, 'data');
+    expect(seated).not.toBeNull();
+    expect(seated!).toBeLessThan(0.3);
+  });
+
+  test('plates rise in lockstep', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(800);
+
+    // Measured: the reference's two plates are at identical y to four decimals
+    // at every sample of the rise. A stagger would show up here immediately.
+    for (const f of [0.28, 0.33, 0.38, 0.43, 0.48]) {
+      await scrollToProgress(page, f);
+      const d = await plateTop(page, 'data');
+      const c = await plateTop(page, 'cloud');
+      expect(d).not.toBeNull();
+      expect(c).not.toBeNull();
+      expect(Math.abs(d! - c!)).toBeLessThan(0.02);
+    }
+  });
+
+  test('the rise never overshoots its seat', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(800);
+
+    // The reference does not rebound after arriving. easeOutBack did, so this
+    // tracks the plate's y monotonically upward across the whole beat.
+    let prev = Number.POSITIVE_INFINITY;
+    let moved = 0;
+    for (const f of [0.23, 0.27, 0.31, 0.35, 0.39, 0.43, 0.47, 0.5]) {
+      await scrollToProgress(page, f);
+      const top = await plateTop(page, 'data');
+      if (top === null) continue;
+      expect(top).toBeLessThanOrEqual(prev + 0.005);
+      if (prev - top > 0.005) moved++;
+      prev = top;
+    }
+    // Sanity: it really was moving, so the assertion above is meaningful.
+    expect(moved).toBeGreaterThan(3);
+  });
+
+  test('the selection hold is static, like the reference after t 4.0s', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForTimeout(800);
+
+    await scrollToProgress(page, 0.6);
+    const a = await plateTop(page, 'data');
+    await scrollToProgress(page, 1.0);
+    const b = await plateTop(page, 'data');
+    expect(a).toBeCloseTo(b!, 3);
+
+    // And the figure never moves at any point in the cinematic.
+    for (const f of [0, 0.2, 0.4, 0.6, 0.8, 1.0]) {
+      await scrollToProgress(page, f);
+      const tf = await page.evaluate(
+        () => document.querySelector('.figure-layer img')?.getAttribute('style') ?? ''
+      );
+      // No transform of any kind is applied to the figure.
+      expect(tf).not.toMatch(/translate3d/);
+    }
   });
 });
