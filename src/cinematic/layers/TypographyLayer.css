@@ -63,25 +63,40 @@
 /*
  * FIT THE GLYPH RUN TO THE BOX.
  *
- * `20.5cqw` is the reference's measured cap-height-to-box-width ratio for the
- * display face, so at the measured box the word fills it exactly. `nowrap`
+ * The reference's measured cap-height-to-box-width ratio is ~0.205, so
+ * `20.5cqw` is the size that makes the word FILL the measured box. `nowrap`
  * keeps the run on one line.
  */
 .cinematic-type__glyphs {
   /*
    * inline-block, so the layout width is the natural glyph width rather than
-   * the box width. The auto-fit then scales that natural width onto the box.
+   * the box width. The auto-fit then measures that natural width and hands the
+   * leftover box width out as letter-spacing.
    */
   display: inline-block;
   white-space: nowrap;
   font-family: 'Archivo Black', 'Anton', Impact, 'Haettenschweiler',
     'Arial Narrow Bold', 'Arial Black', sans-serif;
   font-weight: 900;
-  line-height: 0.86;
-  letter-spacing: -0.02em;
+  line-height: 1;
+  /*
+   * STARTING values only. Both are overwritten per-word by the fit in
+   * TypographyLayer.tsx, which solves them from the box; these exist so the
+   * first paint is close to correct before the effect runs, and so a failed or
+   * cancelled fit still degrades to readable type rather than cramped type.
+   *
+   * `0.04em` positive tracking is deliberate. This used to be `-0.02em`, which
+   * cramped the letters together -- the opposite of "give individual letters
+   * more breathing room", and the reason PORTFOLIO could read as another word.
+   */
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #0a0a0a;
-  font-size: 20.5cqw;
+  /*
+   * Provisional size only, replaced by the cap-height solve. Kept near the
+   * solved value (~21cqw) so the pre-effect paint is not visibly wrong.
+   */
+  font-size: 21cqw;
   /*
    * Distressed edge. An SVG turbulence displacement mask gives the eroded
    * stencil quality of the reference without shipping a font file.

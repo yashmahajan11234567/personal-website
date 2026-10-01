@@ -8,6 +8,7 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
+import { beat } from '../../src/cinematic/timeline/beats';
 
 /** Total scrollable distance of the cinematic track. */
 async function scrollTrack(page: Page): Promise<number> {
@@ -961,5 +962,250 @@ test.describe('opening state regression (default motion)', () => {
 
     const spread = Math.max(...samples.map((s) => s!)) - Math.min(...samples.map((s) => s!));
     expect(spread).toBeLessThan(0.01);
+  });
+});
+
+/*
+ * Typography polish: bold + cinematic + readable, not oversized + cramped.
+ *
+ * The defect these lock down was measured, not eyeballed. The fit used to force
+ * each word to fill its box with `scaleX`, and the measured value was 1.20-1.29
+ * at every viewport -- the type was pulled 20-29% wider than its own
+ * proportions. The cause was the font stack: Archivo Black and Anton are not
+ * installed, so it fell through to Impact (measured 0.406 advance-per-capheight
+ * against the reference's 0.489), and stretching compensated. Letter-spacing was
+ * ALSO negative (-0.02em), actively cramping the letters.
+ *
+ * So the fit now distributes tracking instead of stretching, and these tests
+ * assert the properties that fix was supposed to buy.
+ */
+test.describe('typography polish', () => {
+  const VIEWPORTS = [
+    { width: 1920, height: 1080, name: '1920x1080' },
+    { width: 1440, height: 900, name: '1440x900' },
+    { width: 1280, height: 720, name: '1280x720' },
+    { width: 1024, height: 768, name: '1024x768' },
+    { width: 390, height: 844, name: '390-mobile' },
+  ];
+
+  /**
+   * Read the headline words' rendered geometry.
+   *
+   * `scaleX` is read from the computed transform matrix, so a `none` transform
+   * reports 1.0 rather than being missed by a string match on `scaleX(...)`.
+   */
+  const readHeadline = (page: import('@playwright/test').Page) =>
+    page.evaluate(() => {
+      const out: Array<Record<string, number | string>> = [];
+      for (const side of ['left', 'right']) {
+        const word = document.querySelector(`.cinematic-type__word--${side}`)!;
+        const glyphs = word.querySelector('.cinematic-type__glyphs')!;
+        const cs = getComputedStyle(glyphs);
+        const fontSize = parseFloat(cs.fontSize);
+        const track = parseFloat(cs.letterSpacing);
+        const range = document.createRange();
+        range.selectNodeContents(glyphs);
+        const ink = range.getBoundingClientRect();
+        const box = word.getBoundingClientRect();
+        const m = new DOMMatrixReadOnly(cs.transform);
+        out.push({
+          side,
+          text: glyphs.textContent ?? '',
+          scaleX: m.a,
+          trackEm: Number.isFinite(track) ? track / fontSize : 0,
+          inkLeft: ink.left,
+          inkRight: ink.right,
+          boxLeft: box.left,
+          boxRight: box.right,
+        });
+      }
+      return out;
+    });
+
+  for (const vp of VIEWPORTS) {
+    test(`headline is undistorted and positively tracked at ${vp.name}`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      await page.goto('/');
+      await page.waitForTimeout(900);
+
+      for (const w of await readHeadline(page)) {
+        const where = `${vp.name} ${w.side} (${w.text})`;
+
+        // Not stretched. The old fit ran 1.20-1.29 here.
+        expect(Math.abs(w.scaleX - 1), `${where} scaleX`).toBeLessThan(0.02);
+
+        // Tracking is positive, so letters are opened rather than cramped.
+        // The old value was -0.02em.
+        expect(w.trackEm, `${where} tracking`).toBeGreaterThan(0.01);
+
+        // Ink sits inside the frame on both sides.
+        expect(w.inkLeft, `${where} left edge`).toBeGreaterThan(-0.5);
+        expect(w.inkRight, `${where} right edge`).toBeLessThan(vp.width + 0.5);
+
+        // The word fills its measured box rather than overflowing or collapsing
+        // into a fraction of it. ±4px absorbs the trailing letter-space step.
+        const boxW = w.boxRight - w.boxLeft;
+        const inkW = w.inkRight - w.inkLeft;
+        expect(inkW, `${where} ink vs box`).toBeGreaterThan(boxW * 0.96);
+        expect(inkW, `${where} ink vs box`).toBeLessThan(boxW + 4);
+      }
+    });
+  }
+
+  test('every headline letter renders as a separate ink island', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/');
+    await page.waitForTimeout(900);
+
+    /*
+     * Measured from PIXELS, not DOM rects.
+     *
+     * Per-character `Range` rects are ~0.02px conservative in Chromium, so they
+     * report a "-0.02 gap" between every pair regardless of size -- including
+     * pairs like DE and CL that kern normally. That reads as a collision when
+     * nothing is touching. Column-profiling the rendered ink is the ground
+     * truth: it counts actual separated glyph islands.
+     */
+    for (const side of ['left', 'right']) {
+      const box = await page.locator(`.cinematic-type__word--${side}`).boundingBox();
+      expect(box, `${side} box`).not.toBeNull();
+      const shot = await page.screenshot({ clip: box! });
+
+      const runs = await page.evaluate(async (b64) => {
+        const img = new Image();
+        img.src = 'data:image/png;base64,' + b64;
+        await img.decode();
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const g = c.getContext('2d')!;
+        g.drawImage(img, 0, 0);
+        // Headline ink is DARK on a light ground.
+        const d = g.getImageData(0, 0, c.width, c.height).data;
+        const dark = new Uint8Array(c.width);
+        for (let x = 0; x < c.width; x++) {
+          let n = 0;
+          for (let y = 0; y < c.height; y++) {
+            const i = (y * c.width + x) * 4;
+            // Rec. 601 luma; anything clearly dark counts as ink.
+            if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 128) n++;
+          }
+          dark[x] = n;
+        }
+        // Column runs, merged across 1px of antialiasing.
+        const merged: Array<[number, number]> = [];
+        let start = -1;
+        for (let x = 0; x <= c.width; x++) {
+          const on = x < c.width && dark[x] > 0;
+          if (on && start < 0) start = x;
+          else if (!on && start >= 0) {
+            const last = merged[merged.length - 1];
+            if (last && start - last[1] <= 1) last[1] = x - 1;
+            else merged.push([start, x - 1]);
+            start = -1;
+          }
+        }
+        const gaps: number[] = [];
+        for (let i = 0; i < merged.length - 1; i++) {
+          gaps.push(merged[i + 1][0] - merged[i][1] - 1);
+        }
+        return { islands: merged.length, gaps, width: c.width };
+      }, shot.toString('base64'));
+
+      const letters = side === 'left' ? 8 : 9;
+      expect(runs.islands, `${side} letter islands`).toBe(letters);
+      // Every gap strictly positive => no two letters touch.
+      expect(Math.min(...runs.gaps), `${side} min letter gap`).toBeGreaterThan(0);
+    }
+  });
+
+  test('plate role words are positively tracked and fit their plate', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/');
+    await page.waitForTimeout(800);
+    await scrollToProgress(page, 0.9);
+
+    const lines = await page.evaluate(() => {
+      const out: Array<Record<string, number | string>> = [];
+      for (const side of ['data', 'cloud']) {
+        const plate = document.querySelector(`[data-plate="${side}"]`)!;
+        const body = plate.querySelector('.cinematic-plate__body')!;
+        const contentW = body.clientWidth;
+        for (const line of plate.querySelectorAll('.cinematic-plate__line')) {
+          const cs = getComputedStyle(line);
+          const fontSize = parseFloat(cs.fontSize);
+          const track = parseFloat(cs.letterSpacing);
+          const range = document.createRange();
+          range.selectNodeContents(line);
+          const ink = range.getBoundingClientRect();
+          out.push({
+            side,
+            text: (line.textContent ?? '').trim(),
+            trackEm: Number.isFinite(track) ? track / fontSize : 0,
+            inkW: ink.width,
+            contentW,
+            // `nowrap` means a line that overflows is clipped or spills, not wrapped.
+            wrapped: line.getClientRects().length > 1,
+          });
+        }
+      }
+      return out;
+    });
+
+    // DATA ANALYST, DATA ENGINEER, DEVOPS, CLOUD -- all four present.
+    const texts = lines.map((l) => l.text);
+    expect(texts).toEqual(
+      expect.arrayContaining(['DATA ANALYST', 'DATA ENGINEER', 'DEVOPS', 'CLOUD'])
+    );
+
+    for (const l of lines) {
+      const where = `${l.side} ${l.text}`;
+      expect(l.trackEm, `${where} tracking`).toBeGreaterThan(0.02);
+      expect(l.inkW, `${where} ink vs plate`).toBeLessThan(l.contentW as number);
+      expect(l.wrapped, `${where} wrapped`).toBe(false);
+    }
+  });
+
+  test('typography polish does not disturb the scroll choreography', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto('/');
+    await page.waitForTimeout(800);
+
+    /*
+     * The brief requires the type to "follow the existing animation exactly" --
+     * only visual scale and spacing may change. So the beat map itself must be
+     * untouched. Asserted against the real module, not a copy, so a future
+     * retiming has to change this test deliberately.
+     */
+    expect(beat('boards').start).toBeCloseTo(0.23, 5);
+    expect(beat('boards').end).toBeCloseTo(0.5, 5);
+    expect(beat('selection').start).toBeCloseTo(0.5, 5);
+
+    // And the figure still does not move across the scroll.
+    const figTop = () =>
+      page.evaluate(() => {
+        const el = document.querySelector('[data-testid="cinematic-figure"]');
+        return el ? el.getBoundingClientRect().top / window.innerHeight : null;
+      });
+    const samples: number[] = [];
+    for (const f of [0, 0.25, 0.5, 0.75, 1]) {
+      await page.evaluate(
+        (frac) =>
+          window.scrollTo(
+            0,
+            Math.round((document.documentElement.scrollHeight - window.innerHeight) * frac)
+          ),
+        f
+      );
+      await page.waitForTimeout(600);
+      samples.push((await figTop())!);
+    }
+    expect(samples.every((s) => Number.isFinite(s)), 'figure present throughout').toBe(true);
+    const spread = Math.max(...samples) - Math.min(...samples);
+    expect(spread, 'figure drift across the timeline').toBeLessThan(0.01);
   });
 });

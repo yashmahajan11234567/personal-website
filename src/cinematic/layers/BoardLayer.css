@@ -78,9 +78,9 @@
 .cinematic-plate__body {
   display: flex;
   flex-direction: column;
-  gap: 0.06em;
-  font-family: 'Archivo Black', 'Anton', Impact, 'Arial Narrow Bold',
-    'Arial Black', sans-serif;
+  gap: 0.1em;
+  font-family: 'Archivo Black', 'Anton', Impact, 'Haettenschweiler',
+    'Arial Narrow Bold', 'Arial Black', sans-serif;
   font-weight: 900;
   /*
    * Sized from the reference's measured light-pixel distribution, not by eye.
@@ -88,10 +88,19 @@
    * plate's y 0.4-0.7 band, which requires the type to fill that band densely.
    * The previous clamp was too small to register: measured at only 1.4-2.1%
    * light against the reference's 23-38%.
+   *
+   * Reduced from `3.05vw` and opened up. The old size plus `-0.015em` tracking
+   * crammed "DATA ANALYST" and "DATA ENGINEER" into their plate width, so the
+   * words read as blocks rather than as words. Tracking is now POSITIVE, which
+   * is what gives the individual letters breathing room; the size comes down
+   * slightly to pay for it so the longest line still fits the plate.
+   *
+   * `vw`-based, so it scales with the viewport rather than being fixed -- the
+   * clamp bounds only keep it sane at the extremes.
    */
-  font-size: clamp(1.3rem, 3.05vw, 3.5rem);
-  line-height: 0.94;
-  letter-spacing: -0.015em;
+  font-size: clamp(1.05rem, 2.42vw, 2.8rem);
+  line-height: 1.06;
+  letter-spacing: 0.085em;
   text-transform: uppercase;
   /* The wordmark is the loudest thing on the plate. */
   color: #ffffff;
@@ -102,6 +111,13 @@
 
 .cinematic-plate__line {
   display: block;
+  /*
+   * A word may never be wider than the plate's content box. `nowrap` keeps each
+   * line intact -- "DATA ANALYST" wrapping to two lines would break the
+   * two-line composition the reference uses -- and the fit is verified to fit.
+   */
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .cinematic-plate__status {
@@ -116,12 +132,15 @@
 }
 
 /*
- * Cloud board is a single line, so it needs its type a touch larger to hold
- * visual weight against the Data board's two lines. This is composition, not
- * symmetry-breaking for its own sake.
+ * Cloud board is a single line, so it gets a touch more tracking than the Data
+ * board's two-line block to hold visual weight -- but its LONGEST word
+ * ("ENGINEER", 8 letters on one line) has to fit the same plate width, so its
+ * size is set from that word rather than from the two-line average. Composition,
+ * not symmetry-breaking for its own sake.
  */
 .cinematic-plate[data-plate='cloud'] .cinematic-plate__body {
-  font-size: clamp(1.45rem, 3.35vw, 3.85rem);
+  font-size: clamp(1.12rem, 2.52vw, 2.95rem);
+  letter-spacing: 0.1em;
 }
 
 /* Mobile: stacked plates below the figure get horizontal type. */
@@ -132,7 +151,13 @@
 
 .cinematic-boards[data-mode='mobile'] .cinematic-plate__body,
 .cinematic-boards[data-mode='mobile'] .cinematic-plate[data-plate='cloud'] .cinematic-plate__body {
-  font-size: clamp(0.95rem, 4.4vw, 1.5rem);
+  /*
+   * The mobile plate is 0.84 of the viewport WIDE rather than 0.33, so the
+   * words get proportionally more room; tracking is kept at the same positive
+   * value as the desktop treatment for consistency, not scaled up.
+   */
+  font-size: clamp(0.85rem, 3.75vw, 1.35rem);
+  letter-spacing: 0.09em;
 }
 
 @media (prefers-reduced-motion: reduce) {

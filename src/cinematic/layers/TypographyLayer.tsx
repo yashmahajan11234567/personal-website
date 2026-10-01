@@ -23,6 +23,25 @@ import './TypographyLayer.css';
 const ANCHOR = beat('anchor');
 const LIFT = beat('lift');
 
+/*
+ * How much of the measured box height the cap height should fill.
+ *
+ * The reference's headline ink is 0.1556 of frame height (112px at 720p) and
+ * the words fill it, so the target is close to 1. It is set just under 1
+ * because the distressed mask erodes the top and bottom of every glyph, and
+ * a value of exactly 1 would push the eroded ink a pixel outside the box.
+ */
+const CAP_FILL = 0.94;
+
+/*
+ * Floor on the distributed tracking, in em.
+ *
+ * Tracking is what opens the letters up, so a zero or negative floor would
+ * reintroduce the cramping this replaced. 0.02em is a visible but restrained
+ * gap; the fit normally computes something well above it.
+ */
+const MIN_TRACK_EM = 0.02;
+
 interface WordSpec {
   text: string;
   side: 'left' | 'right';
@@ -63,35 +82,48 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
   const wordRefs = useRef<Record<string, HTMLSpanElement | null>>({});
   const fitRefs = useRef<Record<string, HTMLSpanElement | null>>({});
   const glyphRefs = useRef<Record<string, HTMLSpanElement | null>>({});
+  const boxRefs = useRef<Record<string, HTMLSpanElement | null>>({});
 
   /*
-   * Fit each word's glyph run to its measured box.
+   * Fit each word to its measured box by DISTRIBUTING TRACKING, not by
+   * stretching.
    *
-   * The CSS gives the glyph run `font-size: 20.5cqw`, sized against the fit
-   * wrapper. That gets the right ballpark but cannot guarantee the fit: the
-   * fallback font stack (Archivo Black -> Anton -> Impact -> ...) has different
-   * metrics per machine, and a run that overflows its box is CLIPPED by it.
-   * Measured before this existed: `scrollWidth` 991px inside a 438px box,
-   * rendering "PERS" instead of "PERSONAL".
+   * WHY THIS CHANGED. The previous fit forced the glyph run to fill the box
+   * width with `scaleX`, and measured `scaleX` was 1.20-1.29 on both words at
+   * every viewport -- the type was being pulled 20-29% wider than its own
+   * proportions, which is exactly the "oversized + cramped + distorted"
+   * complaint. The stretch was an accident of the font stack, not a design
+   * choice: Archivo Black and Anton are NOT installed on this machine, so the
+   * stack falls through to Impact, a condensed face. Measured per-letter
+   * advance over cap height:
    *
-   * The correction is measured, not assumed, and it is measured from the
-   * UNTRANSFORMED layout. That distinction matters: a `Range` over an already
-   * transformed run reports the transformed width, so re-measuring on resize
-   * would divide by the ratio again and converge to no-op (observed: the
-   * second pass computed 1.0000 and cleared the transform).
+   *   Impact              0.406      <- what actually renders here
+   *   reference (f0003)   0.489      <- the target proportions
+   *   Arial Black         0.536
+   *   (Archivo Black / Anton / Arial Narrow Bold are unavailable and silently
+   *    fall back to the generic sans, measured at 0.601)
    *
-   * `scrollWidth` is used for the layout width rather than a Range, because it
-   * reports the untransformed content box. It slightly overstates the true ink
-   * extent -- side bearings, and the distressed mask erodes the edges -- so a
-   * small residual under-fill is expected and measured (see below), but it is
-   * stable across reflows, which correctness under repeated resize requires.
+   * Impact is too NARROW for the reference's proportions, so fitting it by
+   * width stretched it 1.28x to compensate.
+   *
+   * So the word is now sized by CAP HEIGHT and the leftover width is handed out
+   * as letter-spacing. That gives an undistorted word (no `scaleX`), opens the
+   * letters instead of cramping them, and -- unlike a hardcoded `cqw` size --
+   * it adapts to whichever face actually resolves, so the result holds on a
+   * machine that does have Archivo Black.
    */
   useEffect(() => {
-    const fits: Array<{ el: HTMLElement; glyphs: HTMLElement }> = [];
+    const fits: Array<{
+      el: HTMLElement;
+      glyphs: HTMLElement;
+      /** The MEASURED box: its height is the cap-height target. */
+      box: HTMLElement;
+    }> = [];
     for (const spec of WORDS) {
       const el = fitRefs.current[spec.side];
       const glyphs = glyphRefs.current[spec.side];
-      if (el && glyphs) fits.push({ el, glyphs });
+      const box = boxRefs.current[spec.side];
+      if (el && glyphs && box) fits.push({ el, glyphs, box });
     }
     if (fits.length === 0) return;
 
@@ -99,51 +131,148 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
     const measure = () => {
       if (cancelled) return;
       for (const fit of fits) {
-        const boxW = fit.el.clientWidth;
-        if (!boxW) continue;
+        const boxW = fit.box.clientWidth;
+        const boxH = fit.box.clientHeight;
+        if (!boxW || !boxH) continue;
 
-        /*
-         * Capture the natural (unconstrained) width.
-         *
-         * `scrollWidth` cannot be read directly: the fit wrapper is an inline-
-         * size container, so it clamps the run's layout width to the box and
-         * `scrollWidth` reports exactly `clientWidth` -- always a ratio of 1.0.
-         *
-         * So the constraint is lifted for the measurement: the container type
-         * is switched off, `width: max-content` lets the run lay out at its
-         * true width, and the resolved font-size (currently expressed in `cqw`)
-         * is frozen to px first so removing the container cannot change the
-         * type size mid-measurement. Everything is restored immediately after.
-         */
         const glyphs = fit.glyphs;
         const fitStyle = fit.el.style;
         const glyphStyle = glyphs.style;
-        const prevFit = {
+        const prev = {
           containerType: fitStyle.containerType,
           width: fitStyle.width,
         };
-        const prevFontSize = glyphStyle.fontSize;
 
-        // Freeze the resolved size so the measurement cannot depend on the
-        // container we are about to remove.
+        /*
+         * Lift the container constraint so the run lays out at its true width.
+         * `scrollWidth` cannot be read directly: the fit wrapper is an
+         * inline-size container, so it clamps the run and `scrollWidth` just
+         * echoes `clientWidth` -- always a ratio of 1.0.
+         *
+         * The resolved font-size is frozen to px BEFORE the container is
+         * removed, so lifting it cannot change the type size mid-measurement.
+         *
+         * NOTE what `unfreeze` deliberately does NOT restore: `fontSize`. An
+         * earlier version restored it, which threw away the solved size and
+         * silently reverted every word to its unsized CSS value -- so the whole
+         * cap-height solve had no effect on what actually rendered. The solved
+         * size is the OUTPUT of this function and must survive it.
+         */
+        const unfreeze = () => {
+          fitStyle.containerType = prev.containerType;
+          fitStyle.width = prev.width;
+        };
+
         const resolved = parseFloat(getComputedStyle(glyphs).fontSize);
         if (Number.isFinite(resolved)) glyphStyle.fontSize = `${resolved}px`;
-
         fitStyle.containerType = 'normal';
         fitStyle.width = 'max-content';
+        glyphStyle.letterSpacing = '0px';
 
-        const natural = glyphs.scrollWidth;
+        const inkOf = () => {
+          /*
+           * Measure GLYPH ADVANCES, excluding the trailing letter-space.
+           *
+           * A `Range` over the text node includes the letter-spacing CSS adds
+           * after the FINAL glyph, which is space outside the word. Treating
+           * that as ink makes the fit ask for more tracking on every pass, so
+           * the run walks outward: measured 518px of "ink" in a 438px box, with
+           * tracking climbing 12 -> 14 -> 19px across successive fixes.
+           *
+           * So the trailing step is subtracted, giving the width the tracking has
+           * to balance: `advances + gaps * track`.
+           */
+          const range = document.createRange();
+          range.selectNodeContents(glyphs);
+          const r = range.getBoundingClientRect();
+          return { w: r.width, h: r.height };
+        };
 
-        // Restore.
-        fitStyle.containerType = prevFit.containerType;
-        fitStyle.width = prevFit.width;
-        glyphStyle.fontSize = prevFontSize;
+        /**
+         * Advance sum with NO tracking, and its cap height. Both are measured
+         * against a frozen px font-size so lifting the container cannot change
+         * the type mid-measurement.
+         */
+        const measureUnscaled = () => {
+          glyphStyle.letterSpacing = '0px';
+          glyphStyle.marginRight = '0px';
+          const m = inkOf();
+          return { w: m.w, h: m.h };
+        };
 
-        if (!natural) continue;
+        // Pass 1: natural, untracked.
+        const n0 = measureUnscaled();
+        if (!n0.w || n0.w <= 0 || !n0.h || n0.h <= 0) {
+          unfreeze();
+          continue;
+        }
 
-        const ratio = boxW / natural;
+        /*
+         * Pass 2: solve the font size.
+         *
+         * There are TWO independent constraints, and taking only the first is
+         * what broke the narrower viewports.
+         *
+         * Height: cap height must fit `boxH * CAP_FILL`.
+         * Width: the run must fit `boxW` even at the MINIMUM tracking, i.e.
+         *   `advances + gaps * MIN_TRACK * size <= boxW`.
+         *
+         * The height target alone worked at 16:9 but not elsewhere, because the
+         * box is a fraction of the scene: its HEIGHT scales with viewport height
+         * while its WIDTH scales with viewport width. On 1024x768 the box is
+         * 350x120 and on 390x844 it is 133x131 -- far narrower per unit height,
+         * so a cap-height-filling word overflowed (measured 382px of ink in a
+         * 350px box, and 414px in a 133px box). Both advances and cap height
+         * scale linearly with font-size, so the width limit is solved in closed
+         * form rather than by iteration:
+         *
+         *   size <= boxW / (k * (1 + gaps * MIN_TRACK_EM))
+         *
+         * where `k` is the advance sum per unit of font-size, measured in pass 1.
+         */
+        const perSizeW = n0.w / resolved;
+        const perSizeH = n0.h / resolved;
+        const count = Math.max(1, (glyphs.textContent ?? '').length);
+        const gaps = Math.max(1, count - 1);
+
+        const sizeForHeight = (boxH * CAP_FILL) / perSizeH;
+        const sizeForWidth = boxW / (perSizeW * (1 + gaps * MIN_TRACK_EM));
+        const solvedSize = Math.max(1, Math.min(sizeForHeight, sizeForWidth));
+
+        glyphStyle.fontSize = `${solvedSize.toFixed(2)}px`;
+
+        // Pass 3: re-measure at the solved size, still untracked.
+        const n1 = measureUnscaled();
+        unfreeze();
+
+        if (!n1.w || n1.w <= 0) continue;
+
+        /*
+         * Hand out whatever width is left as tracking.
+         *
+         * CSS adds letter-spacing after EVERY glyph including the last, so the
+         * laid-out width is `advances + count * track` while the visible word is
+         * `advances + (count - 1) * track`. The trailing step is real layout
+         * space but not ink, so it is cancelled with a negative margin of
+         * exactly one step. Distributing over `count` and cancelling one leaves
+         * `count - 1` gaps of visible air between the letters.
+         */
+        let track = (boxW - n1.w) / count;
+
+        /*
+         * Guard the degenerate case. If the face is so wide that filling the box
+         * needs NEGATIVE tracking, the word would re-cram -- the failure this
+         * change exists to remove. In that case keep a small positive floor and
+         * accept a narrower word rather than compressing the letters again.
+         */
+        if (track < MIN_TRACK_EM * solvedSize) {
+          track = MIN_TRACK_EM * solvedSize;
+        }
+
+        glyphStyle.letterSpacing = `${track.toFixed(3)}px`;
+        glyphStyle.marginRight = `${(-track).toFixed(3)}px`;
         glyphStyle.transformOrigin = '0 50%';
-        glyphStyle.transform = `scaleX(${ratio.toFixed(4)})`;
+        glyphStyle.transform = 'none';
       }
     };
 
@@ -235,12 +364,17 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
             className={`cinematic-type__word cinematic-type__word--${spec.side}`}
             ref={(el) => {
               wordRefs.current[spec.side] = el;
+              boxRefs.current[spec.side] = el;
             }}
             data-testid={`headline-${spec.side}`}
             style={{
               left: `${rect.x * 100}%`,
               top: `${rect.y * 100}%`,
               width: `${rect.width * 100}%`,
+              // Explicit, because the fit solves the type size from the box
+              // HEIGHT as well as its width. Without it `clientHeight` is 0 and
+              // the cap-height pass has nothing to solve against.
+              height: `${rect.height * 100}%`,
             }}
           >
             {/* The distressed-edge mask lives on this inner span. */}
