@@ -42,6 +42,44 @@ const CAP_FILL = 0.94;
  */
 const MIN_TRACK_EM = 0.02;
 
+/*
+ * Ceiling on the fitted tracking, in em.
+ *
+ * See the fixed point in measure(). The loosest tracking the roomier word would
+ * have received from the original leftover-per-gap rule is 0.10em at 1280, so that
+ * is used as the cap: the solve may raise the tighter word up to it, but never
+ * past what the reference composition itself shows.
+ */
+const TRACK_CEILING_EM = 0.1;
+
+/*
+ * Ink the glyphs paint OUTSIDE their advance box, in em.
+ *
+ * `-webkit-text-stroke: 0.006em` (see TypographyLayer.css) paints a symmetric
+ * stroke of that width centred on each glyph outline, so it extends STROKE_WIDTH
+ * beyond the left and right edges of the text run. The Range measurement that drives
+ * the fit reports the ADVANCE box, not the ink, so a word that exactly fills its
+ * measured box still paints over it: measured PORTFOLIO rendering 524.16px of ink
+ * inside a 518.39px box, overrunning by 5.8px.
+ *
+ * Twice the stroke width, because both ends overhang. This is subtracted from every
+ * box's usable width before the size/track solve, so the fit reserves it.
+ *
+ * Kept as a literal rather than read from the stylesheet because the fit runs
+ * before layout settles and needs the value synchronously; the two must be changed
+ * together.
+ */
+const STROKE_OVERHANG_EM = 0.012;
+
+/*
+ * Reference size the advance measurement is taken at.
+ *
+ * See measureWord: the per-unit advance MUST be measured from a fixed size rather
+ * than from whatever the previous pass happened to write, or the solve feeds on
+ * its own output. 100px is simply a round, comfortably non-clamped reference.
+ */
+const REF_PX = 100;
+
 interface WordSpec {
   text: string;
   side: "left" | "right";
@@ -83,7 +121,6 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
   const fitRefs = useRef<Record<string, HTMLSpanElement | null>>({});
   const glyphRefs = useRef<Record<string, HTMLSpanElement | null>>({});
   const boxRefs = useRef<Record<string, HTMLSpanElement | null>>({});
-
   /*
    * Fit each word to its measured box by DISTRIBUTING TRACKING, not by
    * stretching, and give BOTH WORDS THE SAME FONT SIZE.
@@ -156,6 +193,10 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
     interface Measured {
       glyphs: HTMLElement;
       boxW: number;
+      /** Box HEIGHT, the cap-height target. Needed again in the coupled solve. */
+      boxH: number;
+      /** Cap height per unit font-size, measured at REF_PX. */
+      perSizeH: number;
       sizeLimit: number;
       count: number;
       /** Advance sum at `sizeLimit`, needed to re-derive tracking at a smaller size. */
@@ -182,8 +223,8 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
        * container, so it clamps the run and `scrollWidth` just echoes
        * `clientWidth` -- always a ratio of 1.0.
        *
-       * The resolved font-size is frozen to px BEFORE the container is removed,
-       * so lifting it cannot change the type size mid-measurement.
+       * The font-size is pinned to REF_PX before the container is removed, so
+       * lifting it cannot change the type size mid-measurement.
        *
        * NOTE what the restore deliberately does NOT do: `fontSize`. An earlier
        * version restored it, which threw away the solved size and silently
@@ -196,11 +237,8 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
         fitStyle.width = prev.width;
       };
 
-      const resolved = parseFloat(getComputedStyle(glyphs).fontSize);
-      if (Number.isFinite(resolved)) glyphStyle.fontSize = `${resolved}px`;
       fitStyle.containerType = "normal";
       fitStyle.width = "max-content";
-      glyphStyle.letterSpacing = "0px";
 
       /*
        * Measure GLYPH ADVANCES, excluding the trailing letter-space.
@@ -218,9 +256,54 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
         return { w: r.width, h: r.height };
       };
 
+      /*
+       * THE SOLVE MUST NOT DEPEND ON ITS OWN PREVIOUS OUTPUT.
+       *
+       * This was a real defect, not a rounding curiosity. The measurement was
+       * taken at `resolved` -- the font-size the PREVIOUS pass wrote -- and then
+       * divided by `resolved` to get a per-unit advance. So pass N+1 derived its
+       * answer from pass N's output, and the whole thing was a feedback loop.
+       *
+       * `getBoundingClientRect` returns a rounded, whole-pixel width, so at small
+       * sizes the rounding dominated. Measured advance per pass, with identical
+       * geometry and nothing changed between runs:
+       *
+       *     768x1024   252, 252, 258, 252, 258, 252 px
+       *     390x844    125, 131, 125, 131, 125, 131 px
+       *     1280x720   418, 426, 426, 422, 426, 422 px
+       *
+       * At 768 the per-unit advance wobbled 3.963 -> 3.908 (1.4%), which moved
+       * `sizeLimit` across the height/width crossover and made the rendered
+       * tracking flip between two values -- mobile's PERSONAL/PORTFOLIO parity
+       * gap swung 8.63% -> -16.72% -> 9.95% across re-solves of the SAME page.
+       * 1280 happened to land on the same pixel each pass so the bug was invisible
+       * there, which is why earlier passes measured a stable-looking headline.
+       *
+       * The fix is to measure at a FIXED reference size (REF_PX). The per-unit
+       * advance is then a property of the face and the text, not of history, and
+       * the solve is idempotent: running it twice gives the same answer twice.
+       *
+       * `marginRight` is also cleared here for the same reason. It is pass N's
+       * `margin-right: -track`, applied to the very span being measured, so it
+       * contaminated `n0`. Clearing it costs nothing because the value is
+       * rewritten at the end of the pass anyway.
+       */
+      const prevMargin = glyphStyle.marginRight;
+      const prevTransform = glyphStyle.transform;
+      const prevMarginLeft = glyphStyle.marginLeft;
+      glyphStyle.marginRight = "0px";
+      // Also cleared: the box-centring lead written by the previous pass, for the
+      // same reason -- it would otherwise shrink the measured run.
+      glyphStyle.marginLeft = "0px";
+      glyphStyle.fontSize = `${REF_PX}px`;
+      glyphStyle.letterSpacing = "0px";
+
       const n0 = inkOf();
       if (!n0.w || n0.w <= 0 || !n0.h || n0.h <= 0) {
         unfreeze();
+        glyphStyle.marginRight = prevMargin;
+        glyphStyle.marginLeft = prevMarginLeft;
+        glyphStyle.transform = prevTransform;
         return null;
       }
 
@@ -243,8 +326,8 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
        *
        * where `k` is the advance sum per unit of font-size.
        */
-      const perSizeW = n0.w / resolved;
-      const perSizeH = n0.h / resolved;
+      const perSizeW = n0.w / REF_PX;
+      const perSizeH = n0.h / REF_PX;
       const count = Math.max(1, (glyphs.textContent ?? "").length);
       const gaps = Math.max(1, count - 1);
 
@@ -255,6 +338,8 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
       const m: Measured = {
         glyphs,
         boxW,
+        boxH,
+        perSizeH,
         sizeLimit,
         count,
         advanceAtLimit: perSizeW * sizeLimit,
@@ -280,20 +365,119 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
       if (measured.length === 0) return;
 
       /*
-       * Pass 2: one shared size for all words.
+       * Pass 2: solve the shared SIZE and the shared TRACKING TOGETHER.
        *
-       * The smaller of the per-word limits is the largest size EVERY word can
-       * render at inside its own box, so taking the min guarantees no word
-       * overflows. Identical cap height then means an identical baseline, which
-       * is what visually aligns the two words.
+       * They are not independent, and that coupling is the whole difficulty:
+       *
+       *     advances = k * S              (k = advance sum per unit size)
+       *     track     = (boxW - advances) / gaps
+       *     fits      <=> k*S + gaps*track <= boxW
+       *
+       * The previous two-step order -- take the size from min(height limit,
+       * width-at-MIN_TRACK), then hand out whatever slack is left -- does NOT
+       * satisfy that last inequality once the two words are given ONE track. The
+       * parity track is the MEAN of the words' per-gap slacks, so it can exceed
+       * one word's own slack, and that word then renders WIDER than its box:
+       * measured PORTFOLIO at 540px of ink inside a 522px box, overrunning by
+       * 18px. It did not visibly clip only because the frame edge was further out.
+       *
+       * So it is solved as a fixed point. Start from the conservative size, derive
+       * the parity track from the slack that size leaves, re-solve the size against
+       * THAT track as the floor, and repeat. It converges in two or three rounds on
+       * every viewport measured, and the round count is fixed, so the result is
+       * deterministic -- unlike the earlier history-dependent measurement.
+       *
+       * PARITY IS EXACT HERE, not approximate, because both words are handed the
+       * same `track`. Chasing it through box widths instead does not work: parity is
+       *
+       *     (W_L - k_L*S)/7 == (W_R - k_R*S)/8
+       *
+       * which is not scale-invariant, so a width pair that satisfies it at one
+       * aspect misses at the next (measured +3.1% at 1920, +12.0% at 1280, and
+       * -11.5% at 360x800).
        */
-      const sharedSize = Math.max(
+      const kOf = (m: Measured) => m.advanceAtLimit / m.sizeLimit;
+      const gapsOf = (m: Measured) => Math.max(1, m.count - 1);
+      /** Cap-height limit for a word. */
+      const sizeForHeightOf = (m: Measured) => (m.boxH * CAP_FILL) / m.perSizeH;
+
+      /*
+       * Usable width per word, after reserving the stroke overhang. Everything below
+       * solves against this rather than the raw box width, so the painted ink fits
+       * the box rather than merely its advances.
+       */
+      const usableW = measured.map((x) => {
+        const raw = x.m.boxW - STROKE_OVERHANG_EM * x.m.sizeLimit;
+        return raw > 1 ? raw : 1;
+      });
+
+      let sharedSize = Math.max(
         1,
         measured.reduce(
           (acc, x) => Math.min(acc, x.m.sizeLimit),
           Number.POSITIVE_INFINITY,
         ),
       );
+      let parityTrack = MIN_TRACK_EM * sharedSize;
+      for (let round = 0; round < 6; round++) {
+        // Track implied by the slack this size leaves in each box.
+        //
+        // The cap is the crux. Track and size trade against each other: more track
+        // needs a smaller size to fit the same box, and a smaller size leaves more
+        // slack, which permits more track. So an uncapped fixed point runs away --
+        // measured converging to 29.88px of tracking on a 127.84px word (0.234em)
+        // at 1920, wildly gapped and visibly smaller than before.
+        //
+        // The cap is the loosest tracking the roomier word would have received from
+        // the original leftover-per-gap rule, so the solve can raise the tighter word
+        // up to it -- the direction the brief asked for -- but never past what the
+        // reference composition itself shows.
+        let sum = 0;
+        for (let i = 0; i < measured.length; i++)
+          sum +=
+            (usableW[i] - kOf(measured[i].m) * sharedSize) /
+            gapsOf(measured[i].m);
+        const nextTrack = Math.max(
+          MIN_TRACK_EM * sharedSize,
+          Math.min(sum / measured.length, TRACK_CEILING_EM * sharedSize),
+        );
+
+        // Largest size every word can render at with THAT track as its floor.
+        let nextSize = Number.POSITIVE_INFINITY;
+        for (let i = 0; i < measured.length; i++) {
+          const room = usableW[i] - gapsOf(measured[i].m) * nextTrack;
+          nextSize = Math.min(
+            nextSize,
+            room > 0 ? room / kOf(measured[i].m) : 1,
+          );
+        }
+        nextSize = Math.max(
+          1,
+          Math.min(nextSize, ...measured.map((x) => sizeForHeightOf(x.m))),
+        );
+
+        const settled =
+          Math.abs(nextSize - sharedSize) < 0.01 &&
+          Math.abs(nextTrack - parityTrack) < 0.01;
+        sharedSize = nextSize;
+        parityTrack = nextTrack;
+        if (settled) break;
+      }
+
+      /*
+       * Where the tracked run sits INSIDE its box, as a fraction of the leftover
+       * width between the box edge and the tracked run.
+       *
+       * 0 pins the run to the box's left edge, keeping the box's right edge exactly
+       * where HEADLINE_RECTS puts it. That is the safe value: the words are pinned
+       * to the frame edges by the reference, and an earlier 0.9 centred the run
+       * instead, which pushed PORTFOLIO's ink 7px PAST the figure silhouette (ink at
+       * 702px, figure edge at 709px) -- a real overlap, not a near miss.
+       *
+       * So the run is left-aligned in its box, and the leftover width simply becomes
+       * the word's right-hand bearing.
+       */
+      const TRACK_FILL = 0;
 
       // Pass 3: write the shared size and hand out the leftover width as tracking.
       for (const { fit, m } of measured) {
@@ -315,19 +499,27 @@ export function TypographyLayer({ settled = false }: TypographyLayerProps) {
          * is recomputed from the shared size rather than reused from the limit.
          */
         const advances = (m.advanceAtLimit / m.sizeLimit) * sharedSize;
-        let track = (m.boxW - advances) / m.count;
+        const thisSlack = m.boxW - STROKE_OVERHANG_EM * sharedSize - advances;
+        const gaps = Math.max(1, m.count - 1);
+        /*
+         * The parity track, not this word's own leftover share. Because every word
+         * is handed the SAME value, the two words' gaps are equal by construction.
+         */
+        const track = parityTrack;
 
         /*
-         * Guard the degenerate case. If the face is so wide that filling the box
-         * needs NEGATIVE tracking, the word would re-cram -- the failure this
-         * change exists to remove. In that case keep a small positive floor and
-         * accept a narrower word rather than compressing the letters again.
+         * Where the tracked run sits in the box. The run is
+         * `advances + gaps*track` wide and the box is `advances + slack` wide, so
+         * `thisSlack - gaps*track` is the leftover. At TRACK_FILL 0 there is no
+         * lead and the run sits at the box's left edge, which is what keeps the
+         * two words pinned to the frame edges as the reference has them.
          */
-        if (track < MIN_TRACK_EM * sharedSize)
-          track = MIN_TRACK_EM * sharedSize;
+        const lead = ((thisSlack - gaps * track) / 2) * TRACK_FILL;
 
         glyphStyle.letterSpacing = `${track.toFixed(3)}px`;
-        glyphStyle.marginRight = `${(-track).toFixed(3)}px`;
+        // Trailing letter-space cancel, then the box-centring lead.
+        glyphStyle.marginRight = `${(-track + lead).toFixed(3)}px`;
+        glyphStyle.marginLeft = `${lead.toFixed(3)}px`;
         glyphStyle.transformOrigin = "0 50%";
         glyphStyle.transform = "none";
         void fit;

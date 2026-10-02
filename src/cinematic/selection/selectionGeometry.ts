@@ -297,6 +297,74 @@ export const FIGURE_RECT: Rect = {
  * optimum, so this was confirmed by measuring the render rather than by
  * interpolating between search samples.
  *
+ * A LITTLE MORE SIZE, AND BOTH WORDS SPACED LIKE EACH OTHER
+ *
+ * Follow-up request: PORTFOLIO still read cramped, and the headline a size up.
+ *
+ * Two things had to be established first, because both invalidate the obvious
+ * one-lever fix.
+ *
+ * 1. HEIGHT BUYS NOTHING AT 1280. The fitter reports, at the current geometry,
+ *
+ *        left   sizeForHeight 112.32   sizeForWidth 102.98
+ *        right  sizeForHeight 112.32   sizeForWidth 101.61
+ *
+ *    so WIDTH binds at both boxes with ~10px of headroom on the height side. A
+ *    sweep over dH = 0 / 0.004 / 0.008 / 0.012 / 0.016 returned an IDENTICAL
+ *    font size for every step. Height was left untouched.
+ *
+ * 2. WIDENING THE RIGHT BOX ALONE INVERTS THE PARITY. The shared size is the min
+ *    across both words, so widening the right box raises the shared size; the left
+ *    word's advances then grow inside an UNCHANGED left box and PERSONAL's
+ *    tracking FALLS. Measured: +0.004 on the right box moves the gap from +6.0%
+ *    straight to -6.2%, with no parity point between. The left box has to grow
+ *    too, which is why the previous pass could only close the gap to 5-6% at
+ *    1280 rather than to parity.
+ *
+ * Because both boxes are width-bound, widening one only helps until the other
+ * becomes the binding constraint. Each box can grow two ways, and the directions
+ * cost different resources:
+ *
+ *     left outward  -> spends the left outer margin   (was 3.60%, floor 3.0%)
+ *     left inward   -> spends left figure clearance   (~46px spare)
+ *     right inward  -> spends right figure clearance  (~49px spare)
+ *     right outward -> spends the right outer margin  (was 3.50%, ref 2.81%)
+ *
+ * Figure clearance is the cheaper resource and does not move the outer edge, so
+ * the extra width comes mostly from INWARD growth on both boxes, with only 0.004
+ * spent outward on the right. That also keeps PORTFOLIO moving right rather than
+ * left: its box starts 0.012 further left but is 0.016 wider, so the ink's right
+ * edge still travels outward, and the measured outer margin tightens 3.50% ->
+ * 3.14%, i.e. PORTFOLIO sits closer to the frame edge, not further from it.
+ *
+ * The four-lever result was searched against the live fitter at 1280x720 with the
+ * figure silhouette measured from rendered pixels, gated on parity <=2%, outer
+ * margins inside the reference envelope, and >=22px of cap-line clearance. 13
+ * candidates passed; the one taken is the largest of them that keeps real margin
+ * on every gate rather than spending clearance to the floor:
+ *
+ *     font size   101.32px -> 106.02px   (+4.6%)
+ *     tracking    equal on both words, by construction (see TypographyLayer.tsx)
+ *     outer ink   left 3.60% / right 2.85%   (reference 3.67% / 2.81%)
+ *
+ * The right box was then NARROWED to 0.405. That was only possible once parity
+ * stopped depending on geometry: with both words handed the same tracking by the
+ * fitter, the box width is pure right-hand bearing rather than a tracking lever,
+ * so it can be trimmed to restore the frame margin. Measured, the margin trades
+ * against size monotonically, and 0.405 lands the right ink edge on the
+ * reference's own 2.81% at every viewport:
+ *
+ *     width    size kept    right margin
+ *     0.4214     100.0%         2.01%
+ *     0.4050      96.1%         2.85%   <- taken
+ *     0.3900      92.6%         3.43%
+ *
+ * 96% of the size is kept because cap height is what reads as "bigger"; the margin
+ * is what reads as safe.
+ *
+ * Both words grow together, because they render at ONE shared size by design;
+ * making PORTFOLIO alone larger would undo the shared-baseline fix recorded above.
+ *
  * SAFETY, measured from pixels rather than assumed
  *
  * The figure's silhouette at the CAP LINE spans 557-690px at 1280x720, and
@@ -316,8 +384,8 @@ export const FIGURE_RECT: Rect = {
  * The measurement is authoritative; the assertion is corrected instead.
  */
 export const HEADLINE_RECTS = {
-  left: { x: 0.036, y: 0.3455, width: 0.362, height: 0.201 } as Rect,
-  right: { x: 0.5775, y: 0.3455, width: 0.3874, height: 0.201 } as Rect,
+  left: { x: 0.036, y: 0.3455, width: 0.394, height: 0.201 } as Rect,
+  right: { x: 0.5495, y: 0.3455, width: 0.405, height: 0.201 } as Rect,
 };
 
 /**

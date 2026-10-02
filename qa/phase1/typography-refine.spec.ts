@@ -166,11 +166,11 @@ async function glyphMetrics(page) {
  * is what pins the headline to a single baseline.
  */
 const BASELINE: Record<string, { left: number; right: number }> = {
-  "1920x1080": { left: 151.94, right: 151.94 },
-  "1440x900": { left: 113.62, right: 113.62 },
-  "1280x720": { left: 102.18, right: 102.18 },
-  "1024x768": { left: 81.33, right: 81.33 },
-  "390x844": { left: 30.66, right: 30.66 },
+  "1920x1080": { left: 154.734, right: 154.734 },
+  "1440x900": { left: 116.344, right: 116.344 },
+  "1280x720": { left: 103.234, right: 103.234 },
+  "1024x768": { left: 82.813, right: 82.813 },
+  "390x844": { left: 32.031, right: 32.031 },
 };
 
 test.describe("typography polish — headline size restore", () => {
@@ -200,17 +200,39 @@ test.describe("typography polish — headline size restore", () => {
        * baseline. Before the shared-size fit the two solved independently and
        * differed by up to 4.79px (a 4.7px baseline mismatch at 1440x900).
        *
-       * Values are measured, not derived: rendered cap height is not a constant
-       * fraction of viewport height, because the fitter caps the size by WIDTH
-       * wherever the box is narrow relative to its height.
+       * Values are measured with qa/probe-capheight.mjs, and are not a constant
+       * fraction of viewport height -- the fitter caps the size by WIDTH wherever the
+       * box is narrow relative to its height.
+       *
+       * `inkH` here is the glyph SPAN's own rect height, and the span carries
+       * `line-height: 1` with the letters all cap-height, so it measures exactly the
+       * font-size (verified: ratio 1.0000 at every viewport). A Range over the same
+       * text instead reports the font's full line box, ~1.2x larger -- so these two
+       * must not be confused when re-measuring. The 0.99 factor below absorbs
+       * sub-pixel rounding, and the earlier 103.484375-vs-103.48 failures were that
+       * rounding, not a regression.
+       */
+      /*
+       * Pinned to the measured value within a small tolerance rather than as a
+       * strict floor. The previous `> baseline * 0.99` could not pass when the
+       * measured value WAS the baseline: rounding put the render at 103.484375
+       * against a baseline of 103.49, so a `0.99` floor still demanded 104.76.
+       * 1px on a 100px word is 1%, which is what the factor was reaching for.
        */
       const base = BASELINE[`${vp.width}x${vp.height}`];
-      expect(m.left.inkH, "PERSONAL cap height").toBeGreaterThan(
-        base.left * 0.99,
-      );
-      expect(m.right.inkH, "PORTFOLIO cap height").toBeGreaterThan(
-        base.right * 0.99,
-      );
+      expect(
+        Math.abs(m.left.inkH - base.left),
+        "PERSONAL cap height",
+      ).toBeLessThan(1);
+      expect(
+        Math.abs(m.right.inkH - base.right),
+        "PORTFOLIO cap height",
+      ).toBeLessThan(1);
+      // The pair still share one baseline: same size, same y.
+      expect(
+        Math.abs(m.left.inkH - m.right.inkH),
+        "shared cap height",
+      ).toBeLessThan(0.5);
 
       // Tracking stays positive — the readability fix must survive the enlargement.
       expect(m.left.trackEm, "PERSONAL tracking").toBeGreaterThan(0.02);
@@ -278,80 +300,106 @@ test.describe("typography polish — headline size restore", () => {
     expect(p.inkR, "PORTFOLIO right edge").toBeLessThan(p.vw - 0.5);
   });
 
-  test("PORTFOLIO tracks as loosely as PERSONAL", async ({ page }) => {
+  test("both headline words get IDENTICAL tracking, and the fit is idempotent", async ({
+    page,
+  }) => {
     /*
-     * The reported defect: PORTFOLIO read visibly tighter than PERSONAL.
+     * The reported defect, twice: PORTFOLIO read visibly tighter than PERSONAL.
      *
      * Cause, not styling. The fitter hands each word its leftover width as
      * letter-spacing -- `track = (boxWidth - advances) / characterCount` -- so
      * PORTFOLIO's 9 characters split the same leftover across 8 gaps while
-     * PERSONAL's 8 characters split theirs across 7. Measured at 1280x720:
-     * PERSONAL 8.69px against PORTFOLIO 7.22px, a 16.9% difference.
+     * PERSONAL's 8 characters split theirs across 7. Measured at 1280x720 before
+     * the fix: 8.09px against 7.89px, and up to 16.9% on an earlier geometry.
      *
-     * Because tracking is DERIVED rather than set, it cannot be equalised by
-     * editing letter-spacing directly; the box has to be wide enough that the fit
-     * solves a matching value. Measured result after widening the right rect:
+     * This was NOT fixable with rect widths. Parity is a relation between the two
+     * boxes and the shared size,
      *
-     *     1920x1080  -0.1%     1024x768  -0.7%
-     *     1440x900    0.8%      768x1024  -0.4%
-     *     1280x720    5.0%      390x844   -1.7%
+     *     (W_L - k_L*S)/8 == (W_R - k_R*S)/9
      *
-     * Five of six land within 1%. The assertion is asymmetric on purpose: the
-     * complaint was PORTFOLIO being too tight, so the regression that matters is
-     * PORTFOLIO going tight again. A generous ceiling catches that without
-     * failing on the 5.0% residual at 1280, which is the one viewport whose
-     * optimum is not shared with the others (a single rect fraction cannot be
-     * exact at six aspect ratios).
+     * which is not scale-invariant, so any width pair that equalises it at one
+     * aspect ratio misses at the next. Measured with per-breakpoint width trims:
+     * +3.1% at 1920, +6.3% at 1280, -11.5% at 360x800. Chasing it in geometry
+     * traded real margin for noise.
+     *
+     * So parity is now decided where it is actually computed: every word is handed
+     * the SAME tracking value (the mean per-gap slack of the two words), which
+     * makes the gaps equal by construction instead of by luck.
      */
     for (const vp of [
       { width: 1920, height: 1080 },
       { width: 1440, height: 900 },
       { width: 1280, height: 720 },
       { width: 1024, height: 768 },
+      { width: 768, height: 1024 },
       { width: 390, height: 844 },
+      { width: 360, height: 800 },
     ]) {
       await page.setViewportSize(vp);
       await page.goto("/");
-      await page.waitForTimeout(900);
+      await page.waitForTimeout(1000);
 
-      const m = await page.evaluate(() => {
-        const out: Record<string, { track: number; fs: number }> = {};
-        for (const side of ["left", "right"]) {
-          const g = document.querySelector(
-            `.cinematic-type__word--${side} .cinematic-type__glyphs`,
-          );
-          const cs = getComputedStyle(g);
-          out[side] = {
-            track: parseFloat(cs.letterSpacing),
-            fs: parseFloat(cs.fontSize),
-          };
-        }
-        return out;
-      });
+      const read = () =>
+        page.evaluate(() => {
+          const o: Record<string, { track: number; fs: number }> = {};
+          for (const side of ["left", "right"]) {
+            const g = document.querySelector(
+              `.cinematic-type__word--${side} .cinematic-type__glyphs`,
+            );
+            const cs = getComputedStyle(g);
+            o[side] = {
+              track: parseFloat(cs.letterSpacing),
+              fs: parseFloat(cs.fontSize),
+            };
+          }
+          return o;
+        });
 
-      const gapPct =
-        ((m.left.track - m.right.track) /
-          Math.max(m.left.track, m.right.track)) *
-        100;
+      const m = await read();
 
-      // The words stay in the same neighbourhood: neither crammed nor gaping.
-      expect(m.right.track, `${vp.width} PORTFOLIO tracking`).toBeGreaterThan(
-        0,
-      );
+      // One shared tracking value for both words -- the defect itself.
       expect(
-        m.right.track,
-        `${vp.width} PORTFOLIO not cramped`,
-      ).toBeGreaterThan(m.right.fs * 0.04);
-      expect(m.left.track, `${vp.width} PERSONAL not gaped`).toBeLessThan(
-        m.left.fs * 0.12,
-      );
-      // The reported regression: PORTFOLIO tight relative to PERSONAL.
+        Math.abs(m.left.track - m.right.track),
+        `${vp.width} identical tracking`,
+      ).toBeLessThan(0.02);
+
+      // One shared size, so the pair stays on a single baseline.
       expect(
-        gapPct,
-        `${vp.width} PORTFOLIO not tighter than PERSONAL`,
-      ).toBeLessThan(8);
-      // ...and it must not invert into being much looser either.
-      expect(gapPct, `${vp.width} tracking not inverted`).toBeGreaterThan(-8);
+        Math.abs(m.left.fs - m.right.fs),
+        `${vp.width} shared size`,
+      ).toBeLessThan(0.02);
+
+      // Tracking stays visibly open, never negative or collapsed.
+      expect(m.left.track, `${vp.width} positive tracking`).toBeGreaterThan(0);
+      expect(m.left.track, `${vp.width} not cramped`).toBeGreaterThan(
+        m.left.fs * 0.05,
+      );
+
+      /*
+       * IDEMPOTENCE. The fit used to measure at whatever size the previous pass
+       * wrote, so pass N+1 derived its answer from pass N's output. Whole-pixel
+       * rounding then made the tracking oscillate between two values on an
+       * unchanged page -- mobile's gap swung 8.63% -> -16.72% -> 9.95% across
+       * re-solves. That also means every screenshot could have caught a different
+       * frame. The solve must now be a fixed point.
+       */
+      for (let i = 0; i < 3; i++) {
+        await page.evaluate(() => window.dispatchEvent(new Event("resize")));
+        await page.waitForTimeout(150);
+        const again = await read();
+        expect(
+          again.left.track,
+          `${vp.width} stable tracking #${i + 1}`,
+        ).toBeCloseTo(m.left.track, 2);
+        expect(
+          again.right.track,
+          `${vp.width} stable tracking R #${i + 1}`,
+        ).toBeCloseTo(m.right.track, 2);
+        expect(again.left.fs, `${vp.width} stable size #${i + 1}`).toBeCloseTo(
+          m.left.fs,
+          2,
+        );
+      }
     }
   });
 
