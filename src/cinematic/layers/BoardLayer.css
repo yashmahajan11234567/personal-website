@@ -165,51 +165,45 @@
 }
 
 /*
- * CLOUD WORDMARK -> THE PLATE'S OPTICAL CENTRE.
+ * CLOUD WORDMARK -> ALIGNED WITH THE DATA WORDMARK.
  *
- * Measured with qa/probe-plates.mjs, the DEVOPS / CLOUD block was NOT
- * horizontally off-centre: its centre sat at x 0.4875 of the plate, which is
- * exactly 0.5 less this file's own 2.5% inward inset. The lower-left anchoring
- * was entirely VERTICAL -- the block's centre was at y 0.653 of the plate while
- * the plate's own centre is 0.500, i.e. 15% of the plate height too low.
- * `.cinematic-plate` is `justify-content: flex-end` with padding `14% 11% 11%`,
- * which pushes the block down to the bottom content edge.
+ * Re-centring the Cloud block on its own plate (a previous pass, answering a
+ * request to move it "toward the visual centre of the right plate") left the two
+ * plates DISAGREEING with each other, because only Cloud moved. Measured
+ * vertical disagreement between the two wordmark block centres:
  *
- * WHY `justify-content: center` RATHER THAN A PADDING VALUE
+ *   1920x1080  21.0%      1024x768   25.8%
+ *   1440x900   21.8%      768x1024   15.7%
+ *   1280x720   18.6%      390 mobile  0.0%  (both already centred)
  *
- * A padding percentage cannot express this. CSS percentage padding resolves
- * against the plate WIDTH, but the target is a fraction of plate HEIGHT, and
- * the ratio between them shifts with viewport aspect. Measured with
- * qa/solve-cloud-centre.mjs, the best padding-bottom for the target was 26% at
- * 1280x720 (error 0.5%) but had to exceed 30% at 1024x768 and still missed by
- * 9.1% -- the value simply could not reach the target there.
+ * Since the plates are geometrically symmetric, that gap is directly visible as
+ * one title sitting high and the other sitting low. The user asked for the two
+ * to be aligned, so Cloud returns to the Data plate's own placement.
  *
- * Flex centring uses no percentage padding, so it holds across aspects.
- * Measured block centres after centring: 0.4608 / 0.4575 / 0.4527 / 0.4607 /
- * 0.4351 at 1920x1080 / 1440x900 / 1280x720 / 1024x768 / 768x1024. The spread
- * is 0.026 of plate height with a mean of 0.4533 -- already sitting just above
- * true centre, which is where a two-line title reads as optically centred, since
- * the ascenders above the first line carry less weight than the block's bulk
- * below it. No additional bias was needed, so none is applied.
+ * WHY `flex-end` RATHER THAN A SHARED `center`
  *
- * SIDE PADDING IS RESTORED TO SYMMETRIC
+ * With `justify-content: center` the block centre is fixed by the padding
+ * asymmetry alone -- `(H - padT + padB) / 2` -- and so is independent of the
+ * block's own height. That would make the two centres match EXACTLY, but it also
+ * means moving the Data plate up by ~19% of plate height, which is a large
+ * change to the plate the user did not ask to move.
  *
- * `13.5%` on the right (the inward nudge) is what offset the centre to 0.4875,
- * so the Cloud plate's own centring wants symmetric sides. The nudge already
- * did its job -- it moved the plate's text toward the figure while the plate
- * itself is fixed -- and centring the block is the more correct reading of the
- * brief ("toward the visual center of the right plate"), which names the PLATE
- * as the centring reference rather than the viewport.
+ * Restoring `flex-end` on Cloud instead aligns the two on their shared bottom
+ * content edge. The residual is half the difference in block height, since Cloud
+ * is set slightly larger (2.52vw vs 2.42vw, because its longest word "DEVOPS" is
+ * 6 characters against Data's 8). Measured spans at 1280x720 are 0.2115 vs
+ * 0.2223 of plate height, so the centres land 0.0054 -- about 1.7px -- apart.
  *
- * The status line moves with the block and now sits at y ~0.61-0.62 of the
- * plate, still clear of the plate's bottom artwork.
+ * SIDE PADDING IS MIRRORED, NOT SYMMETRIC
  *
- * Only the Cloud plate changes. The Data plate keeps its measured y 0.658, and
- * the mobile stack keeps its existing centred layout.
+ * The Data plate is inset 13.5% on the side facing the figure. Cloud mirrors
+ * that with 13.5% on ITS inward side, so both wordmarks are pushed the same
+ * distance toward the centre and the pair reads as one composition. An earlier
+ * pass set Cloud to symmetric 11% while centring it; that is reverted here.
  */
 .cinematic-plate[data-plate='cloud'] {
-  padding-right: 11%;
-  justify-content: center;
+  padding-right: 13.5%;
+  justify-content: flex-end;
 }
 
 /* Mobile: stacked plates below the figure get horizontal type. */

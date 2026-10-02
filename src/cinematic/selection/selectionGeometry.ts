@@ -238,8 +238,8 @@ export const FIGURE_RECT: Rect = {
  * ink clearance from the figure, and 54px of frame edge to spare at 1280.
  */
 export const HEADLINE_RECTS = {
-  left: { x: 0.042, y: 0.3542, width: 0.3559, height: 0.168 } as Rect,
-  right: { x: 0.5834, y: 0.3542, width: 0.3746, height: 0.168 } as Rect,
+  left: { x: 0.042, y: 0.3542, width: 0.3559, height: 0.183 } as Rect,
+  right: { x: 0.5834, y: 0.3542, width: 0.3746, height: 0.183 } as Rect,
 };
 
 /**

@@ -107,17 +107,20 @@ async function glyphMetrics(page) {
 }
 
 /**
- * Pre-change rendered cap height (px) per viewport, measured with
- * qa/capture-type-baseline.mjs against the committed geometry.
+ * Rendered cap height (px) per viewport, measured with qa/probe-headline-parity.mjs
+ * after the shared-size fit.
+ *
+ * Both words are IDENTICAL by construction: the fitter takes one shared size, so
+ * the two entries can only differ by measurement noise. Asserting a shared value
+ * is what pins the headline to a single baseline.
  */
 const BASELINE: Record<string, { left: number; right: number }> = {
-  "1920x1080": { left: 130.45, right: 131.09 },
-  "1440x900": { left: 106.73, right: 106.37 },
-  "1280x720": { left: 86.06, right: 86.02 },
-  "1024x768": { left: 77.64, right: 74.91 },
-  "390x844": { left: 29.56, right: 29.3 },
+  "1920x1080": { left: 147.35, right: 147.35 },
+  "1440x900": { left: 109.49, right: 109.49 },
+  "1280x720": { left: 98.02, right: 98.02 },
+  "1024x768": { left: 78.68, right: 78.68 },
+  "390x844": { left: 30.38, right: 30.38 },
 };
-
 test.describe("typography polish — headline size restore", () => {
   const VPS = [
     { width: 1920, height: 1080 },
@@ -138,30 +141,24 @@ test.describe("typography polish — headline size restore", () => {
       const m = await glyphMetrics(page);
 
       /*
-       * Cap height, asserted against MEASURED PER-VIEWPORT baselines.
+       * Cap height, pinned to the SHARED value.
        *
-       * The rects grew 8% in height and 4% in width, but rendered size is NOT
-       * a constant fraction of viewport height: the fitter solves cap height
-       * against the rect and then caps it by WIDTH, so on narrow viewports the
-       * width constraint binds first and the height gain is partly given back.
-       * Measured growth is therefore +2.9% to +9.5%, not a uniform +8%.
+       * Both words render at one font size by construction, so this asserts each
+       * word against the same number and therefore pins them to a single
+       * baseline. Before the shared-size fit the two solved independently and
+       * differed by up to 4.79px (a 4.7px baseline mismatch at 1440x900).
        *
-       * The baselines below were captured from the pre-change render with
-       * qa/capture-type-baseline.mjs (git stash of the two geometry files), so
-       * they are real measurements rather than an extrapolated ratio. Each word
-       * must simply be LARGER than it was, and at least +2% larger, which the
-       * rect growth guarantees at every viewport without over-constraining the
-       * width-constrained cases.
+       * Values are measured, not derived: rendered cap height is not a constant
+       * fraction of viewport height, because the fitter caps the size by WIDTH
+       * wherever the box is narrow relative to its height.
        */
       const base = BASELINE[`${vp.width}x${vp.height}`];
-      expect(
-        m.left.inkH,
-        "PERSONAL larger than its pre-restore baseline",
-      ).toBeGreaterThan(base.left * 1.02);
-      expect(
-        m.right.inkH,
-        "PORTFOLIO larger than its pre-restore baseline",
-      ).toBeGreaterThan(base.right * 1.02);
+      expect(m.left.inkH, "PERSONAL cap height").toBeGreaterThan(
+        base.left * 0.99,
+      );
+      expect(m.right.inkH, "PORTFOLIO cap height").toBeGreaterThan(
+        base.right * 0.99,
+      );
 
       // Tracking stays positive — the readability fix must survive the enlargement.
       expect(m.left.trackEm, "PERSONAL tracking").toBeGreaterThan(0.02);
@@ -218,6 +215,62 @@ test.describe("typography polish — headline size restore", () => {
     expect(p.inkR, "PORTFOLIO right edge").toBeLessThan(p.vw - 0.5);
   });
 
+  test("both headline words share one font size and one baseline", async ({
+    page,
+  }) => {
+    /*
+     * The specific defect the user reported: the two words were fitted
+     * INDEPENDENTLY, so they solved to different font sizes and their baselines
+     * did not line up. Measured before this fix: PERSONAL 114.28px vs PORTFOLIO
+     * 109.49px at 1440x900, a 4.7px baseline difference; 2.1px at 1024x768;
+     * 1.3px at 390 mobile.
+     *
+     * The fitter now solves ONE size across both words, so both the font size and
+     * the rendered ink box must match exactly at every viewport.
+     */
+    for (const vp of [
+      { width: 1920, height: 1080 },
+      { width: 1440, height: 900 },
+      { width: 1280, height: 720 },
+      { width: 1024, height: 768 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(vp);
+      await page.goto("/");
+      await page.waitForTimeout(800);
+
+      const m = await page.evaluate(() => {
+        const out: Record<string, { fs: number; top: number; bottom: number }> =
+          {};
+        for (const side of ["left", "right"]) {
+          const g = document.querySelector(
+            `.cinematic-type__word--${side} .cinematic-type__glyphs`,
+          );
+          const r = g.getBoundingClientRect();
+          out[side] = {
+            fs: parseFloat(getComputedStyle(g).fontSize),
+            top: r.top,
+            bottom: r.bottom,
+          };
+        }
+        return out;
+      });
+
+      expect(
+        Math.abs(m.left.fs - m.right.fs),
+        `${vp.width} shared font size`,
+      ).toBeLessThan(0.5);
+      expect(
+        Math.abs(m.left.top - m.right.top),
+        `${vp.width} shared ink top`,
+      ).toBeLessThan(0.5);
+      expect(
+        Math.abs(m.left.bottom - m.right.bottom),
+        `${vp.width} shared baseline`,
+      ).toBeLessThan(0.5);
+    }
+  });
+
   test("the figure stays fixed while the headline grows", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/");
@@ -255,7 +308,7 @@ test.describe("typography polish — headline size restore", () => {
   });
 });
 
-test.describe("typography polish — Cloud wordmark centring", () => {
+test.describe("typography polish — plate wordmarks aligned with each other", () => {
   const VPS = [
     { width: 1920, height: 1080 },
     { width: 1440, height: 900 },
@@ -266,7 +319,7 @@ test.describe("typography polish — Cloud wordmark centring", () => {
   ];
 
   for (const vp of VPS) {
-    test(`${vp.width}x${vp.height} — wordmark sits at the plate's optical centre`, async ({
+    test(`${vp.width}x${vp.height} — both wordmarks share a vertical position`, async ({
       page,
     }) => {
       await page.setViewportSize(vp);
@@ -278,67 +331,78 @@ test.describe("typography polish — Cloud wordmark centring", () => {
       await page.waitForTimeout(1400);
 
       const m = await page.evaluate(() => {
-        const out = {};
+        const out: Record<string, Record<string, number | string[]>> = {};
         for (const side of ["data", "cloud"]) {
           const plate = document.querySelector(`[data-plate="${side}"]`);
           const body = plate.querySelector(".cinematic-plate__body");
           const pb = plate.getBoundingClientRect();
           const bb = body.getBoundingClientRect();
-          const lines = Array.from(
-            plate.querySelectorAll(".cinematic-plate__line"),
-          ).map((l) => l.textContent.trim());
           out[side] = {
-            cxFrac: ((bb.left + bb.right) / 2 - pb.left) / pb.width,
             cyFrac: ((bb.top + bb.bottom) / 2 - pb.top) / pb.height,
-            lines,
+            topFrac: (bb.top - pb.top) / pb.height,
+            botFrac: (bb.bottom - pb.top) / pb.height,
+            insetL: ((bb.left - pb.left) / pb.width) * 100,
+            insetR: ((pb.right - bb.right) / pb.width) * 100,
+            lines: Array.from(
+              plate.querySelectorAll(".cinematic-plate__line"),
+            ).map((l) => l.textContent.trim()),
           };
         }
         return out;
       });
 
-      // DEVOPS above CLOUD is preserved.
-      expect(m.cloud.lines, "Cloud line order").toEqual(["DEVOPS", "CLOUD"]);
+      const d = m.data as { cyFrac: number; topFrac: number; botFrac: number };
+      const c = m.cloud as { cyFrac: number; topFrac: number; botFrac: number };
 
-      // Centred horizontally: measured exactly 0.5 at every viewport.
+      // Line order preserved on both plates.
       expect(
-        m.cloud.cxFrac,
-        "Cloud wordmark centred on the plate x-axis",
-      ).toBeGreaterThan(0.44);
-      expect(
-        m.cloud.cxFrac,
-        "Cloud wordmark centred on the plate x-axis",
-      ).toBeLessThan(0.56);
+        (m.cloud as { lines: string[] }).lines,
+        "Cloud line order",
+      ).toEqual(["DEVOPS", "CLOUD"]);
+      expect((m.data as { lines: string[] }).lines, "Data line order").toEqual([
+        "DATA ANALYST",
+        "DATA ENGINEER",
+      ]);
 
       /*
-       * Centred vertically, slightly above true centre for optical balance.
-       * Measured 0.480 / 0.475 / 0.472 / 0.475 / 0.456 / 0.357. The mobile plate
-       * is a short horizontal band rather than a tall panel, so it keeps the
-       * pre-existing stacked layout and is excluded from the tall-plate band.
+       * The two wordmarks must agree. An earlier pass re-centred the Cloud block
+       * on its own plate, which left the plates disagreeing by 15.7-25.8% of
+       * plate height -- directly visible because the plates are geometrically
+       * symmetric. Both now sit on their shared bottom content edge.
+       *
+       * The residual is half the difference in block height, since Cloud is set
+       * slightly larger (2.52vw vs 2.42vw, because its longest word "DEVOPS" is
+       * 6 characters against Data's 8). Measured disagreement is 0.3-0.6%.
        */
-      const isMobile = vp.width < 700;
-      if (!isMobile) {
-        expect(
-          m.cloud.cyFrac,
-          "Cloud wordmark near the plate centre",
-        ).toBeGreaterThan(0.4);
-        expect(
-          m.cloud.cyFrac,
-          "Cloud wordmark near the plate centre",
-        ).toBeLessThan(0.52);
-      }
+      expect(
+        Math.abs(d.cyFrac - c.cyFrac),
+        "wordmark centres agree across plates",
+      ).toBeLessThan(0.012);
 
-      // The Data plate is untouched: it keeps its measured bottom-anchored y.
-      if (!isMobile) {
-        expect(m.data.cyFrac, "Data plate position unchanged").toBeGreaterThan(
-          0.6,
-        );
+      // And the bottoms coincide, which is what actually reads as "aligned".
+      expect(
+        Math.abs(d.botFrac - c.botFrac),
+        "wordmark bottoms agree",
+      ).toBeLessThan(0.006);
+
+      // The inwards insets are MIRRORED: Data insets from its left, Cloud from
+      // its right, by the same amount, so both titles are pushed the same
+      // distance toward the figure.
+      const dIn = (m.data as { insetL: number }).insetL;
+      const cIn = (m.cloud as { insetR: number }).insetR;
+      const isMobile = vp.width < 700;
+      if (isMobile) {
+        // Stacked plates: even insets keep both on a shared centre axis.
+        expect(Math.abs(dIn - cIn), "mobile insets even").toBeLessThan(0.5);
+      } else {
+        expect(dIn, "Data inset on the figure side").toBeGreaterThan(12);
+        expect(cIn, "Cloud inset on the figure side").toBeGreaterThan(12);
+        expect(Math.abs(dIn - cIn), "mirrored insets match").toBeLessThan(0.5);
       }
     });
   }
 
-  test("Cloud wordmark does not overlap the central figure", async ({
-    page,
-  }) => {
+  test("Cloud wordmark stays inside its plate", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/");
     await page.waitForTimeout(800);
@@ -347,37 +411,21 @@ test.describe("typography polish — Cloud wordmark centring", () => {
     );
     await page.waitForTimeout(1400);
 
-    /*
-     * Measured against the PLATE's left edge, not the figure's element box. The
-     * figure's element box is far wider than its silhouette -- the anchor art
-     * carries a transparent margin -- so `body.left - figure.right` reports -36px
-     * of "overlap" where the wordmark is nowhere near the visible figure. The
-     * wordmark lives INSIDE its plate and the plates are laid out symmetrically
-     * about the scene, so the plate edge is the correct reference and the
-     * wordmark must stay within it.
-     */
     const gap = await page.evaluate(() => {
       const plate = document.querySelector("[data-plate='cloud']");
       const body = plate.querySelector(".cinematic-plate__body");
       const p = plate.getBoundingClientRect();
       const b = body.getBoundingClientRect();
       return {
-        insidePlate: b.left - p.left,
+        inside: b.left - p.left,
         leftOverflow: p.left - b.left,
         rightOverflow: b.right - p.right,
       };
     });
-    expect(
-      gap.insidePlate,
-      "Cloud wordmark inset within its plate",
-    ).toBeGreaterThan(8);
-    expect(
-      gap.leftOverflow,
-      "Cloud wordmark does not overflow the plate left",
-    ).toBeLessThanOrEqual(0);
-    expect(
-      gap.rightOverflow,
-      "Cloud wordmark does not overflow the plate right",
-    ).toBeLessThanOrEqual(0);
+    expect(gap.inside, "Cloud wordmark inset within its plate").toBeGreaterThan(
+      8,
+    );
+    expect(gap.leftOverflow, "no overflow left").toBeLessThanOrEqual(0);
+    expect(gap.rightOverflow, "no overflow right").toBeLessThanOrEqual(0);
   });
 });

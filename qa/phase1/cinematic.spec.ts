@@ -1492,17 +1492,13 @@ test.describe("typography polish", () => {
     await page.waitForTimeout(900);
 
     /*
-     * The size restore deliberately enlarged the headline, so this test now pins
-     * the POST-restore solve rather than the pre-restore one it originally
-     * asserted ("the nudge changed position only, not the type").
+     * The headline now solves ONE shared size for both words, so the two entries
+     * are identical by construction. What still must hold is that the
+     * enlargement came from the RECT and not from a transform: `scaleX` stays 1,
+     * so no horizontal stretch is reintroduced -- the defect that made the
+     * original type look compressed and clipped. Tracking stays positive.
      *
-     * What still must hold is the part of that original intent that survives:
-     * the enlargement came from the RECT, not from a transform. `scaleX` stays
-     * 1, so no horizontal stretch has been reintroduced -- the defect that made
-     * the original type look compressed and clipped. Tracking stays positive.
-     *
-     * Measured post-restore at 1280x720: PERSONAL 94.25px / 10.63px,
-     * PORTFOLIO 91.82px / 10.22px.
+     * Measured at 1280x720: 98.02px, tracking 8.75px / 7.33px.
      */
     const type = await page.evaluate(() => {
       const out: Array<Record<string, number | string>> = [];
@@ -1522,8 +1518,8 @@ test.describe("typography polish", () => {
     });
 
     const EXPECTED = [
-      { side: "left", fontSize: 94.25, track: 10.63 },
-      { side: "right", fontSize: 91.82, track: 10.22 },
+      { side: "left", fontSize: 98.02, track: 8.75 },
+      { side: "right", fontSize: 98.02, track: 7.33 },
     ];
     for (const [i, e] of EXPECTED.entries()) {
       const t = type[i];
@@ -1539,12 +1535,18 @@ test.describe("typography polish", () => {
       expect(t.track, `${e.side} tracking stays positive`).toBeGreaterThan(0);
     }
 
+    // Shared size: the two words are identical, which is what aligns them.
+    expect(
+      Math.abs(type[0].fontSize - type[1].fontSize),
+      "shared font size",
+    ).toBeLessThan(0.5);
+
     // And the enlargement is real, relative to the pre-restore measurements.
     expect(type[0].fontSize, "PERSONAL grew").toBeGreaterThan(86.06);
     expect(type[1].fontSize, "PORTFOLIO grew").toBeGreaterThan(86.02);
   });
 
-  test("Data wordmark stays inset toward the figure; Cloud is centred on its plate", async ({
+  test("both wordmarks are inset toward the figure by the same amount", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -1553,18 +1555,14 @@ test.describe("typography polish", () => {
     await scrollToProgress(page, 0.9);
 
     /*
-     * The two plates now have DIFFERENT horizontal intents, deliberately.
+     * The two plates are geometrically symmetric, so "toward the figure" means
+     * mirrored: Data insets from its LEFT edge, Cloud from its RIGHT, by the same
+     * amount. Measured 13.5% each.
      *
-     * Data keeps the inward nudge: its left inset exceeds its right, moving
-     * DATA ANALYST / DATA ENGINEER toward the figure.
-     *
-     * Cloud does NOT. The size/placment pass re-centred the DEVOPS / CLOUD block
-     * within its own plate (measured centre x exactly 0.500 at every viewport),
-     * which means its two insets are now even. An earlier assertion that the
-     * Cloud right inset exceeded its left was asserting the superseded nudge and
-     * is replaced by the centring assertion below. The plate itself is still
-     * mirrored, so centring on the plate is what moves the text toward the
-     * figure's side of the frame.
+     * An earlier pass centred the Cloud block on its own plate instead, which both
+     * dropped the mirrored inset and left the two wordmarks disagreeing by
+     * 18.6% of plate height. Vertical agreement is asserted in
+     * typography-refine.spec.ts.
      */
     const inset = await page.evaluate(() => {
       const out: Record<string, { l: number; r: number }> = {};
@@ -1586,9 +1584,12 @@ test.describe("typography polish", () => {
       inset.data.l,
       "DATA ANALYST inset on the figure side",
     ).toBeGreaterThan(inset.data.r);
+    expect(inset.cloud.r, "DEVOPS inset on the figure side").toBeGreaterThan(
+      inset.cloud.l,
+    );
     expect(
-      Math.abs(inset.cloud.l - inset.cloud.r),
-      "DEVOPS centred on its plate",
+      Math.abs(inset.data.l - inset.cloud.r),
+      "mirrored insets match",
     ).toBeLessThan(0.5);
 
     // Mobile stacks the plates BELOW the figure, so even insets are correct
