@@ -14,7 +14,7 @@
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
-const DIR = 'qa-screenshots/v4';
+const DIR = 'qa-screenshots/v5';
 mkdirSync(DIR, { recursive: true });
 
 const VIEWPORTS = [

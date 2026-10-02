@@ -1511,7 +1511,7 @@ test.describe("typography polish", () => {
      * so no horizontal stretch is reintroduced -- the defect that made the
      * original type look compressed and clipped. Tracking stays positive.
      *
-     * Measured at 1280x720: 100.07px, tracking 8.69px / 7.22px.
+     * Measured at 1280x720: 102.18px, tracking 7.72px / 7.33px.
      */
     const type = await page.evaluate(() => {
       const out: Array<Record<string, number | string>> = [];
@@ -1531,8 +1531,8 @@ test.describe("typography polish", () => {
     });
 
     const EXPECTED = [
-      { side: "left", fontSize: 100.07, track: 8.69 },
-      { side: "right", fontSize: 100.07, track: 7.22 },
+      { side: "left", fontSize: 102.18, track: 7.72 },
+      { side: "right", fontSize: 102.18, track: 7.33 },
     ];
     for (const [i, e] of EXPECTED.entries()) {
       const t = type[i];

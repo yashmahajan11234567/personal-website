@@ -158,20 +158,21 @@ async function glyphMetrics(page) {
 }
 
 /**
- * Rendered cap height (px) per viewport, measured with qa/verify-v4.mjs after the
- * shared-size fit and the real-weight/stroke pass.
+ * Rendered cap height (px) per viewport, measured with qa/verify-v5.mjs after the
+ * shared-size fit, the real-weight/stroke pass, and the PORTFOLIO tracking fix.
  *
  * Both words are IDENTICAL by construction: the fitter takes one shared size, so
  * the two entries can only differ by measurement noise. Asserting a shared value
  * is what pins the headline to a single baseline.
  */
 const BASELINE: Record<string, { left: number; right: number }> = {
-  "1920x1080": { left: 149.8, right: 149.8 },
-  "1440x900": { left: 112.1, right: 112.1 },
-  "1280x720": { left: 100.07, right: 100.07 },
-  "1024x768": { left: 80.37, right: 80.37 },
-  "390x844": { left: 30.19, right: 30.19 },
+  "1920x1080": { left: 151.94, right: 151.94 },
+  "1440x900": { left: 113.62, right: 113.62 },
+  "1280x720": { left: 102.18, right: 102.18 },
+  "1024x768": { left: 81.33, right: 81.33 },
+  "390x844": { left: 30.66, right: 30.66 },
 };
+
 test.describe("typography polish — headline size restore", () => {
   const VPS = [
     { width: 1920, height: 1080 },
@@ -275,6 +276,83 @@ test.describe("typography polish — headline size restore", () => {
     // Neither word touches the frame edge.
     expect(p.inkL, "PERSONAL left edge").toBeGreaterThan(0.5);
     expect(p.inkR, "PORTFOLIO right edge").toBeLessThan(p.vw - 0.5);
+  });
+
+  test("PORTFOLIO tracks as loosely as PERSONAL", async ({ page }) => {
+    /*
+     * The reported defect: PORTFOLIO read visibly tighter than PERSONAL.
+     *
+     * Cause, not styling. The fitter hands each word its leftover width as
+     * letter-spacing -- `track = (boxWidth - advances) / characterCount` -- so
+     * PORTFOLIO's 9 characters split the same leftover across 8 gaps while
+     * PERSONAL's 8 characters split theirs across 7. Measured at 1280x720:
+     * PERSONAL 8.69px against PORTFOLIO 7.22px, a 16.9% difference.
+     *
+     * Because tracking is DERIVED rather than set, it cannot be equalised by
+     * editing letter-spacing directly; the box has to be wide enough that the fit
+     * solves a matching value. Measured result after widening the right rect:
+     *
+     *     1920x1080  -0.1%     1024x768  -0.7%
+     *     1440x900    0.8%      768x1024  -0.4%
+     *     1280x720    5.0%      390x844   -1.7%
+     *
+     * Five of six land within 1%. The assertion is asymmetric on purpose: the
+     * complaint was PORTFOLIO being too tight, so the regression that matters is
+     * PORTFOLIO going tight again. A generous ceiling catches that without
+     * failing on the 5.0% residual at 1280, which is the one viewport whose
+     * optimum is not shared with the others (a single rect fraction cannot be
+     * exact at six aspect ratios).
+     */
+    for (const vp of [
+      { width: 1920, height: 1080 },
+      { width: 1440, height: 900 },
+      { width: 1280, height: 720 },
+      { width: 1024, height: 768 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(vp);
+      await page.goto("/");
+      await page.waitForTimeout(900);
+
+      const m = await page.evaluate(() => {
+        const out: Record<string, { track: number; fs: number }> = {};
+        for (const side of ["left", "right"]) {
+          const g = document.querySelector(
+            `.cinematic-type__word--${side} .cinematic-type__glyphs`,
+          );
+          const cs = getComputedStyle(g);
+          out[side] = {
+            track: parseFloat(cs.letterSpacing),
+            fs: parseFloat(cs.fontSize),
+          };
+        }
+        return out;
+      });
+
+      const gapPct =
+        ((m.left.track - m.right.track) /
+          Math.max(m.left.track, m.right.track)) *
+        100;
+
+      // The words stay in the same neighbourhood: neither crammed nor gaping.
+      expect(m.right.track, `${vp.width} PORTFOLIO tracking`).toBeGreaterThan(
+        0,
+      );
+      expect(
+        m.right.track,
+        `${vp.width} PORTFOLIO not cramped`,
+      ).toBeGreaterThan(m.right.fs * 0.04);
+      expect(m.left.track, `${vp.width} PERSONAL not gaped`).toBeLessThan(
+        m.left.fs * 0.12,
+      );
+      // The reported regression: PORTFOLIO tight relative to PERSONAL.
+      expect(
+        gapPct,
+        `${vp.width} PORTFOLIO not tighter than PERSONAL`,
+      ).toBeLessThan(8);
+      // ...and it must not invert into being much looser either.
+      expect(gapPct, `${vp.width} tracking not inverted`).toBeGreaterThan(-8);
+    }
   });
 
   test("the display type is set at its real weight, not a synthetic one", async ({

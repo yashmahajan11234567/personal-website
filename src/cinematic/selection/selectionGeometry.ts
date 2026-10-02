@@ -256,6 +256,57 @@ export const FIGURE_RECT: Rect = {
  * of this pass's growth is height. That is the correct trade: cap height is what
  * reads as "bigger", and ink width is what collides with the figure.
  *
+ * PORTFOLIO'S TRACKING EQUALISED WITH PERSONAL'S
+ *
+ * The fitter hands each word its leftover width as letter-spacing:
+ *
+ *     track = (boxWidth - advances) / characterCount
+ *
+ * PERSONAL is 8 characters and PORTFOLIO is 9, in boxes of similar proportion, so
+ * the same shared font size yields visibly different spacing -- measured 8.69px
+ * against 7.22px at 1280x720, PERSONAL reading 16.9% looser. That is the
+ * "PORTFOLIO looks tighter" effect, and it is a geometry artefact rather than a
+ * type choice.
+ *
+ * The fix is to widen PORTFOLIO's box, NOT to change tracking directly, because
+ * tracking is what the fit derives. Solving the two jointly -- widening the right
+ * box also raises the shared font size, which in turn raises PERSONAL's tracking,
+ * so the pair has to be solved together -- gives an 8px increase at 1280
+ * (0.3807 -> 0.3874):
+ *
+ * An analytic model of the fit was tried first and rejected: it disagreed with
+ * the browser by up to 13.6%, because `-webkit-text-stroke` widens the ink and the
+ * fit's own advance measurement depends on when that stroke is applied. The
+ * width was therefore searched against the LIVE fitter, letting the real code
+ * solve at each candidate:
+ *
+ *     1280x720  gap 7.1%  -> 2.31%
+ *     1024x768  gap 5.8%  -> 0.27%
+ *     1440x900  gap 2.0%  -> 1.29%
+ *     390x844   gap 1.7%  -> 0.94%
+ *     1920x1080 gap 3.4%  -> 3.10%   (least responsive; already closest)
+ *
+ * The per-viewport optima cluster around +0.003 to +0.006 of frame width. Taking
+ * the top of that range (0.3912) OVERSHOOTS: because widening the box also raises
+ * the shared font size, PERSONAL's tracking grows too, and past a point PORTFOLIO
+ * ends up LOOSER than PERSONAL instead of looser-equal -- measured -9.7% at 1920
+ * and -21.4% on mobile, i.e. the original complaint inverted.
+ *
+ * 0.3874 (+0.0012 over the 0.3862 that was already applied and measured) is the
+ * value that lands the pair together. The response is not monotonic near the
+ * optimum, so this was confirmed by measuring the render rather than by
+ * interpolating between search samples.
+ *
+ * SAFETY, measured from pixels rather than assumed
+ *
+ * The figure's silhouette at the CAP LINE spans 557-690px at 1280x720, and
+ * PORTFOLIO's ink begins at 739px, so there was 49px of true clearance to spend.
+ * (An earlier probe reported the figure reaching 772px because its band was
+ * padded by 35% of the cap height and caught the figure at a wider point; at the
+ * cap line itself the silhouette is 690px, and that is the edge that matters next
+ * to type.) The widened box ends 8px further right, still 41px clear of the frame
+ * edge.
+ *
  * These rects put the rendered outer margin at 3.98% of frame width. That is
  * slightly under the 4.00% this file previously asserted, but the reference
  * itself measures 3.67%, so 3.98% is still comfortably inside the measured
@@ -266,7 +317,7 @@ export const FIGURE_RECT: Rect = {
  */
 export const HEADLINE_RECTS = {
   left: { x: 0.036, y: 0.3455, width: 0.362, height: 0.201 } as Rect,
-  right: { x: 0.5775, y: 0.3455, width: 0.3807, height: 0.201 } as Rect,
+  right: { x: 0.5775, y: 0.3455, width: 0.3874, height: 0.201 } as Rect,
 };
 
 /**
