@@ -1,14 +1,107 @@
 # State: Pixel Portfolio Game
 
 ## Current Status
-**Phase**: 1 — COMPLETE (Tasks 0–8)
+**Phase**: 1 — COMPLETE (Tasks 0–8), through the typography refinement passes
 **Status**: Cinematic hero rebuilt as a continuous code-driven scene, the Q6 world handoff
-built and verified. **58 Playwright tests pass**, 116/116 under `--repeat-each=2`.
-**Last Updated**: 2026-10-01
+built and verified, world plates given printed technical interiors, and the opening state
+plus all six major typographic roles corrected against measured reference geometry.
+**100 Playwright tests pass, 0 failed.**
+**Last Updated**: 2026-10-02
 
 **Execution report**: `.gsd/REPORT-PHASE-1.md`
 **Rebuild plan**: `.gsd/plans/phase-1-cinematic-rebuild.md`
 **Questions**: `.gsd/QUESTIONS-PHASE-1.md` (D1–D5 locked; Q6 resolved and implemented)
+
+### Phase 1 commit trail
+
+| Commit | Change |
+|---|---|
+| `8f483bf` | Scroll choreography retimed to the reference's measured motion |
+| `1124542` | World plates given a printed technical interior |
+| `55f4539` | Opening state restored (reduced-motion track, measured type boxes) |
+| `f1d9a18` | Scroll-sampling tests made to wait on movement, then stillness |
+| `c413696` | Headline undistorted (`scaleX` 1.20–1.29 → 1.000) and tracking opened |
+| `3e5ab0f` | Typography composed inward around the figure |
+| `0f7377e` | Headline enlarged; Cloud wordmark centred on its plate |
+
+---
+
+## Phase 1 — typography and opening-state refinements (2026-10-02)
+
+All values below are **measured in Chrome**, not estimated. Reference authority is the
+`f0003` opening frame and the frame-96 selection hold, as before.
+
+### Opening state (defect found by human QA)
+
+`prefers-reduced-motion: reduce` rendered the **final** composition at load with zero scroll
+range: `CinematicHero.css` collapsed the hero to `100vh` while `settled={reducedMotion}` forced
+every layer to its end state. Fixed with a `.cinematic-track` wrapper carrying
+`trackHeightVh(viewportWidth)`, so reduced motion keeps a real ~4320px track and the
+scroll-driven timeline, only without scrub smoothing. Normal motion was always correct
+(~5040px track, hidden plates at load, continuous and reversible).
+
+The headline was also clipped: it used an **invented lateral entrance** of ±14vw that the
+reference does not contain (frames 1–14 show identical word extents), and its boxes were the
+wrong size and position. Measured reference ink: `PERSONAL` x 0.0367–0.3789,
+`PORTFOLIO` x 0.6117–0.9719, both at y 0.354–0.510.
+
+### Typography — three sequential corrections
+
+| Pass | Problem | Fix |
+|---|---|---|
+| Undistort | `scaleX` was **1.20–1.29** because Impact's advance-per-cap-height (0.406) is far narrower than the reference's 0.489 | Fitter rewritten to solve **cap height**, then distribute leftover width as **positive tracking**; `scaleX` now **1.000** |
+| Compose inward | Words were edge-anchored: margins 3.7% / 2.8% | Both boxes moved inward 0.012 → margins ~5.0% / 5.0% |
+| Restore size | Read slightly undersized | Rects +8% height, +4% width → cap height +2.9% to +9.5% depending on viewport |
+
+**Why the headline cannot simply be 10–15% larger.** The horizontal budget between the frame
+edge and the figure is fully consumed:
+
+```
+left budget  524px = 424 ink + 64 margin + 36 figure clearance
+right budget 551px = 446 ink + 64 margin + 41 figure clearance     spare: 0px
+```
+
+A 10–15% width increase overlaps the figure by 6–26px. The figure's silhouette at the
+headline band is x 0.4094–0.5695 (measured across rows y 0.354–0.510 of `f0003`, because
+`HEAD_BLOCK` only covers head height). So growth was split: **+8% cap height, +4% width**,
+with the width taken evenly from both outer margins since the figure is a shared obstacle.
+
+**The narrow viewports cannot take the full height gain.** `probe-fit-constraints.mjs`
+shows `WIDTH` binds the fit at every viewport except 1280×720, because the box aspect
+collapses (3.96 at 1280×720 → 1.59 at 768×1024 → 0.98 at 390 mobile). The 14–16% headroom
+above the solved size is **exactly the cost of `MIN_TRACK_EM = 0.02`** — recovering it would
+mean zero tracking, i.e. re-introducing the cramping that was deliberately removed.
+
+### Plate wordmarks
+
+Measured, not assumed: the Cloud block was **not** lower-left. Its centre sat at x **0.4875**,
+which is exactly `0.5` less this file's own 2.5% inward inset. The defect was entirely
+**vertical** — centre y **0.653** against a plate centre of 0.500, caused by
+`justify-content: flex-end`.
+
+Fixed with `justify-content: center`, **not** a padding value. CSS percentage padding
+resolves against plate **width** while the target is a fraction of plate **height**;
+measured best `padding-bottom` missed by 0.5% at 1280×720 and **9.1% at 1024×768**, where no
+value could reach the target. Flex centring holds at 0.480 / 0.475 / 0.472 / 0.475 / 0.456
+across five aspects including portrait — mean 0.4533, already just above true centre, which is
+the optical centre for a two-line title. Clear space around the wordmark is 116px above,
+104px below.
+
+An attempted optical bias via `transform` was **silently ignored** because the plate's
+transform is owned by the reveal animation — only measurement caught it.
+
+### A recurring measurement trap
+
+The figure's **element box is far wider than its silhouette** (measured 372px vs 556px at
+1280×720, because the anchor art carries a transparent margin). Comparing typography against
+`getBoundingClientRect()` of the figure reports an **overlap that does not exist** — this
+produced two false "collision" readings before it was identified. Clearance is therefore
+asserted from **pixels**: column-profile the rendered frame, split at 0.42/0.58 of the
+viewport, and the gap between those ink runs *is* the clearance.
+
+Similarly, rendered cap height is **not** a constant fraction of viewport height (the fitter
+caps by width), so size assertions use **measured per-viewport baselines** captured from the
+pre-change render.
 
 ---
 
@@ -256,10 +349,18 @@ See `.gsd/plans/phase-1-cinematic-rebuild.md` §25–§26. **Task 0 not yet star
 ---
 
 ## Next Actions
-1. Initialize Vite + React + TypeScript project in `C:/Users/hitoy/Downloads/portfolio_website/`
-2. Install GSAP, Phaser 3, and dev dependencies
-3. Create project structure per architecture
-4. Begin Hero component implementation
+
+Phase 1 is complete and verified. Phase 2 is **blocked pending explicit user approval** —
+the brief is explicit: *"Do NOT start Phase 2. Do NOT modify the world gameplay."*
+
+1. **Await Phase 2 approval.** No gameplay work until the user lifts that constraint.
+2. When approved: reusable gameplay foundation (Phase 2), then the Data vertical slice.
+3. Optional polish, only if requested: the world gameplay is still unimplemented by design,
+   so `#/data-world` and `#/cloud-world` currently resolve to real routes that mount a
+   placeholder world rather than a playable one.
+
+Previously listed and now done: Vite + React + TypeScript init, GSAP/Phaser install, project
+structure, and the hero implementation.
 
 ---
 

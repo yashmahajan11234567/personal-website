@@ -95,10 +95,12 @@ These were real defects, not test problems:
 
 | Deviation | Status |
 |---|---|
-| Mean luma 137 vs 147 — build slightly darker | **Known.** Plates read a touch heavier. Acceptable for monochrome; flagged for your eye. |
-| Headline typeface is a CSS stack, not the reference's cut stencil | **Known, accepted (R2).** Wordforms can't be matched in CSS. Position, scale, weight and motion are matched. |
-| Plates lack the reference's cracked-hex texture | **Known.** Flat `#0b0b0c` + SVG chrome. Texture is a Task 8-or-later art call. |
+| Mean luma 137 vs 147 — build slightly darker | **RESOLVED** by the plate-interior pass (`1124542`). Interiors now carry a measured light/mid/dark structure (20.3% / 55.6% / 24.1% vs the reference's 20.0% / 56.9% / 23.1%) instead of reading as flat `#0b0b0c`. |
+| Headline typeface is a CSS stack, not the reference's cut stencil | **Known, accepted (R2).** Wordforms can't be matched in CSS — `Archivo Black` and `Anton` are unavailable and the stack falls back to Impact. Position, scale, tracking, weight and motion are matched. The stencil *character* is preserved via the distressed mask. |
+| Plates lack the reference's cracked-hex texture | **Resolved in spirit** by `1124542`: hatch/grid texture, bands, recessed shelves and telemetry marks now give the panels printed character. It is not the reference's literal cracked-hex pattern, which remains an art call. |
 | Mean-luma delta −9.9 concentrates at the plate edges | Plate bottoms read 0.02 lower than reference. Within tolerance. |
+| **Headline horizontal growth is capped** | **Geometric limit, measured.** Each word is hemmed between the frame edge and the figure, whose silhouette at the headline band spans x 0.4094–0.5695. Budget spare is 0px, so the requested 10–15% increase would overlap the figure. Applied an approved +8% height / +4% width split instead. See §11.3. |
+| **Narrow viewports grow less than desktop** | **Geometric limit, measured.** The fitter's `WIDTH` term binds at every viewport except 1280×720 because the box aspect collapses (3.96 → 0.98 at mobile). The 14–16% headroom is exactly the cost of `MIN_TRACK_EM = 0.02`; taking it would mean zero tracking and re-cram the letters. See §11.3. |
 
 ### Correction to an earlier claim
 
@@ -226,6 +228,69 @@ Verified twice: **58 passed (2.4 m)**, then **116 passed (4.8 m)** with
 
 ## 10. Open items
 
+*(As originally written. Superseded in part by §11 — see below.)*
+
 None blocking. The known cosmetic deviations in section 5 stand: mean luma 137 vs 147,
 a CSS-stack typeface instead of the reference's cut stencil, and no cracked-hex plate
 texture. All three are art-direction calls, not defects.
+
+**Update 2026-10-02**: plate interiors and the mean-luma deviation are resolved by
+`1124542`. The CSS-stack typeface remains an accepted limitation. Two **new** non-defect
+limitations are now documented in §5 and §11.3 — the headline's horizontal growth budget is
+exhausted, and narrow viewports are width-constrained — both measured, both reported to the
+user rather than worked around silently. **Phase 2 gameplay remains deliberately
+unimplemented, blocked pending explicit approval.**
+
+---
+
+## 11. Post-report addendum — plate interiors, opening state, typography (2026-10-02)
+
+Sections 3 and 8 above record the suite size **at the time they were written**. Later passes
+took the count to **100 passing, 0 failing**. Four substantial changes landed after this report
+was first written:
+
+### 11.1 Plate interiors — `1124542`
+
+The plates rendered as flat black cards; the reference panels are **printed technical objects**.
+Numeric analysis of reference frame 96 measured the interior tonal split at ~20% light / ~57%
+midtone / ~23% dark. Added `PlateMarks.tsx`, `PlateInterior.tsx` and a neutral `#4e4e4e` base,
+tuned until the Data plate measured 20.3% / 55.6% / 24.1%. Decorative SVG is `aria-hidden`;
+hover colour stays an external atmospheric glow rather than interior decoration.
+
+### 11.2 Opening state — `55f4539`
+
+Human QA found that at load the page already showed the final Data/Cloud composition with no
+visible scroll progression. Root cause was `prefers-reduced-motion: reduce`: the CSS collapsed
+the hero to `100vh` while `settled={reducedMotion}` forced the final state, leaving
+`scrollable: 0`. Normal motion was always correct. Reduced motion now keeps a real ~4320px
+track and the scroll-driven timeline, without scrub smoothing.
+
+The headline was separately clipped, by an **invented ±14vw lateral entrance** the reference
+does not have plus wrong box geometry.
+
+### 11.3 Typography — `c413696`, `3e5ab0f`, `0f7377e`
+
+| Pass | Defect | Correction |
+|---|---|---|
+| Undistort | `scaleX` 1.20–1.29 compensating for Impact's narrow advance-per-cap-height (0.406 vs the reference's 0.489) | Fitter solves cap height, distributes leftover width as positive tracking; `scaleX` = 1.000 |
+| Compose inward | Edge-anchored, margins 3.7% / 2.8% | Both boxes inward 0.012 → ~5.0% / 5.0% |
+| Restore size | Slightly undersized | Rects +8% height, +4% width → +2.9% to +9.5% cap height |
+| Cloud wordmark | Read as anchored lower-left | `justify-content: center`; measured centre y 0.653 → 0.472 |
+
+Two geometry limits were measured and are worth recording because they look like defects:
+
+- **The headline's horizontal budget is exhausted** (spare 0px), so the requested 10–15%
+  increase was impossible without overlapping the figure. Stopped and asked; applied the
+  approved +8% height / +4% width split.
+- **Narrow viewports are width-constrained**, not height-constrained. The 14–16% headroom above
+  the solved size is precisely the cost of `MIN_TRACK_EM = 0.02`; recovering it would mean
+  zero tracking and re-introduce the cramping that was deliberately removed.
+
+### 11.4 A measurement trap worth inheriting
+
+The figure's **element box is much wider than its silhouette** (372px vs 556px at 1280×720),
+because the anchor art carries a transparent margin. Bounding-box comparisons against the figure
+report overlaps that do not exist — this produced two false "collision" readings. All clearance
+assertions are made from **rendered pixels** instead. Likewise, rendered cap height is not a
+constant fraction of viewport height, so size assertions use measured per-viewport baselines
+rather than an extrapolated ratio.
