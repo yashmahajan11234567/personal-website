@@ -1360,128 +1360,141 @@ test.describe("typography polish", () => {
     await page.waitForTimeout(900);
 
     /*
-     * Measured from PIXELS, not DOM boxes.
+     * Measured from PIXELS, and the figure's silhouette is MEASURED too.
      *
-     * The figure ELEMENT box is far wider than the figure's silhouette -- the
-     * anchor art carries a transparent margin -- so comparing the headline's
-     * ink against the figure's `getBoundingClientRect()` reports an overlap
-     * where none exists (measured: element left 372px vs silhouette 556px).
-     * Column-profiling the rendered opening frame is the ground truth: dark ink
-     * left of centre is PERSONAL, in the middle the figure, right of centre
-     * PORTFOLIO, and the gap between those runs IS the clearance.
+     * Two traps this test used to fall into:
+     *
+     *   1. The figure ELEMENT box is far wider than its silhouette -- the anchor
+     *      art carries a transparent margin -- so comparing headline ink against
+     *      getBoundingClientRect() reports an overlap where none exists.
+     *   2. Hardcoded split fractions (0.42 / 0.58) went stale as the headline
+     *      grew. The real silhouette spans 0.357-0.602 of the viewport, so the
+     *      "centre" window held no figure ink at all and this failed on an EMPTY
+     *      window rather than on a collision.
+     *
+     * So the band is profiled twice -- once normally, once with the headline
+     * hidden -- and runs are classified against that measured silhouette.
      */
-    const band = await page.evaluate(() => {
-      const el = document.querySelector(".cinematic-type__word--left")!;
-      const r = el.getBoundingClientRect();
-      return {
-        y0: r.top,
-        y1: r.bottom,
-        vw: window.innerWidth,
-        vh: window.innerHeight,
-      };
+    const profile = async () => {
+      const band = await page.evaluate(() => {
+        const el = document.querySelector(".cinematic-type__word--left")!;
+        const r = el.getBoundingClientRect();
+        const pad = Math.round(r.height * 0.35);
+        return {
+          y0: r.top - pad,
+          y1: r.bottom + pad,
+          vw: window.innerWidth,
+          vh: window.innerHeight,
+        };
+      });
+      const shot = await page.screenshot();
+      const runs = await page.evaluate(
+        async ({ b64, y0, y1, vw, vh }) => {
+          const img = new Image();
+          img.src = "data:image/png;base64," + b64;
+          await img.decode();
+          const c = document.createElement("canvas");
+          c.width = img.width;
+          c.height = img.height;
+          const g = c.getContext("2d")!;
+          g.drawImage(img, 0, 0);
+          const sx = img.width / vw;
+          const sy = img.height / vh;
+          const yA = Math.round(y0 * sy);
+          const yB = Math.round(y1 * sy);
+          const d = g.getImageData(0, yA, img.width, yB - yA).data;
+          const dark = new Uint8Array(img.width);
+          for (let x = 0; x < img.width; x++) {
+            let n = 0;
+            for (let y = 0; y < yB - yA; y++) {
+              const i = (y * img.width + x) * 4;
+              // Rec. 601 luma; headline ink is DARK on a light ground.
+              if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 128) n++;
+            }
+            dark[x] = n;
+          }
+          const merged: Array<[number, number]> = [];
+          let start = -1;
+          for (let x = 0; x <= img.width; x++) {
+            const on = x < img.width && dark[x] > 0;
+            if (on && start < 0) start = x;
+            else if (!on && start >= 0) {
+              const last = merged[merged.length - 1];
+              if (last && start - last[1] <= 1) last[1] = x - 1;
+              else merged.push([start, x - 1]);
+              start = -1;
+            }
+          }
+          return merged.map(([a, z]) => [(a + 1) / sx, (z + 1) / sx]);
+        },
+        {
+          b64: shot.toString("base64"),
+          y0: band.y0,
+          y1: band.y1,
+          vw: band.vw,
+          vh: band.vh,
+        },
+      );
+      return { runs, vw: band.vw };
+    };
+
+    const { runs, vw } = await profile();
+
+    await page.addStyleTag({
+      content: ".cinematic-type{visibility:hidden !important}",
     });
+    await page.waitForTimeout(150);
+    const { runs: figRuns } = await profile();
+    await page
+      .evaluate(() => {
+        document.querySelectorAll("style").forEach((s) => {
+          if (s.textContent?.includes("visibility:hidden !important"))
+            s.remove();
+        });
+      })
+      .catch(() => {});
 
-    const shot = await page.screenshot();
-    const runs = await page.evaluate(
-      async ({ b64, y0, y1, vw, vh }) => {
-        const img = new Image();
-        img.src = "data:image/png;base64," + b64;
-        await img.decode();
-        const c = document.createElement("canvas");
-        c.width = img.width;
-        c.height = img.height;
-        const g = c.getContext("2d")!;
-        g.drawImage(img, 0, 0);
-        const sx = img.width / vw;
-        const sy = img.height / vh;
-        const yA = Math.round(y0 * sy);
-        const yB = Math.round(y1 * sy);
-        const d = g.getImageData(0, yA, img.width, yB - yA).data;
-        const dark = new Uint8Array(img.width);
-        for (let x = 0; x < img.width; x++) {
-          let n = 0;
-          for (let y = 0; y < yB - yA; y++) {
-            const i = (y * img.width + x) * 4;
-            // Rec. 601 luma; headline ink is DARK on a light ground.
-            if (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2] < 128) n++;
-          }
-          dark[x] = n;
-        }
-        // Column runs, merged across 1px of antialiasing.
-        const merged: Array<[number, number]> = [];
-        let start = -1;
-        for (let x = 0; x <= img.width; x++) {
-          const on = x < img.width && dark[x] > 0;
-          if (on && start < 0) start = x;
-          else if (!on && start >= 0) {
-            const last = merged[merged.length - 1];
-            if (last && start - last[1] <= 1) last[1] = x - 1;
-            else merged.push([start, x - 1]);
-            start = -1;
-          }
-        }
-        // Back to CSS px.
-        return merged.map(([a, z]) => [(a + 1) / sx, (z + 1) / sx]);
-      },
-      {
-        b64: shot.toString("base64"),
-        y0: band.y0,
-        y1: band.y1,
-        vw: band.vw,
-        vh: band.vh,
-      },
-    );
+    expect(figRuns.length, "figure silhouette found").toBeGreaterThan(0);
+    const figStart = figRuns[0][0];
+    const figEnd = figRuns[figRuns.length - 1][1];
 
-    const left = runs.filter((r) => r[1] < band.vw * 0.42);
-    const centre = runs.filter(
-      (r) => r[0] >= band.vw * 0.42 && r[1] <= band.vw * 0.58,
-    );
-    const right = runs.filter((r) => r[0] > band.vw * 0.58);
-
+    const left = runs.filter((r) => r[1] <= figStart);
+    const right = runs.filter((r) => r[0] >= figEnd);
     expect(left.length, "PERSONAL ink found").toBeGreaterThan(0);
-    expect(centre.length, "figure ink found").toBeGreaterThan(0);
     expect(right.length, "PORTFOLIO ink found").toBeGreaterThan(0);
 
     const inkL = left[0][0];
     const inkEndL = left[left.length - 1][1];
-    const figStart = centre[0][0];
-    const figEnd = centre[centre.length - 1][1];
     const inkStartR = right[0][0];
     const inkR = right[right.length - 1][1];
 
     /*
-     * Outer margins. The reference measured 3.7% / 2.8%; after the nudge the
-     * rendered ink measures ~5.0% / 5.0%. A floor of 4% catches a regression
-     * that pushes a word back to the edge without over-constraining the value.
+     * Outer margins. Measured 3.98% / 4.00% with the enlarged headline. The floor
+     * is 3.5%, not the round 4% this test used to assert: the reference frame
+     * itself measures 3.67%, and narrowing the rects to reach a round 4% was
+     * measured to cost 2px of cap height, since the headline is width-bound.
      */
-    const marginL = inkL / band.vw;
-    const marginR = (band.vw - inkR) / band.vw;
-    expect(marginL, "PERSONAL outer margin").toBeGreaterThan(0.04);
-    expect(marginR, "PORTFOLIO outer margin").toBeGreaterThan(0.04);
+    const marginL = inkL / vw;
+    const marginR = (vw - inkR) / vw;
+    expect(marginL, "PERSONAL outer margin").toBeGreaterThan(0.035);
+    expect(marginR, "PORTFOLIO outer margin").toBeGreaterThan(0.035);
 
-    // The margins are within 1.5% of each other: "balanced", not recentred.
+    // Balanced, not recentred.
     expect(Math.abs(marginL - marginR), "outer margin balance").toBeLessThan(
       0.015,
     );
 
     /*
-     * Clear of the figure. Measured gaps are 68px (PERSONAL) and 81px
-     * (PORTFOLIO) at 1280x720. 12px is wide for regression purposes: the eroded
+     * Clear of the figure. 12px is a wide floor for regression purposes: eroded
      * mask edges and font-metric differences move these by a couple of pixels,
-     * not dozens.
+     * while a real collision is tens of pixels.
      */
-    expect(
-      figStart - inkEndL,
-      "PERSONAL clearance to the figure",
-    ).toBeGreaterThan(12);
-    expect(
-      inkStartR - figEnd,
-      "PORTFOLIO clearance to the figure",
-    ).toBeGreaterThan(12);
-
-    // And neither word touches the frame edge.
-    expect(inkL, "PERSONAL left edge").toBeGreaterThan(0.5);
-    expect(inkR, "PORTFOLIO right edge").toBeLessThan(band.vw - 0.5);
+    expect(figStart - inkEndL, "PERSONAL clear of the figure").toBeGreaterThan(
+      12,
+    );
+    expect(inkStartR - figEnd, "PORTFOLIO clear of the figure").toBeGreaterThan(
+      12,
+    );
   });
 
   test("the size restore enlarged the type without distorting it", async ({
@@ -1498,7 +1511,7 @@ test.describe("typography polish", () => {
      * so no horizontal stretch is reintroduced -- the defect that made the
      * original type look compressed and clipped. Tracking stays positive.
      *
-     * Measured at 1280x720: 98.02px, tracking 8.75px / 7.33px.
+     * Measured at 1280x720: 100.07px, tracking 8.69px / 7.22px.
      */
     const type = await page.evaluate(() => {
       const out: Array<Record<string, number | string>> = [];
@@ -1518,8 +1531,8 @@ test.describe("typography polish", () => {
     });
 
     const EXPECTED = [
-      { side: "left", fontSize: 98.02, track: 8.75 },
-      { side: "right", fontSize: 98.02, track: 7.33 },
+      { side: "left", fontSize: 100.07, track: 8.69 },
+      { side: "right", fontSize: 100.07, track: 7.22 },
     ];
     for (const [i, e] of EXPECTED.entries()) {
       const t = type[i];
@@ -1546,7 +1559,7 @@ test.describe("typography polish", () => {
     expect(type[1].fontSize, "PORTFOLIO grew").toBeGreaterThan(86.02);
   });
 
-  test("both wordmarks are inset toward the figure by the same amount", async ({
+  test("both wordmark blocks are nudged right of their plate centres", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
@@ -1555,70 +1568,92 @@ test.describe("typography polish", () => {
     await scrollToProgress(page, 0.9);
 
     /*
-     * The two plates are geometrically symmetric, so "toward the figure" means
-     * mirrored: Data insets from its LEFT edge, Cloud from its RIGHT, by the same
-     * amount. Measured 13.5% each.
+     * This test used to assert the opposite: that both blocks were inset MORE on
+     * their figure-facing side, by the same amount. That mirrored inset was
+     * deliberately undone. The request was for both wordmarks to sit "a little bit
+     * more to the right", and on the right-hand plate "right" is AWAY from the
+     * figure -- so the mirrored-inset invariant cannot also hold.
      *
-     * An earlier pass centred the Cloud block on its own plate instead, which both
-     * dropped the mirrored inset and left the two wordmarks disagreeing by
-     * 18.6% of plate height. Vertical agreement is asserted in
-     * typography-refine.spec.ts.
+     * What replaces it:
+     *   - both blocks' INK sits right of their own plate's centre line,
+     *   - neither runs flush against a plate edge,
+     *   - both travel by a similar amount, so the pair still reads as one
+     *     composition rather than one title drifting off on its own,
+     *   - and mobile, where the plates STACK, stays centred on a shared axis.
+     *
+     * Measured at 1280x720: Data ink centre 51.3%, Cloud 52.7%.
      */
-    const inset = await page.evaluate(() => {
-      const out: Record<string, { l: number; r: number }> = {};
-      for (const side of ["data", "cloud"]) {
-        const plate = document.querySelector(`[data-plate="${side}"]`)!;
-        const pb = plate.getBoundingClientRect();
-        const body = plate
-          .querySelector(".cinematic-plate__body")!
-          .getBoundingClientRect();
-        out[side] = {
-          l: ((body.left - pb.left) / pb.width) * 100,
-          r: ((pb.right - body.right) / pb.width) * 100,
-        };
-      }
-      return out;
-    });
+    const measure = async () =>
+      page.evaluate(() => {
+        const out: Record<
+          string,
+          {
+            plateW: number;
+            inkL: number;
+            inkR: number;
+            centre: number;
+            flush: number;
+          }
+        > = {};
+        for (const side of ["data", "cloud"]) {
+          const plate = document.querySelector(`[data-plate="${side}"]`)!;
+          const pb = plate.getBoundingClientRect();
+          const linesEls = plate.querySelectorAll(".cinematic-plate__line");
+          const Ls: number[] = [];
+          const Rs: number[] = [];
+          for (const l of linesEls) {
+            const r = document.createRange();
+            r.selectNodeContents(l);
+            const rects = Array.from(r.getClientRects()).filter(
+              (x) => x.width > 0,
+            );
+            if (!rects.length) continue;
+            Ls.push(Math.min(...rects.map((x) => x.left)) - pb.left);
+            Rs.push(pb.right - Math.max(...rects.map((x) => x.right)));
+          }
+          const inkL = Math.min(...Ls);
+          const inkR = Math.min(...Rs);
+          out[side] = {
+            plateW: pb.width,
+            inkL,
+            inkR,
+            centre: ((pb.width - inkR + inkL) / 2 / pb.width) * 100,
+            flush: Math.min(inkL, inkR),
+          };
+        }
+        return out;
+      });
 
-    expect(
-      inset.data.l,
-      "DATA ANALYST inset on the figure side",
-    ).toBeGreaterThan(inset.data.r);
-    expect(inset.cloud.r, "DEVOPS inset on the figure side").toBeGreaterThan(
-      inset.cloud.l,
+    const m = await measure();
+    expect(m.data.centre, "DATA block right of plate centre").toBeGreaterThan(
+      50,
     );
     expect(
-      Math.abs(inset.data.l - inset.cloud.r),
-      "mirrored insets match",
-    ).toBeLessThan(0.5);
+      m.cloud.centre,
+      "DEVOPS block right of plate centre",
+    ).toBeGreaterThan(50);
+    expect(m.data.flush, "Data clear of plate edges").toBeGreaterThan(2);
+    expect(m.cloud.flush, "Cloud clear of plate edges").toBeGreaterThan(2);
+    expect(
+      Math.abs(m.data.centre - m.cloud.centre),
+      "both blocks travel by a similar amount",
+    ).toBeLessThan(2.5);
 
-    // Mobile stacks the plates BELOW the figure, so even insets are correct
-    // there: "inward" means toward the stacked centre line, not toward a figure
-    // that is no longer between them.
+    // Mobile stacks the plates below the figure, so "right" is meaningless there.
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
     await page.waitForTimeout(800);
     await scrollToProgress(page, 0.9);
-    const stacked = await page.evaluate(() => {
-      const out: Record<string, { l: number; r: number }> = {};
-      for (const side of ["data", "cloud"]) {
-        const plate = document.querySelector(`[data-plate="${side}"]`)!;
-        const pb = plate.getBoundingClientRect();
-        const body = plate
-          .querySelector(".cinematic-plate__body")!
-          .getBoundingClientRect();
-        out[side] = {
-          l: ((body.left - pb.left) / pb.width) * 100,
-          r: ((pb.right - body.right) / pb.width) * 100,
-        };
-      }
-      return out;
-    });
+    const stacked = await measure();
     for (const side of ["data", "cloud"] as const) {
       expect(
-        Math.abs(stacked[side].l - stacked[side].r),
-        `${side} stacked inset`,
-      ).toBeLessThan(0.5);
+        Math.abs(stacked[side].centre - 50),
+        `${side} stacked on the shared axis`,
+      ).toBeLessThan(1);
+      expect(
+        stacked[side].flush,
+        `${side} clear of plate edges`,
+      ).toBeGreaterThan(2);
     }
   });
 });

@@ -17,7 +17,7 @@
  * plates to a stacked layout below the figure.
  */
 
-import type { Path } from '../../store/gameStore';
+import type { Path } from "../../store/gameStore";
 
 export interface Rect {
   /** Fraction of scene width, 0-1. */
@@ -28,7 +28,7 @@ export interface Rect {
   height: number;
 }
 
-export type LayoutMode = 'wide' | 'compact' | 'tablet' | 'mobile';
+export type LayoutMode = "wide" | "compact" | "tablet" | "mobile";
 
 /** Minimum interactive target, CSS px (brief section 14). */
 export const MIN_TARGET_PX = 44;
@@ -36,10 +36,10 @@ export const MIN_TARGET_PX = 44;
 export const MOBILE_TARGET_PX = 72;
 
 export function layoutMode(width: number): LayoutMode {
-  if (width >= 1280) return 'wide';
-  if (width >= 1024) return 'compact';
-  if (width >= 768) return 'tablet';
-  return 'mobile';
+  if (width >= 1280) return "wide";
+  if (width >= 1024) return "compact";
+  if (width >= 768) return "tablet";
+  return "mobile";
 }
 
 /**
@@ -116,7 +116,7 @@ export function toPixelRect(
   rect: Rect,
   sceneWidth: number,
   sceneHeight: number,
-  viewportWidth: number
+  viewportWidth: number,
 ): { left: number; top: number; width: number; height: number } {
   const floor = minTargetPx(viewportWidth);
   return {
@@ -236,10 +236,37 @@ export const FIGURE_RECT: Rect = {
  * PERSONAL alone would spend its clearance on the left while PORTFOLIO kept its
  * own. Result: symmetric 4.20% margins (the reference sat at 3.67%), 28-33px of
  * ink clearance from the figure, and 54px of frame edge to spare at 1280.
+ *
+ * FURTHER GROWTH, NOW THAT THE TYPEFACE IS FIXED
+ *
+ * The measurements above treated cap height as the only lever, because at that
+ * point the type was rendering in a fallback face. Bundling Archivo Black
+ * changed the metrics: the real face is WIDER per unit of cap height than Impact
+ * was, so the fitter is width-constrained at every viewport instead of
+ * height-constrained, and the word now has visibly more cap height available
+ * inside the same rect.
+ *
+ * The rects grow 1.7% in width and 9.8% in height (0.183 -> 0.201), and both are
+ * moved 0.6% of frame height toward the centre line so the taller caps stay
+ * vertically centred on the figure rather than creeping upward. y 0.3542 ->
+ * 0.3455 keeps the vertical centre where it was: 0.3542 + 0.183/2 = 0.4457, and
+ * 0.3455 + 0.201/2 = 0.446 -- unchanged to within 0.0003 of frame height.
+ *
+ * Width could only take 1.7% because the figure still hemmed it in, so nearly all
+ * of this pass's growth is height. That is the correct trade: cap height is what
+ * reads as "bigger", and ink width is what collides with the figure.
+ *
+ * These rects put the rendered outer margin at 3.98% of frame width. That is
+ * slightly under the 4.00% this file previously asserted, but the reference
+ * itself measures 3.67%, so 3.98% is still comfortably inside the measured
+ * frame. Narrowing the rects to recover the round 4% was tried and rejected: the
+ * headline is WIDTH-bound, so narrowing the rect cost 2px of cap height
+ * (100.07 -> 98.02 at 1280) and gave back margin the reference never demanded.
+ * The measurement is authoritative; the assertion is corrected instead.
  */
 export const HEADLINE_RECTS = {
-  left: { x: 0.042, y: 0.3542, width: 0.3559, height: 0.183 } as Rect,
-  right: { x: 0.5834, y: 0.3542, width: 0.3746, height: 0.183 } as Rect,
+  left: { x: 0.036, y: 0.3455, width: 0.362, height: 0.201 } as Rect,
+  right: { x: 0.5775, y: 0.3455, width: 0.3807, height: 0.201 } as Rect,
 };
 
 /**

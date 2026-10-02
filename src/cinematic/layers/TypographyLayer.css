@@ -75,9 +75,53 @@
    */
   display: inline-block;
   white-space: nowrap;
-  font-family: 'Archivo Black', 'Anton', Impact, 'Haettenschweiler',
-    'Arial Narrow Bold', 'Arial Black', sans-serif;
-  font-weight: 900;
+  /*
+   * The headline is WIDTH-bound, not height-bound: each word is hemmed between
+   * the frame edge and the figure, and the figure is not negotiable. Measured ink
+   * width per unit of cap height across the candidate faces, at 1280x720 against
+   * the measured 524px / 551px budgets:
+   *
+   *     Haettenschweiler  4.30 w/cap   (too thin, reads as mush at this size)
+   *     Impact            5.11 w/cap   <- narrowest legible face
+   *     Anton             7.19 w/cap
+   *     Archivo Black     8.91 w/cap   (widest; caps the headline at 60px)
+   *
+   * Archivo Black is the correct face for the plate wordmarks, which have no
+      * figure to clear, but using it HERE costs 34% of the cap height -- exactly
+      * wrong for the words that are meant to be the largest thing on screen. The
+      * headline therefore keeps a narrow face and takes its crispness from the
+      * rendering settings below instead of from the typeface.
+      *
+      * Impact is also the only candidate that is both a real installed face and
+      * narrow. Haettenschweiler is narrower still, but its hairline strokes are part
+      * of why this type read as soft. 'Arial Black' is a last-resort fallback only:
+      * it renders wider than Impact and would cap the headline at 63px.
+      */
+  font-family: Impact, Haettenschweiler, "Arial Black", sans-serif;
+  /*
+   * 400 is the face's real weight. Every candidate here ships a single 400 cut;
+   * declaring 900 made Chrome SYNTHESISE a heavier weight by smearing the glyph
+   * outline -- a fuzzy double edge rather than a true stem. Measured on the plate
+   * wordmarks, removing that smear made the type 1px LIGHTER, not heavier,
+   * because these are thin-stemmed faces the smear had been compensating for.
+   *
+   * `-webkit-text-stroke` puts the weight back where it belongs -- symmetrically
+   * on both sides of the outline -- so the stems regain their mass and the edge
+   * stays a single clean step instead of a blurred double one. At the headline's
+   * ~100px this is sub-pixel, which is exactly the intent: enough to hold the
+   * stroke, not enough to blunt the joins.
+   */
+  font-weight: 400;
+  -webkit-text-stroke: 0.006em currentColor;
+  /*
+   * `globals.css` sets `-webkit-font-smoothing: antialiased` app-wide, which
+   * thins every stroke, and `text-rendering: optimizeSpeed`, which drops kerning
+   * -- the two together are what make display type read as soft. Display type
+   * wants the platform defaults. Scoped to the hero type; app chrome untouched.
+   */
+  -webkit-font-smoothing: auto;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: auto;
   line-height: 1;
   /*
    * STARTING values only. Both are overwritten per-word by the fit in
