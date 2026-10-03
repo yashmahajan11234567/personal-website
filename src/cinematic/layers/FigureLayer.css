@@ -8,7 +8,29 @@
 
 .cinematic-figure {
   position: absolute;
-  z-index: 3;
+  /*
+   * 6, not 4.
+   *
+   * The figure has to paint OVER the two plates. At 4 it sat below
+   * `.cinematic-boards` (z-index 6), so wherever a plate overlapped the
+   * silhouette -- about 104px of the Data plate and 92px of the Cloud plate at
+   * 1440x900 -- the plate covered the figure, and the figure read as standing
+   * behind its own cards rather than holding them.
+   *
+   * Verified by pixel, not by eye: hiding the plate turned that band white
+   * (252,252,251, i.e. bare ground) while hiding the figure changed nothing,
+   * which is only possible if the plate was the thing painting there.
+   *
+   * 6 TIES with `.cinematic-boards`, and the tie is broken by DOM order: in
+   * CinematicHero.tsx the order is BoardLayer, then FigureLayer, so the figure
+   * is the later sibling and wins. Keep this z-index at or above the boards'
+   * and keep FigureLayer mounted after BoardLayer -- reversing either one puts
+   * the plates back in front.
+   *
+   * The figure stays BELOW `.cinematic-hero__board-target` (7), which is what
+   * keeps the plates clickable where the two overlap.
+   */
+  z-index: 6;
   pointer-events: none;
   /* No transform, no transition. Position is fixed for the whole cinematic. */
   transform: none;

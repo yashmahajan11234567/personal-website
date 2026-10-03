@@ -77,9 +77,17 @@ function useViewportWidth(): number {
 export interface BoardLayerProps {
   /** Skip the rise and hold the locked composition (reduced motion, Task 7). */
   settled?: boolean;
+  /**
+   * The currently active world plate, if any -- resolved by the caller from
+   * hover, focus and selection in the same order the atmosphere uses, so the
+   * plate scale and the coloured light always agree. Drives `data-hovered` on
+   * the root, which the hover-scale CSS keys off. The RISE transform is not
+   * affected: it is written inline per scroll frame and is never transitioned.
+   */
+  hoveredBoard: Path | null;
 }
 
-export function BoardLayer({ settled = false }: BoardLayerProps) {
+export function BoardLayer({ settled = false, hoveredBoard = null }: BoardLayerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const plateRefs = useRef<Record<Path, HTMLDivElement | null>>({ data: null, cloud: null });
   const viewportWidth = useViewportWidth();
@@ -99,9 +107,11 @@ export function BoardLayer({ settled = false }: BoardLayerProps) {
         const e = easeOutSine(t);
         // Rise from below the frame's bottom edge, clipped by the hero's overflow.
         const y = (1 - e) * START_Y_VH;
+        // NOTE: the hover scale is NOT applied here. This transform is rewritten
+        // on every scroll frame, so a CSS transition on it would be reset
+        // continuously and the scale would never animate. The rise owns this
+        // element; the hover scale owns the inner __scale wrapper.
         el.style.transform = `translate3d(0, ${y.toFixed(3)}vh, 0)`;
-        // No opacity ramp: the reference plates are solid black the whole way
-        // up, clipped by the frame edge rather than fading in.
         el.style.opacity = '1';
         el.style.setProperty('--reveal', t.toFixed(4));
 
@@ -142,6 +152,7 @@ export function BoardLayer({ settled = false }: BoardLayerProps) {
       className="cinematic-boards"
       data-mode={mode}
       data-settled={settled || undefined}
+      data-hovered={hoveredBoard ?? undefined}
     >
       {(['data', 'cloud'] as Path[]).map((path) => {
         const content = WORLD_BOARDS[path];
@@ -165,16 +176,18 @@ export function BoardLayer({ settled = false }: BoardLayerProps) {
               }}
               data-plate={path}
             >
-              <PlateInterior path={path} />
-              <PlateChrome side={path} />
-              <div className="cinematic-plate__body">
-                {content.lines.map((line) => (
-                  <span key={line} className="cinematic-plate__line">
-                    {line}
-                  </span>
-                ))}
+              <div className="cinematic-plate__scale" data-plate-scale={path}>
+                <PlateInterior path={path} />
+                <PlateChrome side={path} />
+                <div className="cinematic-plate__body">
+                  {content.lines.map((line) => (
+                    <span key={line} className="cinematic-plate__line">
+                      {line}
+                    </span>
+                  ))}
+                </div>
+                <div className="cinematic-plate__status">{content.status}</div>
               </div>
-              <div className="cinematic-plate__status">{content.status}</div>
             </div>
           </div>
         );

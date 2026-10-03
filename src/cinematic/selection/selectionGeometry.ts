@@ -383,9 +383,216 @@ export const FIGURE_RECT: Rect = {
  * (100.07 -> 98.02 at 1280) and gave back margin the reference never demanded.
  * The measurement is authoritative; the assertion is corrected instead.
  */
+/**
+ * The two headline fit boxes, as fractions of the frame.
+ *
+ * LOCKED OVERSIZED EDITORIAL COMPOSITION (2026-10-03). The words are deliberately
+ * LARGER than the frame and pass BEHIND the figure; they are not trying to fit
+ * beside it. Read this comment as the CURRENT design, not as a derivation.
+ *
+ *      left  x 0.002   PERSONAL starts inside the frame, first letter INTACT
+ *      right x 0.025   PORTFOLIO runs off the right edge by ~2.2% of the viewport
+ *      both  y 0.14  w 0.996  h 0.5
+ *
+ * WHY THE BLEED IS ASYMMETRIC, AND WHY THAT IS THE POINT
+ *
+ * The obvious move is to mirror the crop on both sides. That is wrong, and
+ * cropping recognition is the reason:
+ *
+ *   - Crop a word's FIRST letter and it stops being a word. "ERSONAL" is not
+ *     "PERSONAL"; the opening glyph is what the eye locks onto to read it.
+ *   - Crop a word's LAST letters and it degrades gracefully. "PORTFOLI" still
+ *     reads as PORTFOLIO almost instantly.
+ *
+ * So the crop is spent only on the right word, and the left word starts inside
+ * the frame. `cinematic.spec.ts` now asserts exactly this asymmetry
+ * (`firstLettersIntact`), so the intent is locked by a test rather than left to
+ * whoever next tunes the numbers.
+ *
+ * WHY THE TYPEGOES BEHIND THE FIGURE
+ *
+ * At this size each word paints ~1250-1480px wide, against a figure whose
+ * silhouette leaves only ~419px on the left and ~435px on the right. No placement
+ * can fit a word that wide into a region that narrow, so the two candidate
+ * solutions were "shrink the type" or "let the subject occlude it". The user
+ * chose the second: `.cinematic-type` is z-index 3 and `.cinematic-figure` is 4,
+ * so the figure's face, glasses, body and board paint OVER the letters. That is
+ * the editorial treatment - type interrupted by the subject - and it is why the
+ * size could stay locked instead of being negotiated down to whatever gap was
+ * left over.
+ *
+ * MEASURED, at 1440x900
+ *
+ *   PERSONAL  ink x    3..1247   (439.2px, League Gothic, tracking 0)
+ *   PORTFOLIO ink x  196..1472   (439.2px)
+ *   figure     ink x  419..1005
+ *   right bleed 32px = 2.2% of viewport, and 2.1-2.3% at EVERY viewport from
+ *   390 to 1920 - a proportional editorial crop, not a per-breakpoint accident.
+ *
+ * Both boxes keep the SAME width (0.996) so the shared-tracking fixed point
+ * cannot be dragged down by whichever word is tighter, but their X positions are
+ * INDEPENDENT - they are two separate typographic elements, not one shared box.
+ * Y and H are shared because both words must sit on one baseline band.
+ *
+ * WHAT IS STILL FITTED, AND WHY IT IS NOT "BLIND"
+ *
+ * The fitter in TypographyLayer is size-first: it solves cap height from the
+ * box's HEIGHT and clamps to the box's WIDTH, then hands whatever width is left
+ * over to `MIN_TRACK_EM` (currently 0, so the leftover goes to the glyphs
+ * themselves rather than to air between them). So width still bounds the size -
+ * widening these boxes further is the only way to grow the type, and y/h only
+ * move the caps. The x values below decide WHERE the words sit, never how big
+ * they are.
+ */
+/**
+ * WHY THE HEADLINE IS BUILT FROM THE FIGURE'S CORRIDOR, NOT FROM THE FRAME
+ *
+ * This is the current design, not a derivation, so read the numbers rather than
+ * the archaeology above it.
+ *
+ *      PERSONAL   [  avatar  ]   PORTFOLIO
+ *
+ * The user asked for the words to be LARGE and SPACED, to NOT overlap each other,
+ * to NOT sit behind the avatar's head, to sit at the VERTICAL MIDDLE rather than
+ * up in the top band, and for the frame to read FILLED. The previous composition
+ * satisfied none of that, and the measurements say exactly why:
+ *
+ *   size            439.2px      (cap height 325px = 36% of the frame height)
+ *   PERSONAL ink    1243px wide
+ *   PORTFOLIO ink   1276px wide
+ *   two words       2519px of ink in a 1440px frame
+ *   overlap         1071px  = 84% of EACH word
+ *   cap band centre 35.2% of frame height   (the "too far up" complaint)
+ *
+ * Both boxes were 0.996 of the frame wide, so each word was laid across the whole
+ * viewport and they printed on top of each other. That was the unreadable mass,
+ * and no amount of nudging could fix it: at this size the two words need 1.75x
+ * the frame's width.
+ *
+ * THE ARITHMETIC THAT SETS THE SIZE
+ *
+ * League Gothic's advance per em of font size, measured on the live render:
+ *
+ *     PERSONAL    2.830 em     PORTFOLIO   2.905 em
+ *
+ * so the painted ink is `size * 2.830` and `size * 2.905`. The avatar's painted
+ * silhouette leaves a corridor on each side, and both words must fit inside their
+ * own corridor for "not behind the head" to be true:
+ *
+ *     size <= leftCorridor / 2.830      size <= rightCorridor / 2.905
+ *
+ * At 1440x900 the widest such band caps the size at 220px -- a 50% reduction from
+ * 439px. That is not a taste judgement, it is the font's own advance, and it is
+ * why the two requirements ("as large as possible" and "clear of the avatar")
+ * have a single hard ceiling between them.
+ *
+ * WHY THE CORRIDOR IS A CONSTANT FRACTION
+ *
+ * `FIGURE_RECT` is a fixed fraction of the frame, so the silhouette scales with
+ * the viewport and the corridor does too. Measured at full asset resolution, the
+ * figure's painted silhouette across the cap band is:
+ *
+ *     left  edge  0.431 of viewport width
+ *     right edge  0.557 of viewport width
+ *
+ * identically at 1920, 1600, 1440, 1366, 1280, 1024, 768 and 390 wide. That is
+ * what lets one set of fractions describe the composition at every viewport
+ * without a per-breakpoint table.
+ *
+ * WHAT IS SPENT WHERE
+ *
+ * Each side corridor is split between an outer margin and a gap off the figure:
+ *
+ *     left   0.008 margin | 0.012 gap | 0.411 word box
+ *     right  0.569 box   | 0.012 gap | 0.008 margin
+ *
+ * The gap is the honest one: it is what keeps PORTFOLIO's first letters off the
+ * avatar's head, which is the specific complaint that produced this layout. The
+ * margin exists because the glyph run's painted ink sits a few px OUTSIDE its
+ * advance box (the last glyph's right side bearing plus the 0.006em stroke), so a
+ * zero margin would still bleed ~17px past the frame edge.
+ *
+ * WHY THE RIGHT WORD IS THE WIDER BOX
+ *
+ * PORTFOLIO is 9 letters to PERSONAL's 8 but the fitter sizes both at ONE shared
+ * size, so its ink is 2.7% wider for the same cap height. Given equal corridors
+ * it would therefore bind first and drag the shared size down. Handing the right
+ * side the slightly larger corridor it actually has (0.423 against 0.411) keeps
+ * the binding constraint on PERSONAL, and the shared-size solve stays stable.
+ *
+ * VERTICAL CENTRE
+ *
+ * `y` is chosen so the painted CAP band lands at 44% of the frame height: below
+ * the 35.2% it used to sit at, close enough to the optical middle that the frame
+ * reads centred rather than top-heavy, and high enough to keep the larger words
+ * the corridor allows. The cap band sits 0.43em below the line box's top edge in
+ * League Gothic (baseline at 0.8em, cap height 0.74em), so `y = 0.34` puts the
+ * band at 0.44 at every 16:9 viewport and within 0.01 of it at 4:3.
+ *
+ * `height` is deliberately generous (0.26). The fitter takes the SMALLER of its
+ * width and height limits, so an over-tall box cannot inflate the type -- it only
+ * guarantees the width limit is the one that binds, which is what makes the size
+ * predictable instead of aspect-dependent.
+ *
+ * WHAT THIS COSTS, STATED PLAINLY
+ *
+ * 1440x900   439.2px -> 220px   (-50%)   frame fill 87.6%
+ * 1920x1080  585.1px -> 293px   (-50%)   frame fill 87.5%
+ * 1280x720   390.6px -> 195px   (-50%)   frame fill 87.4%
+ * 390x844    119.8px ->  57px   (-52%)   frame fill 78%
+ *
+ * The words are half the size they were. That is the price of separating them
+ * from each other and from the avatar's head in the same band, and the user was
+ * shown the number before this was written. The gain is that the frame now reads
+ * as three distinct masses instead of two overlapping ones: the words are
+ * individually legible, nothing crosses the face, and the composition fills the
+ * page instead of spilling off both edges.
+ */
 export const HEADLINE_RECTS = {
-  left: { x: 0.036, y: 0.3455, width: 0.394, height: 0.201 } as Rect,
-  right: { x: 0.5495, y: 0.3455, width: 0.405, height: 0.201 } as Rect,
+  left: { x: 0.017, y: 0.344, width: 0.398, height: 0.26 } as Rect,
+  right: { x: 0.567, y: 0.344, width: 0.429, height: 0.26 } as Rect,
+};
+
+/**
+ * The figure's painted silhouette across the headline's cap band, as a fraction
+ * of frame width, and where the words are meant to sit vertically.
+ *
+ * Exported so the tests assert against the SAME measured silhouette the geometry
+ * is derived from, rather than re-deriving it from the box rect.
+ */
+export const HEADLINE_CORRIDOR = {
+  /**
+   * Figure silhouette's left edge. PERSONAL's corridor ends here.
+   *
+   * Measured at FULL asset resolution inside the headline's own cap band, not
+   * from the element box: the box carries a transparent margin, and an earlier
+   * pass read the box and got 0.431, which is 25px to the right of the truth.
+   * That wrong constant is what let the words run 7px into the figure's shoulder
+   * at 1920 and 2px at 1600 while the numbers looked healthy.
+   */
+  figureLeft: 0.4056,
+  /**
+   * Figure silhouette's right edge. PORTFOLIO's corridor starts here.
+   *
+   * Stable across every breakpoint measured: 0.5573, 0.5583, 0.5406, 0.5573,
+   * 0.5573, 0.5390, 0.5395 at 1920 / 1600 / 1440 / 1366 / 1280 / 1024 / 390.
+   * The spread is sub-pixel quantisation of the figure's own outline, not a
+   * breakpoint difference -- so a single constant is correct, and the left edge
+   * needs the same care (it reads 0.4056 at every 16:9 width).
+   */
+  figureRight: 0.5573,
+  /**
+   * Where the painted cap band lands, as a fraction of frame height.
+   *
+   * 0.44 is the CENTRE of what the corridor allows, not the middle of the frame.
+   * Pushing it to 0.47 was measured and failed: the figure's shoulders flare
+   * outward below the head, so the corridor narrows as the band descends. At 0.47
+   * the words hit the silhouette at 1920 (-53px) and 1280 (-31px); back at 0.44
+   * they clear it at every breakpoint. The figure is the optical centre of this
+   * composition, and its head sits above the frame's own midpoint, so the type
+   * reading as centred means centred on the SUBJECT.
+   */
+  capBandCentre: 0.44,
 };
 
 /**

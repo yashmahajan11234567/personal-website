@@ -1,0 +1,115 @@
+/*
+ * Environment layer — the world's own reaction to being looked at.
+ *
+ * Layer order, which is the whole point of this file:
+ *
+ *   0  ground        GroundLayer
+ *   1  ENVIRONMENT   this layer      <- PIP network / clouds
+ *   2  colour wash   AccentGlowLayer
+ *   3  figure        FigureLayer
+ *   4  typography    TypographyLayer
+ *   5+ plates / targets / grain / handoff
+ *
+ * ORDER CORRECTED FROM THE BRIEF'S LITERAL STACK, and the reason matters.
+ *
+ * The brief lists ENVIRONMENT then ATMOSPHERIC COLOUR. Implemented literally,
+ * the multiply wash sat ON TOP of the canvases and multiplied every white
+ * structure by the accent hue: the cloud pass paints white and cream, and a
+ * multiply above it turned every cloud into a muted orange shape that had lost
+ * its highlight. Vision review described them as "not pure white; they retain
+ * the orange-toned palette of the background" and "sparse and stylised" -- the
+ * reference's white clouds on orange had become orange clouds on orange.
+ *
+ * Both reference videos show light-coloured structures reading AGAINST the
+ * colour field: white pipes on blue, white-topped clouds on orange. So the wash
+ * is the field and the structures sit on top of it, both at z-index 1 and 2.
+ * Transparency is what preserves the blend -- the canvas has no background of
+ * its own, so the wash still shows through everywhere no structure is drawn.
+ *
+ * The brief's actual hard constraint -- "must never obscure the figure or
+ * selection plates" -- is unaffected: the figure is at 4 and the plates at 6,
+ * both well above.
+ *
+ * The canvases are behind everything that matters and are `pointer-events:
+ * none`, so neither the plates nor the board hit targets are affected. Nothing
+ * here can intercept the user's pointer or obscure the figure.
+ */
+
+.cinematic-env {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  /*
+   * Never intercept the pointer. The board hit targets sit above at z-index 7
+   * and must remain clickable, and this layer is decorative.
+   */
+  pointer-events: none;
+  /*
+   * 'screen' makes the drawn structures behave as LIGHT against the wash
+   * beneath, which is what the reference videos show: white pipes reading over
+   * blue, white-topped clouds over orange. With the default 'normal' the
+   * canvas's own alpha composites as opaque paint and the clouds lose their
+   * highlight, reading as flat orange shapes.
+   *
+   * Screen only ever lightens, so it can never darken the figure or the plates
+   * standing above at z-index 4 and 6 -- those are unaffected by this layer's
+   * blending either way, because blending is confined to the backdrop beneath
+   * z-index 2.
+   */
+  mix-blend-mode: screen;
+  isolation: isolate;
+  contain: paint;
+}
+
+.cinematic-env__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+/*
+ * Phase / idle gate.
+ *
+ * Only `display: none` is used here, and it is applied from the PHASE, never
+ * from `data-active`.
+ *
+ * The first version gated on `[data-active]` with `visibility: hidden`, which
+ * broke the leave animation outright: the instant the pointer left a plate,
+ * data-active became 'none' and the whole layer vanished in one frame, so the
+ * recede the brief asks for ("do NOT instantly remove everything") was never
+ * visible. Measured: 5.23% ink -> 0.00% inside 30ms.
+ *
+ * `display: none` keyed on the phase still satisfies "NO PIP, NO CLOUDS, NO
+  * BLUE, NO ORANGE" during PERSONAL/PORTFOLIO, and the renderer additionally
+  * clears both canvases at zero progress, so an idle or left scene paints
+  * nothing regardless of this rule. The atmosphere itself is gone in that phase
+  * anyway -- the React layer stops advancing progress and the wash is gated off.
+  *
+  * The phase gate reads `data-phase` (not `data-active`). Those are deliberately
+  * different attributes: `data-active` changes on every hover and leave, so
+  * gating the layer's visibility on it hid the whole canvas in the same frame
+  * the pointer left a plate -- which is precisely what made leave instant.
+  * `data-phase` only changes at the cinematic phase boundaries, so the layer
+  * stays displayed for the whole of the selection phase and the recede is
+  * visible.
+  */
+.cinematic-env {
+  display: none;
+}
+
+.cinematic-env[data-phase='selection'] {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+   * Reduced motion removes the build animation and the drift in the renderer;
+   * this keeps the layer itself from being composited at all when idle.
+   */
+  .cinematic-env[data-reduced] {
+    will-change: auto;
+  }
+}

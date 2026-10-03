@@ -14,7 +14,7 @@
 .cinematic-boards {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 6;
   pointer-events: none;
 }
 
@@ -23,32 +23,101 @@
   display: flex;
 }
 
+/*
+ * `.cinematic-plate` is the TIMING element only: it carries the rise
+ * transform, which the timeline rewrites inline on every scroll frame, plus the
+ * `--reveal` custom property the interior artwork reads (custom properties
+ * inherit, so the interior still sees it through the scale wrapper).
+ *
+ * The plate's visible surface -- background, border, padding, the clip that
+ * contains the interior artwork -- deliberately lives on the child
+ * `__scale` wrapper instead, so that hovering scales the WHOLE plate as one
+ * physical object. Keeping the surface here would leave a stationary
+ * background with the artwork and type growing out of it.
+ *
+ * `overflow` is NOT set here: the rise is clipped by the hero's overflow (see
+ * the apply() comment), and clipping here would shave the outer 2% off the
+ * plate on hover, because the scaled wrapper would be cut off at the unscaled
+ * box edge.
+ */
 .cinematic-plate {
   --reveal: 0;
   position: relative;
   width: 100%;
   height: 100%;
+  will-change: transform, opacity;
+}
+
+/*
+ * Hover scale layer.
+ *
+ * This wrapper exists so the plate's scale can be transitioned independently of
+ * the rise. `.cinematic-plate` has its transform rewritten inline on every
+ * scroll frame, so a transition on it would be reset continuously and the
+ * scale would never animate. The rise (translate3d) owns that element; the
+ * hover scale owns this one.
+ *
+ * Everything inside scales together as one physical plate -- background,
+ * border, artwork, wordmark and detail text alike -- because they are all
+ * descendants of this element.
+ *
+ * The transform is left at its initial `none` rather than an explicit
+ * `scale(1)`. `none` interpolates as the identity matrix, so the transition
+ * still animates 1 -> 1.04, but the element is not promoted to its own
+ * compositor layer at rest -- which would change how the interior artwork and
+ * the wordmark are antialiased, and those are deliberately tuned for acuity.
+ */
+.cinematic-plate__scale {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   padding: 14% 11% 11%;
   box-sizing: border-box;
-  background: #0b0b0c;
+  background: rgba(11, 11, 12, 0.85);
   color: #f2f2f0;
+  /* Clips the interior artwork to the plate, as it always was. The clip moves
+   * WITH the scale, so on hover the artwork and its clip both grow together --
+   * which is correct, because the artwork is painted to fill the plate. */
   overflow: hidden;
-  will-change: transform, opacity;
   /* Hard edge, no radius: this is a plate, not a card. */
   border-radius: 0;
   box-shadow: none;
+  transform-origin: 50% 50%;
+  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* Hairline light border, drawn inside the plate. */
-.cinematic-plate::after {
+.cinematic-plate__scale::after {
   content: "";
   position: absolute;
   inset: 0;
   border: 1px solid rgba(255, 255, 255, 0.28);
   pointer-events: none;
+}
+
+/*
+ * Hover state.
+ *
+ * Scaling the surface wrapper grows the plate about its own centre, so the
+ * plate's resting footprint -- the position the selection geometry and the
+ * reference are pinned to -- does not move. Scaling the outer `.cinematic-plate`
+ * instead would push the edges outward and shift where the resting composition
+ * sits. The 1.04 target is the middle of the requested 1.03-1.06 band: enough
+ * to read as "active / selectable", not enough to look like a zoom.
+ */
+.cinematic-boards[data-hovered='data'] .cinematic-plate[data-plate='data']
+  .cinematic-plate__scale,
+.cinematic-boards[data-hovered='cloud'] .cinematic-plate[data-plate='cloud']
+  .cinematic-plate__scale {
+  transform: scale(1.04);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-plate__scale {
+    transition: none;
+  }
 }
 
 .cinematic-plate__chrome {
@@ -216,7 +285,14 @@
  * Deliberately small: the reference's wordmarks are already well inside their
  * plates, so this is a nudge rather than a re-layout.
  */
-.cinematic-plate[data-plate="data"] {
+/*
+ * These two rules used to target `.cinematic-plate` directly. The plate's
+ * surface now lives on the `__scale` wrapper, so they target
+ * `.cinematic-plate[data-plate="..."] .cinematic-plate__scale` instead --
+ * otherwise the padding and justify-content would apply to the timing element
+ * and have no effect on the visible surface.
+ */
+.cinematic-plate[data-plate="data"] .cinematic-plate__scale {
   padding-left: 13.5%;
 }
 
@@ -271,13 +347,13 @@
  * geometrically identical and the two wordmarks stay aligned VERTICALLY, which
  * is the symmetry that was actually asked for earlier.
  */
-.cinematic-plate[data-plate="cloud"] {
+.cinematic-plate[data-plate="cloud"] .cinematic-plate__scale {
   padding-right: 5.5%;
   justify-content: flex-end;
 }
 
 /* Mobile: stacked plates below the figure get horizontal type. */
-.cinematic-boards[data-mode="mobile"] .cinematic-plate {
+.cinematic-boards[data-mode="mobile"] .cinematic-plate .cinematic-plate__scale {
   padding: 8% 8%;
   justify-content: center;
 }
@@ -287,8 +363,12 @@
  * stacked centre line rather than toward the figure, which no longer sits
  * between them. Even insets keep both wordmarks aligned on a shared axis.
  */
-.cinematic-boards[data-mode="mobile"] .cinematic-plate[data-plate="data"],
-.cinematic-boards[data-mode="mobile"] .cinematic-plate[data-plate="cloud"] {
+.cinematic-boards[data-mode="mobile"]
+  .cinematic-plate[data-plate="data"]
+  .cinematic-plate__scale,
+.cinematic-boards[data-mode="mobile"]
+  .cinematic-plate[data-plate="cloud"]
+  .cinematic-plate__scale {
   padding-left: 8%;
   padding-right: 8%;
 }
@@ -307,7 +387,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cinematic-plate,
   .cinematic-plate__chrome .glyph {
     transition: none;
   }

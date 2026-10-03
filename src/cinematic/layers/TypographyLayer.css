@@ -11,7 +11,18 @@
 .cinematic-type {
   position: absolute;
   inset: 0;
-  z-index: 4;
+  /*
+   * BEHIND THE FIGURE (z-index 4).
+   *
+   * At 439px the two words are far wider than the frame, so they cannot sit
+   * beside the figure without covering it. Putting the typography UNDER the
+   * figure lets the oversized words extend behind it: the figure's face, glasses,
+   * body and board now occlude the letters instead of being painted over by them,
+   * which is the editorial "type interrupted by the subject" treatment.
+   *
+   * 3 sits above cinematic-ground (0) and below the figure (4).
+   */
+  z-index: 3;
   pointer-events: none;
 }
 
@@ -76,28 +87,32 @@
   display: inline-block;
   white-space: nowrap;
   /*
-   * The headline is WIDTH-bound, not height-bound: each word is hemmed between
-   * the frame edge and the figure, and the figure is not negotiable. Measured ink
-   * width per unit of cap height across the candidate faces, at 1280x720 against
-   * the measured 524px / 551px budgets:
+   * WHY LEAGUE GOTHIC
    *
-   *     Haettenschweiler  4.30 w/cap   (too thin, reads as mush at this size)
-   *     Impact            5.11 w/cap   <- narrowest legible face
-   *     Anton             7.19 w/cap
-   *     Archivo Black     8.91 w/cap   (widest; caps the headline at 60px)
+   * The headline's size is set by a WIDTH-bound fit, so the face's
+   * advance-per-unit-cap-height decides how big the words can get. Measured
+   * against the room the figure leaves (corridor x 554..700 at 1280x720), with
+   * tracking solved to its ceiling:
    *
-   * Archivo Black is the correct face for the plate wordmarks, which have no
-      * figure to clear, but using it HERE costs 34% of the cap height -- exactly
-      * wrong for the words that are meant to be the largest thing on screen. The
-      * headline therefore keeps a narrow face and takes its crispness from the
-      * rendering settings below instead of from the typeface.
-      *
-      * Impact is also the only candidate that is both a real installed face and
-      * narrow. Haettenschweiler is narrower still, but its hairline strokes are part
-      * of why this type read as soft. 'Arial Black' is a last-resort fallback only:
-      * it renders wider than Impact and would cap the headline at 63px.
-      */
-  font-family: Impact, Haettenschweiler, "Arial Black", sans-serif;
+   *   face              cap reached   gap     vs reference cap (112px)
+   *   League Gothic      112.5px      12.2px   <- chosen, the only one to clear it
+   *   Anton              103.0px       9.6px   92%
+   *   Haettenschweiler   101.8px      11.6px   91%
+   *   Bebas Neue          97.6px      11.2px   87%
+   *   Impact              87.5px       8.9px   78%
+   *   Oswald              84.1px       8.3px   75%
+   *
+   * League Gothic is the only bundled face that clears the reference cap height
+   * while still leaving clearly readable letter gaps - the one combination the
+   * brief asks for. It also leads because it is BUNDLED (@fontsource), so it
+   * renders identically on every platform rather than depending on a
+   * Windows-only system face.
+   *
+   * The rest stay behind it as graceful degradation. Anton is the nearest match
+   * at 92%, so a machine that somehow cannot load League Gothic still reads as
+   * the same design, 9px smaller.
+   */
+  font-family: "League Gothic", Anton, Haettenschweiler, Impact, sans-serif;
   /*
    * 400 is the face's real weight. Every candidate here ships a single 400 cut;
    * declaring 900 made Chrome SYNTHESISE a heavier weight by smearing the glyph
@@ -187,18 +202,13 @@
  * that mechanism and are what allowed the words to be pushed past the frame
  * edges on smaller viewports.
  *
- * What DOES still need adjusting per breakpoint is the vertical relationship:
- * the boxes are fractions of the SCENE, and on short/wide viewports the type
- * must still clear the figure's head block.
+ * Nothing overrides the vertical position any more. The headline's rect carries
+ * `top` as a fraction of the frame, and the media query that used to force
+ * `top: 30%` below 1024px is gone deliberately: it placed the words at a
+ * different height on a different class of viewport, which is what kept the
+ * composition from reading as centred. One rule at every width means the cap band
+ * lands where `HEADLINE_CORRIDOR.capBandCentre` says it does, and the corridor
+ * fractions in `selectionGeometry.ts` keep the words clear of the figure on all
+ * of them -- `FIGURE_RECT` is itself a fraction of the frame, so the silhouette
+ * scales with the viewport rather than needing its own breakpoints.
  */
-@media (max-width: 1023px) {
-  /*
-   * The reference keeps the words level with the board at 16:9. On narrower
-   * frames the same fractions would push them into the figure, so the words
-   * lift slightly and tighten.
-   */
-  .cinematic-type__word--left,
-  .cinematic-type__word--right {
-    top: 30%;
-  }
-}

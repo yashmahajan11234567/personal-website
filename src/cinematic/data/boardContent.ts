@@ -49,6 +49,26 @@ export const HEADLINE = {
 } as const;
 
 /**
+ * The page's one real heading.
+ *
+ * PERSONAL / PORTFOLIO are TYPE ART: painted glyph runs fitted to measured
+ * boxes, positioned as fractions of the frame, and semantically meaningless as
+ * a pair. A screen reader announcing "PERSONAL PORTFOLIO" gets no idea whose
+ * portfolio this is or what they do, and there was no <h1> anywhere in the hero
+ * to answer that.
+ *
+ * This string is the accessible identity. It states only what the project
+ * already asserts about itself — the same two role pairs that
+ * `WORLD_BOARDS` below labels the two paths with, and the same name the figure
+ * artwork carries. No credential, employer, or claim is introduced here.
+ *
+ * Rendered visually-hidden by the hero, so the approved composition is
+ * untouched; the type art keeps its own glyphs and its own pixels.
+ */
+export const HERO_HEADING =
+  'Yash Mahajan — Data Analyst, Data Engineer and Cloud DevOps Engineer' as const;
+
+/**
  * Copy for the ID plate the figure holds. The plate is artwork, so this is
  * reference metadata only — it is not rendered as live text (D2 keeps the
  * existing figure artwork). Kept here so the plate can later be re-skinned.

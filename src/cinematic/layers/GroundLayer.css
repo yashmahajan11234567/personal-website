@@ -14,7 +14,7 @@
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  background: #f4f4f2;
+  background: transparent;
 }
 
 .cinematic-ground__field {

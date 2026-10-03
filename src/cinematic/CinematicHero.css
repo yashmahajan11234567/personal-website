@@ -20,12 +20,24 @@
 }
 
 /*
+ * The hero is focusable only as a keyboard shortcut target (tabIndex -1), never
+ * reachable by Tab. Chrome draws a default focus ring on focused elements, which
+ * would draw a hard 1px rectangle around the entire cinematic — including
+ * across the approved type art. Suppressed for the hero only; every real
+ * control in the scene (the skip link, the two boards) keeps its own ring.
+ */
+.cinematic-hero:focus,
+.cinematic-hero:focus-visible {
+  outline: none;
+}
+
+/*
  * Board hit targets. Transparent frames positioned over the plates using the
  * same measured rects as BoardLayer, so artwork and hit area cannot drift.
  */
 .cinematic-hero__board-target {
   position: absolute;
-  z-index: 5;
+  z-index: 7;
   pointer-events: none;
 }
 
@@ -38,6 +50,33 @@
  * is visually hidden rather than display:none.
  */
 .cinematic-hero__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * The page's real <h1>, for identity and screen readers.
+ *
+ * Visually hidden, but NOT with `display: none` or `visibility: hidden` — both
+ * remove the element from the accessibility tree, which would defeat the point
+ * of having a heading at all. The clip recipe above keeps it focusable,
+ * announced, and in the AX tree while painting nothing and taking no layout
+ * space.
+ *
+ * Absolutely positioned so it cannot participate in the hero's layout at all:
+ * zero risk of shifting a layer, a z-index, or the approved composition. It is
+ * a sibling of GroundLayer inside `.cinematic-hero`, so it sits above the
+ * ground's own background in paint order but paints nothing.
+ */
+.cinematic-hero__heading {
   position: absolute;
   width: 1px;
   height: 1px;

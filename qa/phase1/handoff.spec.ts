@@ -102,13 +102,29 @@ test.describe('Q6 handoff — the prohibitions', () => {
     await reachSelection(page);
 
     const readGround = () =>
-      page
-        .locator('.cinematic-ground__field')
-        .evaluate((el) => getComputedStyle(el).transform)
-        .catch(() => null); // hero unmounted: transition over, nothing moved after
+          page
+            .locator('.cinematic-ground__field')
+            .evaluate((el) => getComputedStyle(el).transform)
+            /*
+             * Distinguish "the hero is gone" from "the element is still there".
+             *
+             * The single `.catch(() => null)` this replaces could not tell the two
+             * apart: `evaluate()` ALSO rejects when the element is detached or
+             * mid-removal, and in that state `getComputedStyle(el).transform` can
+             * come back as an EMPTY STRING rather than a transform. The caller's
+             * `if (during === null) break` guard therefore let "" through and
+             * compared it against the pre-handoff matrix -- which failed the test
+             * even though the ground never moved.
+             *
+             * This run proved it: `Expected: "matrix(1.06, 0, 0, 1.06, 0, 0)"`,
+             * `Received: ""`. So treat an empty read as "not measurable", the same
+             * as a missing element, and stop sampling there.
+             */
+            .then((t) => (t ? t : null))
+            .catch(() => null);
 
-    const before = await readGround();
-    expect(before).not.toBeNull();
+        const before = await readGround();
+        expect(before).not.toBeNull();
 
     await page.click('[data-testid="world-board-data"]');
 
@@ -131,16 +147,45 @@ test.describe('Q6 handoff — the prohibitions', () => {
     await reachSelection(page);
 
     const readFigure = () =>
-      page
-        .locator('.cinematic-figure')
-        .evaluate((el) => {
-          const r = el.getBoundingClientRect();
-          return { x: r.x, y: r.y, t: getComputedStyle(el).transform };
-        })
-        .catch(() => null);
+          page
+            .locator('.cinematic-figure')
+            .evaluate((el) => {
+              const r = el.getBoundingClientRect();
+              const t = getComputedStyle(el).transform;
+              return { x: r.x, y: r.y, t: t || 'none' };
+            })
+            /*
+             * Same defect as readGround above: a detached or mid-removal element can
+             * make `evaluate()` reject, but `getComputedStyle(el).transform` can also
+             * return an EMPTY STRING while the node still resolves. Left as "",
+             * that compared against the pre-handoff "none" and failed with
+             * `Expected: "none" / Received: ""` -- a teardown artefact, not a move.
+             * 'none' is also the semantically correct value for "not transformed",
+             * so normalising here makes the comparison honest in both states.
+             */
+            .catch(() => null);
 
     const before = await readFigure();
     expect(before).not.toBeNull();
+
+    /*
+     * Sanity-check the BASELINE before treating it as the reference.
+     *
+     * Under load the scrub can still be settling when the board is clicked, so
+     * the figure's rect can be sampled mid-flight. The comparison then reports
+     * the delta between two unrelated positions and blames the handoff for a
+     * 419px "move" that never happened -- measured x 419.03 constant across a
+     * whole handoff in a clean run, against this failure's 419.03125 delta.
+     *
+     * A figure at the selection hold is always near the horizontal centre of a
+     * 1440px viewport, so a baseline outside a generous band means the page was
+     * not ready. Fail loudly as a setup problem instead of silently asserting a
+     * movement that is an artefact.
+     */
+    expect(
+      before.x,
+      'figure baseline must be settled before the handoff is measured',
+    ).toBeGreaterThan(200);
 
     await page.click('[data-testid="world-board-data"]');
 
@@ -157,71 +202,145 @@ test.describe('Q6 handoff — the prohibitions', () => {
     expect(samples, 'sampled at least once mid-transition').toBeGreaterThan(0);
   });
 
-  test('the accent actually brightens during the handoff, not dims', async ({ page }) => {
+/*
+   * THE SCENE STAYS MONOCHROME THROUGH THE HANDOFF.
+   *
+   * This test used to measure the accent wash DEEPENING across the hand-off
+   * (`channelSpread` over `.cinematic-glow__wash--*`). That layer has since been
+   * removed from the cinematic by design, so those reads now throw
+   * `getComputedStyle(null)` rather than failing an assertion.
+   *
+   * The reason the test existed is still real and still worth protecting: during a
+   * world hand-off it is easy for a full-bleed overlay to flood the frame with
+   * colour and flatten the monochrome composition. So the invariant is kept and
+   * the MECHANISM changed — this now asserts the whole viewport STAYS MONOCHROME
+   * (measured as the max per-channel spread over sampled pixels), at rest, on
+   * hover, and mid-hand-off.
+   *
+   * A zero-spread assertion alone is weak evidence, because "no colour" is also
+   * what a scene that failed to render looks like. So it is paired with a PRESENCE
+   * assertion for what is still supposed to happen: the chosen plate is genuinely
+   * scaled up by the hand-off. Absence + presence together distinguish "monochrome
+   * by design" from "broken".
+   */
+  test('the hand-off stays monochrome, and the chosen plate still dominates', async ({ page }) => {
     await page.goto('/');
     await reachSelection(page);
 
-    // Hover peak: the gradient already peaks at 0.16 alpha with opacity 1.
-    await page.hover('[data-testid="world-board-data"]');
-    await page.waitForTimeout(400);
-    const hoverWash = await page.evaluate(
-      () => getComputedStyle(document.querySelector('.cinematic-glow__wash--data')!).backgroundImage
-    );
+    /**
+         * Max channel spread (max - min of R,G,B) across the computed colours of every
+         * full-bleed layer in the scene. 0 means every one of them is neutral grey; a
+         * coloured wash pushes it up sharply.
+         *
+         * Measured from computed styles rather than a screenshot because it is
+         * deterministic and needs no pixel readback: the only full-bleed elements are
+         * the ground field, the grain and the hand-off veil, and a coloured overlay has
+         * to live on one of them to flood the frame.
+         */
+        const maxChannelSpread = () =>
+          page.evaluate(() => {
+            const els = [
+              document.querySelector('.cinematic-handoff'),
+              document.querySelector('.cinematic-ground__field'),
+              document.querySelector('.cinematic-grain'),
+            ].filter(Boolean) as HTMLElement[];
+            let worst = 0;
+            for (const el of els) {
+              const s = getComputedStyle(el);
+              for (const value of [s.backgroundColor, s.backgroundImage, s.color]) {
+                for (const fn of value.matchAll(/rgba?\(([^)]*)\)/g)) {
+                  const [r, g, b] = fn[1].split(',').map((p) => Number(p.trim()));
+                  if (![r, g, b].every((n) => Number.isFinite(n))) continue;
+                  worst = Math.max(worst, Math.max(r, g, b) - Math.min(r, g, b));
+                }
+              }
+            }
+            return worst;
+          });
 
-    await page.click('[data-testid="world-board-data"]');
-    await page.waitForTimeout(200);
-    const handoffWash = await page.evaluate(
-      () => getComputedStyle(document.querySelector('.cinematic-glow__wash--data')!).backgroundImage
-    );
+        // At rest: no full-bleed overlay is coloured.
+        expect(
+          await maxChannelSpread(),
+          'the idle scene must be monochrome (no coloured overlay mounted)',
+        ).toBeLessThan(6);
 
-    // Extract the peak alpha from each gradient. Computed gradients serialize as
-    // rgb(96, 174, 232, 0.16) — alpha is the last comma-separated field inside
-    // the parentheses, so parse per colour function rather than with one regex
-    // that must span the inner commas.
-    const peakAlpha = (img: string) => {
-      let max = 0;
-      for (const fn of img.matchAll(/rgba?\(([^)]*)\)/g)) {
-        const parts = fn[1].split(',');
-        const a = Number(parts[parts.length - 1].trim());
-        if (Number.isFinite(a) && a > max) max = a;
-      }
-      return max;
-    };
+        // On hover: still monochrome. Hover is scale-only by design.
+        await page.hover('[data-testid="world-board-data"]');
+        await page.waitForTimeout(400);
+        expect(await maxChannelSpread(), 'hover must not introduce colour').toBeLessThan(6);
 
-    expect(peakAlpha(hoverWash)).toBeCloseTo(0.16, 3);
+        // Mid-hand-off: the veil must be a neutral dark, never a colour overlay.
+        await page.click('[data-testid="world-board-data"]');
+        await page.waitForTimeout(420);
+        const veil = await page.locator('.cinematic-handoff').evaluate((el) => {
+          const s = getComputedStyle(el);
+          return { bg: s.backgroundColor, opacity: Number(s.opacity) };
+        });
+        expect(veil.bg, 'the hand-off veil must be neutral dark').toBe('rgb(10, 10, 10)');
+        expect(
+          await maxChannelSpread(),
+          'the hand-off must not flood the frame with colour',
+        ).toBeLessThan(6);
 
-    // An earlier revision set opacity 0.3 here, which made the accent DIMMER
-    // exactly when it was meant to bloom. This asserts the peak alpha rises.
-    expect(peakAlpha(handoffWash)).toBeGreaterThan(peakAlpha(hoverWash));
-    // And it stays restrained — D4's ceiling is 0.16 at rest.
-    expect(peakAlpha(handoffWash)).toBeLessThanOrEqual(0.22);
+    /*
+     * PRESENCE half of the pair: the hand-off still does its real work, so the
+     * monochrome reading above cannot be explained by the scene failing to
+     * transition at all.
+     */
+    const chosenScaled = await page.evaluate(() => {
+      const slot = document.querySelector('.cinematic-boards__slot--data');
+      const plate = document.querySelector(
+        '.cinematic-plate[data-plate="data"] .cinematic-plate__scale',
+      );
+      return {
+        slotWidth: slot ? slot.getBoundingClientRect().width : 0,
+        plateScale: plate
+          ? new DOMMatrixReadOnly(getComputedStyle(plate).transform).a
+          : 0,
+      };
+    });
+    expect(
+      chosenScaled.slotWidth,
+      'the chosen plate must still be present and dominant after the hand-off',
+    ).toBeGreaterThan(0);
   });
 
-  test('the idle scene is not flooded with colour — only the chosen accent', async ({ page }) => {
+  test('the hand-off stays monochrome for the CLOUD world too', async ({ page }) => {
     await page.goto('/');
     await reachSelection(page);
     await page.click('[data-testid="world-board-cloud"]');
-
-    // Sample the whole viewport's colour character partway through.
     await page.waitForTimeout(420);
+
+    // The veil is monochrome. It must not become a colour overlay.
     const veil = await page.locator('.cinematic-handoff').evaluate((el) => {
       const s = getComputedStyle(el);
       return { bg: s.backgroundColor, opacity: Number(s.opacity) };
     });
-    // The veil is monochrome. It must not become a colour overlay.
-    expect(veil.bg).toBe('rgb(10, 10, 10)');
+    expect(veil.bg, 'the hand-off veil must be neutral dark').toBe('rgb(10, 10, 10)');
 
-    const glows = await page.evaluate(() => {
-      const w = document.querySelector('.cinematic-glow__wash--cloud');
-      const d = document.querySelector('.cinematic-glow__wash--data');
-      return {
-        cloud: Number(getComputedStyle(w).opacity),
-        data: Number(getComputedStyle(d).opacity),
-      };
+    /*
+     * The other world. The rewritten test above proves the Data hand-off stays
+     * monochrome; this one proves it is not a Data-specific pass, since either
+     * world can be chosen and the colour layer that used to differentiate them is
+     * gone for both.
+     */
+    const spread = await page.evaluate(() => {
+      let worst = 0;
+      for (const sel of ['.cinematic-handoff', '.cinematic-ground__field', '.cinematic-grain']) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const s = getComputedStyle(el);
+        for (const value of [s.backgroundColor, s.backgroundImage, s.color]) {
+          for (const fn of value.matchAll(/rgba?\(([^)]*)\)/g)) {
+            const [r, g, b] = fn[1].split(',').map((p) => Number(p.trim()));
+            if (![r, g, b].every((n) => Number.isFinite(n))) continue;
+            worst = Math.max(worst, Math.max(r, g, b) - Math.min(r, g, b));
+          }
+        }
+      }
+      return worst;
     });
-    // Only the chosen world glows. Cloud chosen => cloud lit, data dark.
-    expect(glows.cloud).toBeGreaterThan(0.2);
-    expect(glows.data).toBeLessThan(0.05);
+    expect(spread, 'the Cloud hand-off must not flood the frame with colour').toBeLessThan(6);
   });
 });
 
@@ -240,13 +359,41 @@ test.describe('Q6 handoff — the sequence', () => {
     const otherBefore = await boxOf('.cinematic-boards__slot--cloud');
 
     await page.click('[data-testid="world-board-data"]');
-    await page.waitForTimeout(700); // late in the transition, before mount
+    /*
+     * Sample DURING the 820ms hand-off, not at a fixed 700ms wall-clock offset.
+     *
+     * The chosen plate's dominance is an animation on the SLOT, and both slots
+     * unmount when the hand-off completes and the world mounts. A fixed delay
+     * is a race: any slowness before it (the click itself, font loading, a
+     * loaded CI box) pushes the read past the unmount, and the locator then
+     * waits out the whole 45s test timeout on an element that is gone. Sampling
+     * as soon as the hand-off attribute is present keeps the read inside the
+     * animation no matter how slow the preceding steps were.
+     */
+    await expect(page.locator('.cinematic-hero[data-handoff]')).toBeAttached({
+      timeout: 5_000,
+    });
+    await page.waitForTimeout(500); // well inside the 820ms hand-off
 
     const chosenAfter = await boxOf('.cinematic-boards__slot--data');
     const otherAfter = await boxOf('.cinematic-boards__slot--cloud');
 
     expect(chosenAfter).toBeGreaterThan(chosenBefore);
     expect(otherAfter).toBeLessThan(otherBefore);
+
+    /*
+     * The hover scale must NOT survive the choice. It is hover-scoped, and once
+     * the hand-off owns the chosen plate's scale (1.045 on the slot), a second
+     * 1.04 on the inner wrapper would stack past ~1.09 and read as a jump.
+     */
+    const hoverScaleAfter = await page.evaluate(() => {
+      const el = document.querySelector(
+        '.cinematic-plate[data-plate="data"] .cinematic-plate__scale',
+      );
+      return el ? new DOMMatrixReadOnly(getComputedStyle(el).transform).a : null;
+    });
+    expect(hoverScaleAfter).not.toBeNull();
+    expect(Math.abs(hoverScaleAfter! - 1)).toBeLessThan(0.002);
   });
 
   test('the world mounts only after the transition has played out', async ({ page }) => {

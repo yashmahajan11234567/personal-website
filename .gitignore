@@ -1,34 +1,50 @@
-# Logs
-logs
-*.log
+# --- Node ---
+node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+logs
+*.log
 
-node_modules
-dist
-dist-ssr
+# --- Build output ---
+dist/
+dist-ssr/
 *.local
 
-# Editor directories and files
+# --- Environment / secrets ---
+# No .env file is committed. Create one locally and fill it in; never commit
+# real credentials.
+.env
+.env.*
+!.env.example
+
+# --- Editor / OS ---
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+*.bak
+*.orig
+*.rej
 
-# --- Phase 1 rebuild (2026-10-01) ---
-
-# Playwright
+# --- Testing ---
 test-results/
 playwright-report/
+blob-report/
+.playwright/
+coverage/
+
+# --- Screenshot / visual-QA output ---
 qa-screenshots/
+qa/shots/
 qa/phase1-final/
 
 # Legacy QA screenshot dumps at repo root (hundreds of qa-*.png from the
@@ -38,12 +54,70 @@ qa/phase1-final/
 /qa-selection-*.png
 /qa-reference-*.png
 
-# Scratch/debug frame extraction
+# --- Scratch / debug frame extraction ---
 debug_frames/
 debug_selection/
 qa-selection-analysis/
 
-# Reference-only source material (D1: secondary visual asset references).
-# Kept in-repo for QA comparison, out of the shipped bundle.
+# --- One-off diagnostic scripts ---
+# Throwaway measurement and verification harnesses written while tuning the
+# hero. The maintained probes and the qa/phase1/ Playwright suite are tracked
+# individually and stay tracked — an ignore rule never untracks a file.
+/_*.mjs
+/qa/_*.mjs
+/qa/analyze.mjs
+/qa/bearing.mjs
+/qa/boards.mjs
+/qa/capture-iter.mjs
+/qa/capture-after.mjs
+/qa/capture-environment.mjs
+/qa/capture-final.mjs
+/qa/capture-prod.mjs
+/qa/capture-restore.mjs
+/qa/ceiling*.mjs
+/qa/check-*.mjs
+/qa/cmp*.mjs
+/qa/comp.mjs
+/qa/corridor*.mjs
+/qa/crop.mjs
+/qa/figure-*.mjs
+/qa/inspect-*.mjs
+/qa/invariants.mjs
+/qa/iso.mjs
+/qa/layers.mjs
+/qa/measure-*.mjs
+/qa/optcentre.mjs
+/qa/profile.mjs
+/qa/px-probe.mjs
+/qa/refband.mjs
+/qa/refmeasure.mjs
+/qa/regions*.mjs
+/qa/scale.mjs
+/qa/search-*.mjs
+/qa/shot.mjs
+/qa/silhouette.mjs
+/qa/slack.mjs
+/qa/spare.mjs
+/qa/truth*.mjs
+/qa/probe-[0-9]*.mjs
+/qa/probe-[a-z]*.mjs
+/qa/verify-*.mjs
+/qa/solve-*.mjs
+/qa/sweep-*.mjs
+
+# --- Local agent/tool state (not part of the project) ---
+# Nested editor-agent worktrees. A near-complete copy of the project (~38 MB)
+# can live here; it must never be committed.
+/.kilo/
+/.gsd/
+/.hermes/plans/
+
+# --- Reference-only source material (kept locally, never shipped) ---
+# Vite copies public/ verbatim, so anything under public/ lands in every build
+# even when nothing references it.
+#
+# /reference/frames/   - source frame sequences
+# /reference/analysis/ - 25 analysis PNGs (~11.95 MB) moved out of public/ on
+#   2026-10-03 because they were shipped despite zero references.
 /reference/frames/
-/public/analysis/
+/reference/analysis/

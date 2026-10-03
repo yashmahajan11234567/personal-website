@@ -17,7 +17,7 @@
   inset: 0;
   /* Above the grain (6) and the board targets (5): nothing stays interactive
      once a world is chosen, and the veil must be the last thing painted. */
-  z-index: 7;
+  z-index: 9;
   pointer-events: none;
   background: #0a0a0a;
   opacity: 0;

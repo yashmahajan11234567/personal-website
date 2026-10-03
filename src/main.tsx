@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 // before the stylesheets that reference it, so the family is available on the
 // first paint rather than swapping in after a flash of fallback type.
 import "@fontsource/archivo-black/400.css";
+import "@fontsource/league-gothic/400.css";
 import "./styles/globals.css";
 import App from "./App.tsx";
 

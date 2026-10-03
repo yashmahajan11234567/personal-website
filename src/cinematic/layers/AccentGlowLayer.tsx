@@ -12,6 +12,8 @@
  * - Sits BEHIND the plates and the figure, so the figure never takes a cast.
  * - Decorative only: it carries no information, so it cannot create a contrast
  *   regression. Board text is measured against the monochrome ground.
+ * - ONLY ACTIVE DURING SELECTION PHASE: no atmosphere during PERSONAL/PORTFOLIO phase.
+ * - FULL VIEWPORT ATMOSPHERE: covers the entire cinematic environment, not local to text.
  */
 
 import { useEffect, useRef } from 'react';
@@ -24,10 +26,25 @@ export function AccentGlowLayer() {
   const active = useGameStore(
     (s) => s.hoveredBoard ?? s.focusedBoard ?? s.selectedPath
   );
+  const cinematicPhase = useGameStore((s) => s.cinematicPhase);
   const isHandoff = useGameStore((s) => s.isHandoff);
+
+  // Gate: atmosphere only during selection phase
+  const inSelectionPhase = cinematicPhase === 'selection';
 
   useEffect(() => {
     const apply = () => {
+      if (!inSelectionPhase) {
+        // Force monochrome outside selection phase
+        if (dataRef.current) {
+          dataRef.current.style.setProperty('--glow-alpha', '0');
+        }
+        if (cloudRef.current) {
+          cloudRef.current.style.setProperty('--glow-alpha', '0');
+        }
+        return;
+      }
+      
       if (dataRef.current) {
         dataRef.current.style.setProperty(
           '--glow-alpha',
@@ -42,7 +59,7 @@ export function AccentGlowLayer() {
       }
     };
     apply();
-  }, [active]);
+  }, [active, inSelectionPhase]);
 
   /**
    * During the handoff the selected world's accent blooms. The [data-intensifying]
@@ -56,6 +73,7 @@ export function AccentGlowLayer() {
       aria-hidden="true"
       data-active={active ?? 'none'}
       data-intensifying={isHandoff || undefined}
+      data-phase={inSelectionPhase ? 'selection' : 'other'}
     >
       <div ref={dataRef} className="cinematic-glow__wash cinematic-glow__wash--data" />
       <div ref={cloudRef} className="cinematic-glow__wash cinematic-glow__wash--cloud" />
