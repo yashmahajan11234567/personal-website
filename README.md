@@ -259,16 +259,18 @@ See [`docs/TESTING.md`](docs/TESTING.md).
 npm run build
 ```
 
-Verified output: **23 files, 566 KB total**.
+Verified output: **23 files, 566 kB total** (565,558 bytes).
 
 | Chunk | Raw | Gzip |
 |---|---|---|
-| `vendor-*.js` (React + GSAP + Zustand) | 325.3 KB | 109.1 KB |
-| `index-*.js` (app code) | 24.0 KB | 8.3 KB |
-| `index-*.css` | 15.9 KB | 4.1 KB |
-| `vendor-*.css` | 2.0 KB | 0.5 KB |
-| runtime | 0.6 KB | 0.4 KB |
-| **JS + CSS total** | **367.7 KB** | **122.4 KB** |
+| `vendor-*.js` (React + GSAP + Zustand) | 333.07 kB | 112.81 kB |
+| `index-*.js` (app code) | 24.53 kB | 8.55 kB |
+| `index-*.css` | 16.28 kB | 4.20 kB |
+| `vendor-*.css` | 2.01 kB | 0.53 kB |
+| runtime | 0.58 kB | 0.36 kB |
+| **JS + CSS total** | **376.47 kB** | **126.45 kB** |
+
+Figures are as reported by `vite build` (kB = 1000 bytes).
 
 Plus 102 KB of self-hosted woff2/woff font subsets and the 62 KB figure image. Fonts are
 emitted for latin, latin-ext, and vietnamese subsets.
@@ -331,7 +333,7 @@ current browsers, but that is inference from the spec, not a test result.
 
 Measured from the production build, not estimated:
 
-- Total output 566 KB; JS + CSS 122.4 KB gzipped.
+- Total output 566 kB; JS + CSS 126.45 kB gzipped.
 - One image request (62 KB webp). No video, no canvas frame sequence, no runtime fetches.
 - Fonts are self-hosted subsets - no render-blocking third-party request.
 - Only two animations run continuously (a figure specular sweep and the grain); both are

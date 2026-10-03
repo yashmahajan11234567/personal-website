@@ -12,7 +12,8 @@ npm run build
 `npm run build` runs `tsc -b && vite build`, so a type error fails the build before Vite is
 even invoked. Output lands in `dist/`.
 
-Verified output: **23 files, 566 KB**, of which JS + CSS is 122.4 KB gzipped.
+Verified output: **23 files, 566 kB**, of which JS + CSS is 126.45 kB gzipped
+(as reported by `vite build`).
 
 ## Environment variables
 
