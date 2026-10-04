@@ -1,0 +1,92 @@
+/*
+ * World shell styling.
+ *
+ * `.placeholder-world` itself is NOT restyled here: those rules already live in
+ * App.css and an existing QA test asserts the world background equals the
+ * handoff veil colour (#0a0a0a). Only the new Phase 1 pieces are added, and
+ * the layout is switched from the old centred single column to a stage the
+ * canvas can actually fill.
+ */
+
+.world-canvas {
+  /* Phaser RESIZEs the canvas to this box. It must have a real size before the
+     engine measures it, otherwise the canvas boots at 0x0. */
+  width: min(100%, 1100px);
+  height: clamp(280px, 58vh, 620px);
+  background: #070b14;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  /* The canvas is decorative-duplicate content: the mirror below carries the
+     same information semantically. */
+  line-height: 0;
+}
+
+.world-canvas canvas {
+  display: block;
+  max-width: 100%;
+}
+
+/* The engine reports status on the container; a failed load must be visible
+   rather than leaving an empty bordered box. */
+.world-canvas[data-status='unplayable']::after {
+  content: 'World unavailable';
+  display: block;
+  padding: 2rem 1rem;
+  color: var(--color-text-light);
+  font-family: var(--font-mono);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.world-a11y {
+  width: min(100%, 1100px);
+  text-align: left;
+  font-family: var(--font-mono);
+  color: var(--color-text-light);
+}
+
+.world-a11y h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.world-a11y p {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.world-a11y dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+}
+
+.world-a11y dt {
+  color: var(--color-muted);
+}
+
+.world-a11y dd {
+  margin: 0;
+}
+
+.world-a11y kbd {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+/* On a narrow viewport the stage and the mirror stack without the page ever
+   scrolling sideways — checked at 390, 375, and 412. */
+@media (max-width: 640px) {
+  .world-canvas {
+    height: clamp(240px, 46vh, 420px);
+  }
+}

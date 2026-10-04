@@ -1,5 +1,31 @@
 import { defineConfig, devices } from '@playwright/test';
 
+/*
+ * Dedicated QA port, separate from the developer port (5173).
+ *
+ * QA used to run against `http://localhost:5173` with `reuseExistingServer:
+ * true`. That combination is unsafe on a machine that also runs another copy
+ * of this app: if anything else already owns 5173, Playwright silently tests
+ * THAT server instead of this repository. It happened here — a stale Vite
+ * server for the older `D:\Yash\portfolio_website` copy held 5173 on the IPv6
+ * loopback only, so IPv4 probes reported the port free, and 31 Phase 1 tests
+ * failed against an app that had no Phaser in it at all.
+ *
+ * Two changes make that class of mistake impossible rather than unlikely:
+ *
+ *   1. QA binds its own port (5174), so a developer's `npm run dev` on 5173
+ *      never collides with a test run, and vice versa.
+ *   2. `reuseExistingServer: false`. Playwright must start this repository's
+ *      own dev server and fail loudly if it cannot, instead of adopting a
+ *      stranger's server. With the port dedicated, the only thing that can
+ *      occupy it is a previous run of this same suite.
+ *
+ * Nothing about production behaviour, the hero, gameplay, or the content
+ * model changes: this file only decides which dev server the tests talk to.
+ */
+const TEST_PORT = 5174;
+const TEST_ORIGIN = `http://localhost:${TEST_PORT}`;
+
 export default defineConfig({
   testDir: './qa/phase1',
   outputDir: './test-results',
@@ -29,7 +55,7 @@ export default defineConfig({
    */
   use: {
     // Vite binds to localhost only; 127.0.0.1 is not served.
-    baseURL: 'http://localhost:5173',
+    baseURL: TEST_ORIGIN,
     trace: 'off',
     screenshot: 'only-on-failure',
   },
@@ -40,9 +66,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: true,
+    command: `npm run dev -- --port ${TEST_PORT} --strictPort`,
+    url: TEST_ORIGIN,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 });

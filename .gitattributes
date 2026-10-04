@@ -1,0 +1,15 @@
+# Normalize line endings in the repository.
+# Without this, Windows checkouts rewrite every text file to CRLF and
+# `git status` reports the whole tree as modified.
+* text=auto eol=lf
+
+# Binary assets must never be EOL-converted.
+*.webp binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.woff  binary
+*.woff2 binary
+*.mp4  binary

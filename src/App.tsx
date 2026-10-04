@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { CinematicHero } from './components/Hero';
+import { WorldShell } from './components/WorldShell';
 import { destroyActiveTimeline } from './cinematic/timeline/activeTimeline';
 import { useGameStore } from './store/gameStore';
 import type { Path } from './store/gameStore';
@@ -139,13 +140,17 @@ function App() {
       <main id="main">
         {currentWorld === 'hero' && <CinematicHero onWorldSelected={handleWorldSelected} />}
         
+        {/*
+          The Data world is playable in Phase 1: `WorldShell` lazy-loads the
+          Phaser engine only when a world is actually mounted, so the hero pays
+          no Phaser cost. The Cloud world keeps its Phase-2 placeholder — the
+          shared engine refuses to build it until it is marked playable.
+
+          `key` forces a clean unmount/remount when switching between worlds, so
+          a second world never inherits the previous scene's canvas or listeners.
+        */}
         {currentWorld === 'data-world' && (
-          <div className="placeholder-world" data-theme="dark">
-            <h1>Data World — Phase 2</h1>
-            <button type="button" onClick={returnToHero}>
-              Back to Hero
-            </button>
-          </div>
+          <WorldShell key="data-world" world="data" onExit={returnToHero} />
         )}
 
         {currentWorld === 'cloud-world' && (
