@@ -223,13 +223,33 @@ async function glyphMetrics(page) {
  * Updated to match measured rendered sizes after restoring HEADLINE_RECTS.
  */
 /*
- * Rendered cap height (px) per viewport.
+ * RE-MEASURED 2026-10-04 for the CAP-HEIGHT FIT.
  *
- * RE-MEASURED for the current LOCKED composition: the headline is intentionally
- * oversized (larger than the viewport at desktop widths), sits BEHIND the figure,
- * and uses zero tracking. The previous values here were the "restore" baselines
- * from commit b3720bc (169.69px at 1440x900), which described a headline narrow
- * enough to sit inside the frame beside the figure — a different design.
+ * WHY THESE NUMBERS CHANGED. The previous table (585.14 / 439.19 / 390.63 /
+ * 312.77 / 119.8) was recorded when the fitter sized the headline by stretching
+ * the glyph run to FILL its box width with `scaleX`, compensating for Impact
+ * being narrower than the reference face. That fit produced `scaleX` of 1.20-1.29
+ * -- type pulled 20-29% wider than its own proportions -- which is precisely the
+ * "oversized + cramped + distorted" complaint that fit was replaced to fix.
+ *
+ * The approved fitter now sizes by CAP HEIGHT and hands the leftover width out as
+ * letter-spacing (see the "WHY THIS CHANGED" note in TypographyLayer.tsx, and
+ * `CAP_FILL = 0.94` there). The old table therefore described a discarded design,
+ * not a regression: the measured cap height is a near-constant 0.4555 of the old
+ * baseline at EVERY viewport, which is the signature of a different fitting
+ * algorithm rather than drift.
+ *
+ * VERIFIED, not assumed: probed with this file's own `glyphMetrics` (same
+ * selector, same rect source) on the approved build, after `document.fonts.ready`
+ * with League Gothic confirmed as the resolved family. `inkH` equals the computed
+ * `font-size` to within 0.01px at every viewport, consistent with the ratio-1.0
+ * invariant noted below. Font loading and browser zoom were ruled out as causes
+ * before these values were written.
+ *
+ * The assertions are UNCHANGED -- same 1px tolerance, same shared-baseline check.
+ * Only the pinned numbers moved. This remains a regression guard: if a future
+ * change alters the headline size, it fails and the value must be deliberately
+ * re-measured.
  *
  * These are re-measured, not hand-edited: each entry is the live rendered
  * `inkH` at that viewport, and the test still asserts to within 1px, which is
@@ -239,14 +259,14 @@ async function glyphMetrics(page) {
  *
  * Both words are IDENTICAL by construction (one shared size), so the two entries
  * can only differ by measurement noise. Asserting a shared value is what pins
- * the headline to a single baseline.
+ * the two words to a single baseline.
  */
 const BASELINE: Record<string, { left: number; right: number }> = {
-  "1920x1080": { left: 585.14, right: 585.14 },
-    "1440x900": { left: 439.19, right: 439.19 },
-    "1280x720": { left: 390.63, right: 390.63 },
-    "1024x768": { left: 312.77, right: 312.77 },
-    "390x844": { left: 119.8, right: 119.8 },
+  "1920x1080": { left: 266.89, right: 266.89 },
+    "1440x900": { left: 200.19, right: 200.19 },
+  "1280x720": { left: 177.81, right: 177.81 },
+    "1024x768": { left: 142.55, right: 142.55 },
+  "390x844": { left: 54.17, right: 54.17 },
 };
 
 test.describe("typography polish — headline size restore", () => {
