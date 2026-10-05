@@ -5,12 +5,30 @@
  * graph to discover what happened. Events cross in one direction only, through
  * this tiny typed bus.
  *
- * Phase 1 establishes the mechanism and proves it end to end with a single
- * probe object. Skills, projects and panels are later phases and attach
- * listeners here without any engine change.
+ * PHASE 2 SHAPE
+ *
+ * Phase 1 proved the path with one `probe` event. Phase 2 adds the interactions
+ * the world needs, and they differ in SHAPE because the visitor's intent differs:
+ *
+ *   proximity  — "you are near this station". Fires as the player moves, carries
+ *                no open/close state, and exists so React can mirror the same
+ *                highlight the canvas shows. A visitor who never reads the DOM
+ *                mirror can still play: that is the property which stops the
+ *                canvas from being the only route to the portfolio.
+ *   activate   — "open this". Discrete, carries the content-model id, and is the
+ *                only thing that makes a panel appear.
+ *   close      — "put the panel away". Discrete, same payload as activate.
+ *   chapter    — "the player travelled". Not a panel; it tells React which chapter
+ *                is current so the mirror's heading stays honest.
+ *
+ * `payload` carries only ids and primitives — never a live object from the scene
+ * graph. React resolves ids against the content model itself, which keeps the
+ * content model the single source of truth for every word a visitor reads.
+ *
+ * `probe` is retained: the Phase 1 suite asserts the gem at world x=480 emits it.
  */
 
-export type InteractionKind = 'probe';
+export type InteractionKind = 'probe' | 'proximity' | 'activate' | 'close' | 'chapter';
 
 export interface InteractionEvent {
   /** Stable identifier for the object that was touched. */
@@ -18,6 +36,14 @@ export interface InteractionEvent {
   /** Which world produced it. */
   world: string;
   kind: InteractionKind;
+  /**
+   * Extra data, by kind:
+   *   proximity — `{ stationKind, chapter, inRange }`
+   *   activate  — `{ stationKind, chapter }`
+   *   close     — `{ stationKind }`, omitted when nothing was open
+   *   chapter   — `{ chapter }`
+   */
+  payload?: Record<string, string | number | boolean>;
 }
 
 type Listener = (event: InteractionEvent) => void;

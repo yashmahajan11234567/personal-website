@@ -33,6 +33,16 @@ export interface MountOptions {
 export interface GameHandle {
   /** Stop the loop, destroy the renderer, remove the canvas and listeners. */
   unmount: () => void;
+  /**
+   * Tell the scene a React panel is open or closed.
+   *
+   * The panel can be opened two ways — Enter over the canvas, or activating a
+   * station in the DOM mirror. Only the first is visible to the scene, so without
+   * this the canvas would keep accepting movement input while a DOM-opened panel
+   * covered the world. Returns false once the game is destroyed, so a late call
+   * from a closing panel cannot reach a dead scene.
+   */
+  setPanelOpen: (open: boolean) => void;
 }
 
 export const canMount = (world: WorldId): boolean => isPlayable(world);
@@ -74,6 +84,30 @@ export const mountWorld = ({ world, reducedMotion, parent }: MountOptions): Game
       height: parent.clientHeight || 540,
     },
     physics: physicsFor(),
+
+    /*
+     * NO AUDIO.
+     *
+     * The Data World has no sound, and nothing in `src/` creates or plays an
+     * AudioContext. Without this, Phaser builds an HTML5AudioSoundManager anyway
+     * and that manager creates a real AudioContext.
+     *
+     * The cost was an unhandled promise rejection in the browser console every
+     * time the game was destroyed:
+     *
+     *     [vite] (client) [Unhandled rejection] InvalidStateError:
+     *     Cannot resume a closed AudioContext.
+     *
+     * `resume()` returns a promise; calling it on a context that has already been
+     * closed rejects, and Phaser's WebAudio unlock path does not guard it. It is
+     * noise in the one console the project treats as its error channel, and it
+     * fires on the exit path — exactly where a real error would matter most.
+     *
+     * `noAudio` is a supported Phaser option; it skips the manager entirely
+     * rather than muting it, so no context is created and there is nothing to
+     * close.
+     */
+    audio: { noAudio: true },
     // Audio is unused in Phase 1; no autoplay-policy surprises, no empty loader.
     disableContextMenu: true,
     banner: false,
@@ -83,6 +117,14 @@ export const mountWorld = ({ world, reducedMotion, parent }: MountOptions): Game
   let destroyed = false;
 
   return {
+    setPanelOpen: (open: boolean) => {
+      // A panel can outlive the scene by one tick: React closes it in an effect
+      // cleanup that may run after `game.destroy`. Guarding here means the call
+      // is a no-op rather than a throw on a destroyed scene.
+      if (destroyed) return;
+      (game.scene.getScene('world') as WorldScene | null)?.setPanelOpen?.(open);
+    },
+
     unmount: () => {
       // Idempotent: React StrictMode double-invokes effects in development,
       // so unmount can arrive twice for one mount.

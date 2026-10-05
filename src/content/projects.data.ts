@@ -141,5 +141,103 @@ export const DATA_PROJECTS: readonly Project[] = [
     ],
     github: 'https://github.com/yashmahajan11234567/PRIMETradeAI',
     evidence: ['PartA/ — nine T-SQL queries', 'PartB/ — model notebook', 'PartC/app.py — Streamlit dashboard'],
-  },
-];
+    },
+    {
+      id: 'data-analytics-dashboards',
+      title: 'Data Analytics Dashboards',
+      world: 'data',
+      authorship: 'solo',
+      contribution:
+        'Built five dashboards across three BI tools, each committed with its source workbook or report file.',
+      description:
+        'A collection of five interactive dashboards built in Excel, Tableau and Power BI. Each dashboard ships with its committed source file — a workbook, a .twbx, or a .pbix — so every figure on screen is reproducible from the repository rather than mocked up.',
+      technologies: ['Excel', 'Tableau', 'Power BI'],
+      workflow: {
+        metaphor: 'analytics-terminal',
+        stages: [
+          { id: 'collect', label: 'Collect', detail: 'Public datasets: bike sales, COVID-19, HR records, Netflix titles' },
+          { id: 'model', label: 'Model', detail: 'Segment and aggregate in the tool the dashboard ships in' },
+          { id: 'build', label: 'Build', detail: 'Interactive report pages with filters and drill-down' },
+          { id: 'publish', label: 'Publish', detail: 'Committed as .xlsx, .twbx and .pbix alongside a preview image' },
+        ],
+      },
+      /*
+       * THE FIVE DASHBOARDS ARE ONE PROJECT, NOT FIVE
+       *
+       * All five live in a single repository under
+       * `Projects/Data-Analytics-Projects`, so they are one body of work with five
+       * views. Splitting them into top-level world stations would have claimed
+       * eight projects instead of four and overstated a single repo as five
+       * separate builds.
+       *
+       * EVERY PREVIEW IS THE REAL COMMITTED IMAGE
+       *
+       * `previewPath` files are committed under `public/assets/dashboards/` and were
+       * copied from the repository itself — not generated, not redrawn. The audit
+       * measured each one to confirm it is a real PNG and to record its true
+       * aspect ratio, because they differ sharply (962x593 up to 2024x1449) and the
+       * panel renders them with `object-fit: contain` so none is ever stretched.
+       *
+       * `technology` is copied from each dashboard's own README. HR Analytics is
+       * Tableau because that folder contains `HR.twbx` and its README states
+       * "Tool Used: Tableau" — the explicit "verify exact technology" step, not a
+       * guess from the screenshot. Netflix appears twice because it genuinely was
+       * built twice, once per tool, which is why both files sit in that folder.
+       */
+      dashboards: [
+        {
+          id: 'bike-sales',
+          title: 'Bike Sales Dashboard',
+          technology: 'Excel',
+          previewPath: '/assets/dashboards/bike-sales.png',
+          summary:
+            'Customer purchasing behaviour segmented by income, age and commute distance, in an interactive Excel dashboard.',
+        },
+        {
+          id: 'covid-19',
+          title: 'COVID-19 Dashboard',
+          technology: 'Tableau',
+          previewPath: '/assets/dashboards/covid-19.png',
+          summary:
+            'Global COVID-19 trends: cases, deaths by continent, and country population impact over time.',
+        },
+        {
+          id: 'hr-analytics',
+          title: 'HR Analytics Dashboard',
+          technology: 'Tableau',
+          previewPath: '/assets/dashboards/hr-analytics.png',
+          summary:
+            'Employee demographics, salary distribution across roles and ages, and hiring against termination trends.',
+        },
+        {
+          id: 'netflix-tableau',
+          title: 'Netflix Content Analysis',
+          technology: 'Tableau',
+          previewPath: '/assets/dashboards/netflix-tableau.png',
+          summary:
+            'Netflix catalogue analysed by genre, country and release year, with rating classification and interactive filtering.',
+        },
+        {
+          id: 'netflix-powerbi',
+          title: 'Netflix Content Analysis',
+          technology: 'Power BI',
+          previewPath: '/assets/dashboards/netflix-powerbi.png',
+          summary:
+            'The same Netflix analysis rebuilt in Power BI as a .pbix report, showing genre mix, country map and growth by year.',
+        },
+      ],
+      limitations: [
+        'These are BI workbooks and report files, not automated systems — nothing here has a test suite',
+        'Each dashboard is built on a single public dataset, so the findings are descriptive of that dataset and are not generalisable claims',
+        'Several workbooks are packaged (.twbx) rather than openable source, so the build steps are not fully inspectable from the repository alone',
+        'COVID-19 figures reflect the dataset as published at the time and are not a current epidemiological source',
+      ],
+      github: 'https://github.com/yashmahajan11234567/Projects/tree/main/Data-Analytics-Projects',
+      evidence: [
+        'Bike-Sales-Analysis/ — Bike.xlsx and bike.png',
+        'COVID-19-Analysis/ — Covid Dashboard.twbx and covid.png',
+        'HR-Analytics-Dashboard/ — HR.twbx and HR.png',
+        'Netflix-Content-Analysis/ — netflix-dashboard.twbx, netflix-dashboard.pbix, and both preview images',
+      ],
+    },
+  ];

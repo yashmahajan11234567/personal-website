@@ -1,25 +1,65 @@
 /**
- * DATA world skill set.
+ * DATA world skill set — exactly six primary visible skills.
  *
- * Every `evidence` line below is traceable to the approved evidence audit
+ * THE AXIS IS THE TOOL, NOT THE TECHNIQUE
+ *
+ * The Data World presents six stations: SQL, Python, Excel, Power BI, Tableau,
+ * Streamlit. These are the tools the work was actually done in, and each one has
+ * a committed repository with a working artifact behind it. An earlier pass
+ * modelled the axis as technique instead — SQL, ETL, Data Quality, Regex NLP,
+ * Screening, Visualisation — which produced seven stations with no dashboard,
+ * no BI tool and no spreadsheet in the world at all, despite all three being
+ * among the most substantial verified work.
+ *
+ * WHAT HAPPENED TO THE FOUR RETIRED TECHNIQUES
+ *
+ * ETL, Data Quality Engineering, Regex NLP and Scoring/Screening were real,
+ * audit-verified work and none of it has been thrown away. It is demoted to
+ * EVIDENCE inside the skills that actually exercise it:
+ *
+ *   ETL + Data Quality  -> SQL      (medallion load, DQ-04, DQ-13)
+ *   Regex + Screening   -> Python   (compiled parsers, winsorize-and-scale)
+ *
+ * They are no longer rooms to walk into, but every claim they carried survives
+ * on the station whose repository contains the code. Deleting them outright
+ * would have discarded verified evidence; promoting them back to stations would
+ * have contradicted the approved six-skill list.
+ *
+ * EVIDENCE DISCIPLINE, UNCHANGED
+ *
+ * Every `evidence` line below traces to the approved evidence audit
  * (`.hermes/plans/2026-10-04_021500-portfolio-evidence-audit.md`). Nothing is
  * inferred, and no metric appears that the audit did not verify by execution or
- * direct measurement.
- *
- * PROGRESSION ORDER
- *
- * The audit derived this order and the reasoning is worth preserving:
- *
- *   SQL → ETL → Data quality → Python → Regex → Screening → API/Visualisation
- *
- * This is deliberately NOT the generic "Python first" ladder. The strongest
- * verified assets are the data-quality rule engine and the medallion warehouse,
- * so they come early. Python sits mid-path because it is applied TO validated
- * data — verified through the screener and pandas over quality-checked input,
- * not as standalone work. Putting Python first would misrepresent the evidence.
+ * direct measurement. Repository references are absolute URLs validated by
+ * `content/index.ts` at load — the previous bare-name `repository` field put a
+ * comma-separated string straight into an `href` and broke every skill link.
  */
 
 import type { Skill } from './types';
+
+/** The fintech analytics app. Two of the six skills are demonstrated here. */
+const REPO_FINTECH = {
+  name: 'Bluestock_fintech',
+  url: 'https://github.com/yashmahajan11234567/Bluestock_fintech',
+} as const;
+
+/** The medallion SQL Server warehouse. */
+const REPO_WAREHOUSE = {
+  name: 'Sql-data-warehouse',
+  url: 'https://github.com/yashmahajan11234567/Sql-data-warehouse',
+} as const;
+
+/** The crypto-market analysis project: T-SQL queries, ML models, Streamlit app. */
+const REPO_PRIME = {
+  name: 'PRIMETradeAI',
+  url: 'https://github.com/yashmahajan11234567/PRIMETradeAI',
+} as const;
+
+/** The BI dashboard collection. Excel, Power BI and Tableau all live here. */
+const REPO_DASHBOARDS = {
+  name: 'Projects/Data-Analytics-Projects',
+  url: 'https://github.com/yashmahajan11234567/Projects/tree/main/Data-Analytics-Projects',
+} as const;
 
 export const DATA_SKILLS: readonly Skill[] = [
   {
@@ -27,7 +67,7 @@ export const DATA_SKILLS: readonly Skill[] = [
     name: 'SQL / T-SQL',
     world: 'data',
     category: 'storage',
-    summary: 'Schema design and query work across SQLite and SQL Server.',
+    summary: 'Schema design, medallion pipelines and star-schema modelling in T-SQL.',
     experience: {
       experienceType: 'PROJECT',
       evidence: [
@@ -35,53 +75,20 @@ export const DATA_SKILLS: readonly Skill[] = [
         'Medallion bronze/silver/gold layering implemented as T-SQL stored procedures',
         'Window functions including LEAD() for dedup logic; star-schema gold layer',
         'Eight .sql files read directly: load, transform, and data-quality test scripts',
+        'ETL: proc_load_bronze and proc_load_silver implement the layered load, with a per-table load audit rather than silent failure',
+        'Data quality: 16 accounting-aware rules, including DQ-04 asserting the balance-sheet identity and DQ-13 asserting EPS sign consistency',
+        'Nine analytical T-SQL queries over trade history in PRIMETradeAI',
       ],
-      repository: 'Bluestock_fintech, Sql-data-warehouse',
+      repositories: [REPO_WAREHOUSE, REPO_FINTECH, REPO_PRIME],
     },
     visual: { kind: 'database-terminal', treatment: 'solid' },
-  },
-  {
-    id: 'etl',
-    name: 'ETL / Medallion Architecture',
-    world: 'data',
-    category: 'pipeline',
-    summary: 'Three-stage load pipeline with reject-and-log handling.',
-    experience: {
-      experienceType: 'PROJECT',
-      evidence: [
-        'proc_load_bronze / proc_load_silver implement the layered load',
-        'Silver stage deduplicates using a LEAD() window technique',
-        'Gold layer materialises a star schema for reporting',
-        'Load audit records per-table outcomes rather than failing silently',
-      ],
-      repository: 'Sql-data-warehouse, Bluestock_fintech',
-    },
-    visual: { kind: 'pipeline-vessel', treatment: 'solid' },
-  },
-  {
-    id: 'data-quality',
-    name: 'Data Quality Engineering',
-    world: 'data',
-    category: 'quality',
-    summary: 'Accounting-aware validation rules, not just type checks.',
-    experience: {
-      experienceType: 'PROJECT',
-      evidence: [
-        '16 data-quality rules implemented in a dedicated validator',
-        'DQ-04 asserts the balance-sheet identity (assets = liabilities + equity)',
-        'DQ-13 asserts EPS sign consistency',
-        'Rules encode accounting meaning, not null-count checks',
-      ],
-      repository: 'Bluestock_fintech',
-    },
-    visual: { kind: 'inspection-arch', treatment: 'solid' },
   },
   {
     id: 'python',
     name: 'Python / pandas',
     world: 'data',
     category: 'analysis',
-    summary: 'Analysis applied to validated data, plus a test suite.',
+    summary: 'Analysis applied to validated data, plus a large test suite that pins the result.',
     experience: {
       experienceType: 'PROJECT',
       evidence: [
@@ -89,60 +96,84 @@ export const DATA_SKILLS: readonly Skill[] = [
         'pandas used across ratio, CAGR, and cash-flow modules',
         '699 of 714 tests pass; the 14 failures trace to pandas 3.0.5 dtype drift against a 2.3.3 pin',
         'scikit-learn is declared but was NOT executed in this environment',
+        'Regex NLP: four compiled patterns extract structured fields from unstructured text, cross-validated against an independent calculation',
+        'Screening: multi-factor winsorize-and-scale scoring, with KMeans clustering and an elbow-method implementation present in the code',
+        'Random Forest and KMeans models in PRIMETradeAI over the trade history',
       ],
-      repository: 'Bluestock_fintech',
+      repositories: [REPO_FINTECH, REPO_PRIME],
     },
     visual: { kind: 'code-station', treatment: 'solid' },
   },
   {
-    id: 'regex-nlp',
-    name: 'Regex NLP',
-    world: 'data',
-    category: 'analysis',
-    summary: 'Pattern extraction from text with cross-validation.',
-    experience: {
-      experienceType: 'PROJECT',
-      evidence: [
-        'Four compiled regex patterns extract structured fields from unstructured text',
-        'Extracted values are cross-validated against an independent calculation',
-        'Regex output feeds the scoring stage rather than being displayed raw',
-      ],
-      repository: 'Bluestock_fintech',
-    },
-    visual: { kind: 'text-parser', treatment: 'solid' },
-  },
-  {
-    id: 'screening',
-    name: 'Scoring / Screening',
-    world: 'data',
-    category: 'analysis',
-    summary: 'Winsorized multi-factor screening with clustering code.',
-    experience: {
-      experienceType: 'PROJECT',
-      evidence: [
-        'Multi-factor screen winsorizes and scales inputs before weighting',
-        'KMeans clustering and an elbow-method implementation are present in the code',
-        'Clustering was NOT executed during the audit — scikit-learn is absent from the environment',
-      ],
-      repository: 'Bluestock_fintech',
-    },
-    visual: { kind: 'selector-gate', treatment: 'solid' },
-  },
-  {
-    id: 'visualization',
-    name: 'Data Visualisation / API',
+    id: 'excel',
+    name: 'Excel',
     world: 'data',
     category: 'delivery',
-    summary: 'FastAPI endpoints and a Streamlit UI over the same live data.',
+    summary: 'Interactive dashboard modelling delivered straight from a committed workbook.',
     experience: {
       experienceType: 'PROJECT',
       evidence: [
-        'FastAPI endpoints return real rows from the SQLite database',
-        'Streamlit UI renders the same underlying data',
-        'Both verified live during the audit — API calls returned real data',
+        'Bike Sales Analysis shipped as an interactive Excel dashboard, committed as Bike.xlsx',
+        'Customer segmentation on income, age and commute distance',
+        'Income-versus-purchase visualisation built in the workbook',
+        'The dashboard states its own findings: higher income raises purchase probability, middle-aged customers contribute the most, and shorter commutes convert better',
       ],
-      repository: 'Bluestock_fintech',
+      repositories: [REPO_DASHBOARDS],
     },
-    visual: { kind: 'dashboard-screen', treatment: 'solid' },
+    visual: { kind: 'analytics-monitor', treatment: 'solid' },
+  },
+  {
+    id: 'power-bi',
+    name: 'Power BI',
+    world: 'data',
+    category: 'delivery',
+    summary: 'Netflix content analysis built as a .pbix report over the public dataset.',
+    experience: {
+      experienceType: 'PROJECT',
+      evidence: [
+        'Netflix Content Analysis committed as netflix-dashboard.pbix',
+        'Genre distribution, country map, rating classification and year-on-year trend views',
+        'Interactive filtering across the report pages',
+        'The report states its own findings: movies are about 70% of the catalogue, Drama and International Movies lead, and production rises sharply after 2015',
+      ],
+      repositories: [REPO_DASHBOARDS],
+    },
+    visual: { kind: 'analytics-monitor', treatment: 'solid' },
+  },
+  {
+    id: 'tableau',
+    name: 'Tableau',
+    world: 'data',
+    category: 'delivery',
+    summary: 'Three committed Tableau workbooks: COVID-19, HR analytics and Netflix.',
+    experience: {
+      experienceType: 'PROJECT',
+      evidence: [
+        'COVID-19 Analysis committed as Covid Dashboard.twbx: global cases, deaths by continent, country population impact and time series',
+        'HR Analytics Dashboard committed as HR.twbx: demographics, salary against age, department breakdown, and hiring and termination trends',
+        'Netflix Content Analysis committed as netflix-dashboard.twbx alongside its Power BI sibling',
+        'The workbooks state their own findings: Europe recorded the highest COVID-19 death count, most HR employees fall in the 25-34 band, and Netflix genres cluster on Drama and International Movies',
+      ],
+      repositories: [REPO_DASHBOARDS],
+    },
+    visual: { kind: 'analytics-monitor', treatment: 'solid' },
+  },
+  {
+    id: 'streamlit',
+    name: 'Streamlit',
+    world: 'data',
+    category: 'delivery',
+    summary: 'Live web UIs over the same data the pipelines produce, verified running.',
+    experience: {
+      experienceType: 'PROJECT',
+      evidence: [
+        'Streamlit dashboard over the Nifty-100 SQLite database, served from the same rows the API returns',
+        'FastAPI endpoints verified live during the audit — calls returned real data, and the Streamlit UI renders that same data',
+        'PRIMETradeAI ships a Streamlit app presenting six charts over the modelled trade data',
+        'This is the delivery layer for the whole pipeline: one validated database, several ways to read it',
+      ],
+      repositories: [REPO_FINTECH, REPO_PRIME],
+    },
+    visual: { kind: 'repository-terminal', treatment: 'solid' },
   },
 ];

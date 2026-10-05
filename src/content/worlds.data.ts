@@ -27,16 +27,13 @@ export const WORLD_CONFIGS: readonly WorldConfig[] = [
     id: 'data',
     name: 'Data Analyst / Data Engineer',
     heading: 'Data Analyst and Data Engineer',
-    skillOrder: [
-      'sql',
-      'etl',
-      'data-quality',
-      'python',
-      'regex-nlp',
-      'screening',
-      'visualization',
-    ],
-    projectOrder: ['nifty100-financial-analysis', 'sql-data-warehouse', 'primetradeai'],
+    skillOrder: ['sql', 'python', 'excel', 'power-bi', 'tableau', 'streamlit'],
+        projectOrder: [
+          'nifty100-financial-analysis',
+          'sql-data-warehouse',
+          'primetradeai',
+          'data-analytics-dashboards',
+        ],
     palette: {
       background: '#0b1220',
       accent: '#22d3ee',

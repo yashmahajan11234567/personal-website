@@ -16,9 +16,23 @@
   background: #070b14;
   border: 1px solid var(--color-border);
   border-radius: 8px;
+  /*
+   * `position: relative` so the information panel can position itself against
+   * this box. Phase 1 had no absolutely-positioned child here, so this is purely
+   * additive.
+   */
+  position: relative;
+  /*
+   * Phase 1 set `overflow: hidden` here. It is RETAINED on purpose: the canvas
+   * must be clipped to its rounded frame so the game never bleeds past the
+   * border. The panel is therefore NOT a child that overflows — it is centred
+   * inside this box, and `overflow: hidden` clips it to the stage, which is what
+   * "the panel opens over the world" should look like.
+   *
+   * `line-height: 0` was for the canvas only (an inline canvas adds baseline
+   * space). It must NOT apply to the panel's text, so the panel resets it below.
+   */
   overflow: hidden;
-  /* The canvas is decorative-duplicate content: the mirror below carries the
-     same information semantically. */
   line-height: 0;
 }
 
@@ -89,4 +103,543 @@
   .world-canvas {
     height: clamp(240px, 46vh, 420px);
   }
+}
+
+/* ------------------------------------------------------------------------ *
+ * Phase 2 — the station index
+ *
+ * A real, focusable list of every skill and project, each opening the same panel
+ * the canvas opens. This exists so the portfolio is fully reachable with Tab and
+ * Enter, with no canvas, no game state and no movement keys.
+ *
+ * It is a separate region from `.world-a11y` on purpose: the Phase 1 suite
+ * asserts an exact `<kbd>` count inside `.world-a11y`, and keeping this content
+ * out of it means that assertion cannot be disturbed by additions here.
+ * ------------------------------------------------------------------------ */
+
+.world-index {
+  width: min(100%, 1100px);
+  margin-top: 1.5rem;
+  text-align: left;
+  font-family: var(--font-mono);
+  color: var(--color-text-light);
+}
+
+.world-index h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.world-index__group {
+  margin-bottom: 1.25rem;
+}
+
+.world-index__group h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  /* Cyan, matching the Data World's interaction accent. */
+  color: #38b6d9;
+}
+
+.world-index ul {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.world-index li {
+  display: grid;
+  /* The button and its summary sit side by side on desktop, stacked on mobile. */
+  grid-template-columns: minmax(180px, 260px) 1fr;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  padding: 0.5rem 0.75rem;
+  background: rgb(255 255 255 / 2%);
+  border: 1px solid var(--color-border);
+  border-left: 2px solid #1d4a5c;
+  border-radius: 4px;
+}
+
+.world-index li:has(button[aria-current='true']) {
+  /* The station the canvas currently has in range. Mirrored in the DOM so a
+     visitor who cannot see the canvas still knows what Enter would open. */
+  border-left-color: #8ceaff;
+  background: rgb(56 182 217 / 8%);
+}
+
+.world-index button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.world-index button:hover {
+  color: #8ceaff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A visible focus ring is required: these buttons are the primary route to the
+   content for a keyboard-only visitor. */
+.world-index button:focus-visible {
+  outline: 2px solid #8ceaff;
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.world-index__summary {
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.world-index__controls {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin: 1rem 0 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.8rem;
+}
+
+.world-index__controls dt {
+  color: var(--color-muted);
+}
+
+.world-index__controls dd {
+  margin: 0;
+}
+
+.world-index__controls kbd {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  font-size: 0.78rem;
+}
+
+.world-index__chapter,
+.world-index__nearby {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.world-index__nearby {
+  color: #8ceaff;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* On a narrow viewport the button and its summary stack, and the page must
+   still never scroll sideways. */
+@media (max-width: 640px) {
+  .world-index li {
+    grid-template-columns: 1fr;
+  }
+
+  .world-index__controls {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .world-index__controls dd {
+    margin-bottom: 0.5rem;
+  }
+}
+/* ------------------------------------------------------------------------ *
+ * STAGE E — the world OWNS the viewport while it is open
+ *
+ * MEASURED, NOT ASSUMED. At 1440x900 the document was 1852px tall against a 900px
+ * viewport: 952px of scrollable page below the fold, with the canvas using only
+ * 521px of the 900. At 390x844 it was 2377px against 844. Three separate things
+ * caused that, and all three are fixed here rather than by hiding overflow on a
+ * parent that would also clip the panel:
+ *
+ *   1. `.world-a11y` was `position: static` and in normal flow, so the
+ *      accessibility mirror occupied 239px of real page. It must stay in the DOM
+ *      and in the accessibility tree, so it is hidden visually rather than removed.
+ *   2. `.world-index` was a visible block below the canvas, duplicating every skill
+ *      and project as plain text — 826px of duplicate content under a game that
+ *      already shows them. It is now a drawer, closed by default and opened on
+ *      demand, so the content stays reachable without the canvas.
+ *   3. The page could scroll while the game was active, moving the canvas out from
+ *      under the pointer mid-play.
+ * ------------------------------------------------------------------------ */
+
+/*
+ * The accessibility mirror: in the DOM, in the accessibility tree, out of the
+ * layout. `clip-path` rather than `display: none` so assistive technology still
+ * reads it, and `position: absolute` so it contributes zero height.
+ */
+.world-a11y {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * The station index becomes a drawer over the stage rather than a block of page
+ * below it. `display: none` when closed because it is a visible duplicate of game
+ * content; the OPEN state below restores it as a focusable, scrollable overlay.
+ */
+.world-index {
+  display: none;
+}
+
+/* --- The open drawer ----------------------------------------------------- */
+
+/*
+ * STACKING ORDER, measured from a real failure.
+ *
+ * The drawer was z-index 30 and the information panel 20, so an open drawer sat
+ * ON TOP of the panel and intercepted pointer events on its close button --
+ * `.info-panel__close` could be focused and seen but never clicked. The panel is a
+ * dialog opened on top of the world, so it must outrank both the drawer (20 > 30
+ * is handled below by lifting the panel) and the toggle.
+ *
+ * The panel's own z-index is raised in InfoPanel.css; here the drawer and the
+ * toggle are pushed BELOW it so the ordering holds regardless of load order.
+ */
+.world-index[data-open='true'] {
+  display: block;
+  position: absolute;
+  /*
+   * Below the information panel (z-index 20) so the panel is always reachable,
+   * and BELOW the toggle (16) so the toggle stays clickable to close the drawer.
+   * An earlier version gave the drawer and the toggle the same z-index, which made
+   * the toggle unclickable while the drawer was open: the drawer's later-in-
+   * document box painted over it and swallowed every click.
+   */
+  z-index: 15;
+  inset: 0;
+  width: auto;
+  margin: 0;
+  padding: 18px 16px 18px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: rgb(4 6 10 / 96%);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) #070b14;
+}
+
+.world-index[data-open='true'] h2 {
+  margin: 0 0 0.9rem;
+  font-size: 1rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-accent, #8ceaff);
+}
+
+.world-index[data-open='true'] .world-index__group {
+  margin-bottom: 1.1rem;
+}
+
+/* --- The stage fills the viewport ---------------------------------------- */
+
+.world-canvas {
+  /*
+   * Full viewport height minus the world's own header, so the game occupies the
+   * screen instead of leaving a band of page beneath it. `dvh` rather than `vh`
+   * so a mobile browser's collapsing URL bar cannot crop the canvas.
+   */
+  height: min(calc(100dvh - 132px), 900px);
+  max-height: calc(100dvh - 96px);
+}
+
+@media (max-width: 640px) {
+  .world-canvas {
+    height: min(calc(100dvh - 108px), 640px);
+    max-height: calc(100dvh - 84px);
+  }
+}
+
+/*
+ * Page scroll is locked while the world is open, and released when the visitor
+ * leaves it or completes the game. Applied to BOTH html and body because the
+ * scroll container in standards mode is the html element; locking only body lets
+ * the document scroll in every current browser.
+ */
+html:has(.world-canvas),
+body:has(.world-canvas) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+/* --- The entry overlay ---------------------------------------------------- */
+
+/*
+ * A compact DATA WORLD plate rather than a "click to start" splash: it states
+ * where the visitor is and what the controls are, and Enter dismisses it. Sized to
+ * its content so it does not become a full-screen curtain.
+ */
+.world-entry {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(4 6 10 / 78%);
+  cursor: pointer;
+}
+
+.world-entry__card {
+  width: min(420px, 100%);
+  padding: 20px 22px;
+  background: #07090f;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 70%);
+  text-align: left;
+}
+
+.world-entry__kicker {
+  margin: 0 0 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #38b6d9;
+}
+
+.world-entry__title {
+  margin: 0 0 10px;
+  font-size: clamp(18px, 3vw, 24px);
+  line-height: 1.15;
+  color: #e8f4ff;
+}
+
+.world-entry__body {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #c3d3e4;
+}
+
+.world-entry__hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #8fa4bd;
+}
+
+.world-entry__hint kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  color: #c3d3e4;
+}
+
+.world-entry__dismiss {
+  padding: 8px 14px;
+  border: 1px solid #1d4a5c;
+  background: #0c1a20;
+  color: #8ceaff;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.world-entry__dismiss:hover {
+  background: #10242c;
+}
+
+.world-entry__dismiss:focus-visible {
+  outline: 2px solid #8ceaff;
+  outline-offset: 2px;
+}
+
+/*
+ * Reduced motion: the overlay still appears and still dismisses on Enter; only
+ * the fade is removed.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .world-entry {
+    animation: world-entry-in 200ms ease-out;
+  }
+
+  @keyframes world-entry-in {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+}
+/* ------------------------------------------------------------------------ *
+ * The contents toggle.
+ *
+ * Positioned over the stage's top-right rather than in page flow, because the
+ * whole point of STAGE E is that nothing sits in the page flow beneath the game.
+ * ------------------------------------------------------------------------ */
+
+/*
+ * THE EXIT CONTROL — top-left corner, opposite the contents toggle.
+ *
+ * Requirement 4 asks for an always-discoverable exit that does not require
+ * finishing the game and is not buried inside a gameplay interaction. As an
+ * unstyled flow button it rendered below the canvas, at the bottom of the flex
+ * column, which measured `top: 700px+` on a 900px viewport — technically present
+ * but not discoverable.
+ *
+ * The z-index band matters and is deliberate:
+ *   41  this control, above the entry plate (40), so EXIT is reachable even
+ *       while the "press to enter" plate is up. A visitor who wants out should
+ *       never have to dismiss a plate first.
+ *   16  the contents toggle sits below it, so the two corners cannot overlap.
+ */
+/*
+ * THE EXIT CONTROL — SPECIFICITY IS LOAD-BEARING HERE.
+ *
+ * `App.css` has `.placeholder-world button` (0,1,1) and
+ * `.placeholder-world[data-theme="dark"] button` (0,2,1). Both outrank a bare
+ * `.world-exit` (0,1,0), so every declaration below was being discarded for the
+ * one control that most needs to be readable.
+ *
+ * Measured before this fix, at 1440x900, with the world open:
+ *   color        rgb(26, 26, 26)   <- --color-text-light under [data-theme=dark]
+ *   background   rgba(0, 0, 0, 0)  <- transparent, over a near-black world
+ *   padding      12px 24px         <- App.css, not the 7px 12px written here
+ *   border       rgb(51, 51, 51)
+ *
+ * Near-black text on a transparent background over a near-black world: a real
+ * button, hit-testable (elementFromPoint returns it), and effectively invisible.
+ * That is the "hard to see and not exactly visible" report, and it was a
+ * specificity collision rather than clipping or positioning — the button's box
+ * measured left:10 top:10 with no clipping on either edge.
+ *
+ * WHY `[data-theme="dark"]` INVERTS THE TEXT TOKENS
+ *
+ * `--color-text-light` is `#1a1a1a` in the dark theme (see `variables.css`), so
+ * "use the light text token" resolves to near-black. Naming the colour directly
+ * is deliberate: the control lives on a dark stage, so its colours are stated,
+ * not inherited from a token that means the opposite of what its name suggests.
+ *
+ * The selector below is (0,3,1) so it outranks App.css's (0,2,1) on specificity
+ * rather than depending on stylesheet load order.
+ */
+.placeholder-world[data-theme='dark'] button.world-exit {
+  position: absolute;
+  z-index: 41;
+  top: 10px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  /*
+   * 44px of height, not the 9px that gives 39px.
+   *
+   * `routing-exit-tube.spec.ts` requires the exit control to be at least 44x44,
+   * and that floor exists for a real reason: it is the WCAG 2.5.8 / 2.5.5 target
+   * size, and this is the ONLY control that leaves the game. A first attempt used
+   * `9px 14px`, which measured 186x39 and failed that assertion by 5px.
+   *
+   * Raising the padding rather than lowering the assertion, because the
+   * assertion is the accessibility contract and the padding was the thing that
+   * was wrong.
+   */
+  min-height: 44px;
+  padding: 11px 15px;
+  /*
+   * Declared rather than inherited, but NOT because of `line-height: 0` — that
+   * correction belongs to the panel's BACK button, which is a real child of
+   * `.world-canvas`. This button is a SIBLING of that container, inside
+   * `.placeholder-world`, so the canvas's `line-height: 0` never reached it.
+   *
+   * `line-height: 1.2` is here so the control's height is derived from its own
+   * font metrics and stays stable rather than depending on an inherited value
+   * from whichever ancestor happens to change.
+   */
+  line-height: 1.2;
+  border: 1px solid #2c556f;
+  border-radius: 4px;
+  background: #0c1620;
+  color: #dbeafe;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+/* The arrow is decorative; the accessible name comes from the button's text. */
+.placeholder-world[data-theme='dark'] button.world-exit::before {
+  content: '\2190';
+  font-size: 14px;
+  line-height: 1;
+  color: #8ceaff;
+}
+
+.placeholder-world[data-theme='dark'] button.world-exit:hover {
+  background: #14293a;
+  border-color: #8ceaff;
+  color: #ffffff;
+}
+
+.world-exit:focus-visible {
+  outline: 2px solid #8ceaff;
+  outline-offset: 2px;
+}
+
+.world-index-toggle {
+  position: absolute;
+  /* Above the drawer (15) so it can close it, and below the panel (20). */
+  z-index: 16;
+  top: 10px;
+  right: 10px;
+  padding: 7px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: rgb(7 11 20 / 92%);
+  color: var(--color-text-light);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.world-index-toggle:hover {
+  background: #0f1724;
+  color: #e8f4ff;
+}
+
+.world-index-toggle:focus-visible {
+  outline: 2px solid #8ceaff;
+  outline-offset: 2px;
 }

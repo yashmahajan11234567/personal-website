@@ -23,11 +23,26 @@ import { defineConfig, devices } from '@playwright/test';
  * Nothing about production behaviour, the hero, gameplay, or the content
  * model changes: this file only decides which dev server the tests talk to.
  */
-const TEST_PORT = 5174;
+const TEST_PORT = 5173;
 const TEST_ORIGIN = `http://localhost:${TEST_PORT}`;
 
 export default defineConfig({
-  testDir: './qa/phase1',
+  /*
+   * `./qa`, not `./qa/phase1`.
+   *
+   * Scoping `testDir` to a single phase folder meant a later phase's specs were
+   * silently invisible: `npx playwright test qa/phase2/` reported "No tests
+   * found" and exited 0-adjacent without ever running them, which reads exactly
+   * like a passing suite. Pointing at `qa` means every spec under it is
+   * collected, and a spec in a new folder is picked up automatically rather than
+   * needing a config edit first.
+   *
+   * `_legacy-*` directories are excluded explicitly: they are archived specs from
+   * earlier phases, kept for reference, and several assert against markup that
+   * has since changed on purpose.
+   */
+  testDir: './qa',
+  testIgnore: ['**/_legacy-*/**'],
   outputDir: './test-results',
   timeout: 45_000,
   expect: { timeout: 10_000 },
@@ -68,7 +83,7 @@ export default defineConfig({
   webServer: {
     command: `npm run dev -- --port ${TEST_PORT} --strictPort`,
     url: TEST_ORIGIN,
-    reuseExistingServer: false,
+    reuseExistingServer: true,
     timeout: 60_000,
   },
 });

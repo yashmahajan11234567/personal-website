@@ -85,14 +85,25 @@ export interface SkillVisual {
    * name and carries no import.
    */
   readonly kind:
-    | 'database-terminal'
-    | 'pipeline-vessel'
-    | 'inspection-arch'
-    | 'code-station'
-    | 'text-parser'
-    | 'selector-gate'
-    | 'dashboard-screen'
-    | 'repository-terminal'
+      | 'database-terminal'
+      | 'pipeline-vessel'
+      | 'inspection-arch'
+      | 'code-station'
+      | 'text-parser'
+      | 'selector-gate'
+      | 'dashboard-screen'
+      /*
+       * Added for the six-tool skill axis. `analytics-monitor` is the generic BI
+       * reporting surface (Excel, Power BI, Tableau all present real dashboards on
+       * it); `bi-report-screen` is the richer variant used where the station needs
+       * a second, brighter element behind the report — the Data Analytics gallery
+       * screen. Three separate archetypes rather than reusing `dashboard-screen`
+       * three times, because the audit found the world reads better when two
+       * objects are distinguishable at a glance instead of being one shape relabelled.
+       */
+      | 'analytics-monitor'
+      | 'bi-report-screen'
+      | 'repository-terminal'
     | 'build-stage'
     | 'pulse-monitor'
     | 'orchestration-deck'
@@ -112,6 +123,29 @@ export interface SkillVisual {
   readonly treatment: 'solid' | 'scaffold';
 }
 
+/**
+ * A repository backing a claim, as a validated absolute URL.
+ *
+ * WHY THIS REPLACED A BARE `repository: string`
+ *
+ * The previous field held a repository NAME — `"Bluestock_fintech,
+ * Sql-data-warehouse"` — and the panel rendered it straight into an `href`.
+ * Every skill link in the shipped build was therefore broken: `href` received a
+ * comma-separated fragment, not a URL. Measured in the live DOM:
+ * `href="Bluestock_fintech, Sql-data-warehouse"`.
+ *
+ * Making the name the type meant a broken link was a TYPE-VALID state, so
+ * nothing about the model would catch it. This shape makes the URL explicit:
+ * `name` is for display, `url` must be absolute, and `content/index.ts` asserts
+ * that at module load rather than trusting a comment.
+ */
+export interface RepositoryRef {
+  /** Display name, e.g. `Bluestock_fintech`. */
+  readonly name: string;
+  /** Absolute https URL. Never a bare repo name. */
+  readonly url: string;
+}
+
 /** Evidence backing a skill claim, plus training context where relevant. */
 export interface SkillExperience {
   readonly experienceType: ExperienceType;
@@ -123,8 +157,14 @@ export interface SkillExperience {
    * Absent for pure PROJECT skills, which need no such disclaimer.
    */
   readonly trainingContext?: string;
-  /** Where the evidence lives, for a panel's "show me" affordance. */
-  readonly repository?: string;
+  /**
+   * Repositories backing this skill, as validated absolute URLs.
+   *
+   * An array rather than a single string because one skill legitimately spans
+   * several repositories — SQL is demonstrated in both the fintech app and the
+   * medallion warehouse.
+   */
+  readonly repositories?: readonly RepositoryRef[];
 }
 
 export interface Skill {
@@ -165,7 +205,39 @@ export interface ProjectWorkflow {
   readonly stages: readonly WorkflowStage[];
 }
 
-/** A person who shares authorship. Required for collaborative/extended work. */
+/**
+ * One dashboard inside a project's gallery.
+ *
+ * Added for Data Analytics Dashboards, which is a single world project
+ * containing five real dashboards rather than five separate projects. The
+ * alternative — promoting each dashboard to a top-level station — was rejected
+ * because it would misrepresent a single repository as five projects and would
+ * have pushed the top-level project count to eight.
+ *
+ * `previewPath` points at a file COMMITTED to this repository under
+ * `public/assets/dashboards/`. These are the actual dashboard images from
+ * `Projects/Data-Analytics-Projects`, not generated stand-ins; the audit
+ * verified every file is a real PNG with a distinct aspect ratio, and those
+ * ratios are preserved by rendering with `object-fit: contain`.
+ *
+ * `technology` is copied from the dashboard's own README in that repository,
+ * never inferred. HR Analytics is Tableau because the folder contains `HR.twbx`
+ * and its README states "Tool Used: Tableau" — not a guess from the preview.
+ */
+export interface DashboardPreview {
+  /** Content-model id, unique within the project. */
+  readonly id: string;
+  /** Display title. */
+  readonly title: string;
+  /** The tool that built it, verbatim from the dashboard's README. */
+  readonly technology: string;
+  /** Committed image path, relative to the site root. */
+  readonly previewPath: string;
+  /** What the dashboard shows, from its README. Never a metric it does not state. */
+  readonly summary: string;
+}
+
+/** A person's shared authorship. Required for collaborative/extended work. */
 export interface Collaborator {
   readonly name: string;
   /** What they did, stated so the credit is specific. */
@@ -208,6 +280,14 @@ export interface Project {
   readonly limitations: readonly string[];
   readonly github?: string;
   readonly demo?: string;
+  /**
+   * A gallery of real dashboards belonging to this ONE project.
+   *
+   * Optional and additive: the three single-repository projects simply omit it.
+   * Present only on Data Analytics Dashboards, whose five dashboards live in one
+   * repository and are therefore one project with five views, not five projects.
+   */
+  readonly dashboards?: readonly DashboardPreview[];
   /**
    * Where the evidence lives. Not a claim about the project — a pointer to the
    * files that back it, for a panel's "show me" affordance.

@@ -1,0 +1,251 @@
+{
+  "labels": [
+    {
+      "phase": "approach",
+      "atFrame": 0,
+      "log": null
+    },
+    {
+      "phase": "activate",
+      "atFrame": 181,
+      "log": [
+        "approach",
+        "activate"
+      ]
+    },
+    {
+      "phase": "entering",
+      "atFrame": 186,
+      "log": [
+        "approach",
+        "activate",
+        "entering"
+      ]
+    },
+    {
+      "phase": "occluded",
+      "atFrame": 204,
+      "log": [
+        "approach",
+        "activate",
+        "entering",
+        "occluded"
+      ]
+    },
+    {
+      "phase": "conduit",
+      "atFrame": 206,
+      "log": [
+        "approach",
+        "activate",
+        "entering",
+        "occluded",
+        "conduit"
+      ]
+    },
+    {
+      "phase": "blackout",
+      "atFrame": 222,
+      "log": [
+        "approach",
+        "activate",
+        "entering",
+        "occluded",
+        "conduit",
+        "blackout"
+      ]
+    },
+    {
+      "phase": "build",
+      "atFrame": 227,
+      "log": [
+        "approach",
+        "activate",
+        "entering",
+        "occluded",
+        "conduit",
+        "blackout",
+        "build"
+      ]
+    },
+    {
+      "phase": "position",
+      "atFrame": 229,
+      "log": [
+        "approach",
+        "activate",
+        "entering",
+        "occluded",
+        "conduit",
+        "blackout",
+        "build",
+        "position"
+      ]
+    },
+    {
+      "phase": "reveal",
+      "atFrame": 230,
+      "log": [
+        "approach",
+        "activate",
+        "entering",
+        "occluded",
+        "conduit",
+        "blackout",
+        "build",
+        "position",
+        "reveal"
+      ]
+    },
+    {
+      "phase": "emerging",
+      "atFrame": 234,
+      "log": [
+        "approach",
+        "activate",
+        "entering",
+        "occluded",
+        "conduit",
+        "blackout",
+        "build",
+        "position",
+        "reveal",
+        "emerging"
+      ]
+    },
+    {
+      "phase": "settle",
+      "atFrame": 247,
+      "log": [
+        "approach",
+        "activate",
+        "entering",
+        "occluded",
+        "conduit",
+        "blackout",
+        "build",
+        "position",
+        "reveal",
+        "emerging",
+        "settle"
+      ]
+    },
+    {
+      "phase": "idle",
+      "atFrame": 250,
+      "log": [
+        "approach",
+        "activate",
+        "entering",
+        "occluded",
+        "conduit",
+        "blackout",
+        "build",
+        "position",
+        "reveal",
+        "emerging",
+        "settle",
+        "idle"
+      ]
+    }
+  ],
+  "frameCount": 252,
+  "written": [
+    {
+      "phase": "approach",
+      "frame": 90,
+      "span": [
+        0,
+        181
+      ]
+    },
+    {
+      "phase": "activate",
+      "frame": 183,
+      "span": [
+        181,
+        186
+      ]
+    },
+    {
+      "phase": "entering",
+      "frame": 195,
+      "span": [
+        186,
+        204
+      ]
+    },
+    {
+      "phase": "occluded",
+      "frame": 205,
+      "span": [
+        204,
+        206
+      ]
+    },
+    {
+      "phase": "conduit",
+      "frame": 214,
+      "span": [
+        206,
+        222
+      ]
+    },
+    {
+      "phase": "blackout",
+      "frame": 224,
+      "span": [
+        222,
+        227
+      ]
+    },
+    {
+      "phase": "build",
+      "frame": 228,
+      "span": [
+        227,
+        229
+      ]
+    },
+    {
+      "phase": "position",
+      "frame": 229,
+      "span": [
+        229,
+        230
+      ]
+    },
+    {
+      "phase": "reveal",
+      "frame": 232,
+      "span": [
+        230,
+        234
+      ]
+    },
+    {
+      "phase": "emerging",
+      "frame": 240,
+      "span": [
+        234,
+        247
+      ]
+    },
+    {
+      "phase": "settle",
+      "frame": 248,
+      "span": [
+        247,
+        250
+      ]
+    },
+    {
+      "phase": "idle",
+      "frame": 251,
+      "span": [
+        250,
+        252
+      ]
+    }
+  ]
+}

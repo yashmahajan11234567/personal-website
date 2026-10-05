@@ -199,10 +199,31 @@ test.describe('Phase 1 — player and physics', () => {
 
     expect(mid.y).toBeLessThan(before.y - 10);
 
-    // Let it land again.
-    await page.waitForTimeout(1200);
+    /*
+     * Wait for the landing rather than sleeping a fixed 1200ms.
+     *
+     * Measured across five consecutive runs, the player becomes grounded at
+     * 700, 800, 1000, 1000 and 1100ms — real frame-time variation, because
+     * gravity integrates per frame and this machine renders the world at
+     * 22-28fps under load. The old fixed 1200ms sleep left as little as 100ms of
+     * margin, and during the 261-test full-suite run the machine was loaded
+     * enough that the landing landed past it and this test failed with
+     * `expect(landed.grounded).toBe(true)` receiving false. The physics was
+     * never wrong: the arc measured 560 -> 533 -> 560, back to exactly its
+     * resting height.
+     *
+     * Polling asserts the property being claimed — "it comes back down" — and
+     * is immune to frame rate, where a fixed sleep asserts a frame-rate
+     * assumption instead.
+     */
+    await expect
+      .poll(async () => (await probe(page))!.grounded, {
+        timeout: 5000,
+        message: 'player should become grounded again after the jump',
+      })
+      .toBe(true);
+
     const landed = (await probe(page))!;
-    expect(landed.grounded).toBe(true);
     // It landed back on the ground, not somewhere below it.
     expect(Math.abs(landed.y - before.y)).toBeLessThan(6);
   });

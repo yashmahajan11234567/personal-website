@@ -1,0 +1,508 @@
+/*
+ * The information panel.
+ *
+ * MONOCHROME + CYAN, MATCHING THE WORLD
+ *
+ * The canvas is near-black with grey structure and cyan only where something is
+ * live. The panel follows the same rule so it reads as part of the facility
+ * rather than a web dialog dropped on top of it: near-black surface, grey rules,
+ * and cyan reserved for the panel's own title accent and its focus ring.
+ *
+ * READABILITY OVER ATMOSPHERE
+ *
+ * This panel carries the portfolio's most checkable claims — authorship,
+ * contribution, limitations. Those win every argument with the art direction.
+ * Body text is at least 15px with a 1.55 line height on a dark surface, and the
+ * limitations block is set apart rather than styled down, because that block is
+ * the one a reader must not be able to skim past.
+ */
+
+.info-panel {
+  position: absolute;
+  z-index: 20;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - 32px));
+  max-height: min(78vh, 640px);
+  display: flex;
+  flex-direction: column;
+  background: #07090f;
+  border: 1px solid #2b3646;
+  /* The cyan corner brackets echo the world's station housings. */
+  box-shadow:
+    0 0 0 1px #0c111a,
+    0 24px 64px rgb(0 0 0 / 72%);
+  color: #e8f4ff;
+  font-family: inherit;
+
+  /*
+   * RESET `line-height` — a real bug, not a nicety.
+   *
+   * `.world-canvas` sets `line-height: 0` on purpose (an inline canvas adds
+   * baseline space, so the canvas-only box zeroes it). The panel is rendered
+   * INSIDE that box, and nothing was ever resetting it here — so every piece of
+   * panel text inherited `line-height: 0` and collapsed its own line box to zero
+   * height.
+   *
+   * Most text in the panel sets its own `line-height`, which is why the body copy
+   * looked fine and this went unnoticed. The controls did not: the new BACK
+   * button measured `height: 14px` with `padding: 6px 11px` correctly applied and
+   * a computed `line-height: 0px` — a 14px-tall button whose padding had nowhere
+   * to go. That is well under any usable pointer target, and it is why the button
+   * was built as a `flex` row that then collapsed anyway.
+   *
+   * `normal` is restored here so any control or label in the panel that does not
+   * declare its own line height still gets a real one.
+   */
+  line-height: normal;
+}
+
+/* Cyan accent bar across the top: the panel's one bright edge. */
+.info-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    #38b6d9 0%,
+    #8ceaff 38%,
+    #38b6d9 62%,
+    #1d4a5c 100%
+  );
+}
+
+.info-panel__body {
+  overflow-y: auto;
+  padding: 20px 22px 8px;
+  /* Keep the scrollbar inside the panel's border. */
+  scrollbar-width: thin;
+  scrollbar-color: #2b3646 #07090f;
+}
+
+.info-panel__body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.info-panel__body::-webkit-scrollbar-track {
+  background: #07090f;
+}
+
+.info-panel__body::-webkit-scrollbar-thumb {
+  background: #2b3646;
+  border: 2px solid #07090f;
+}
+
+.info-panel__kind {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #38b6d9;
+}
+
+/*
+ * THE PINNED HEADER ROW.
+ *
+ * This selector had NO RULE AT ALL before this pass, which is why the header
+ * measured `display: block; padding: 0px` in the browser and the `×` sat
+ * unstyled and flush-left against the panel edge. `InfoPanel.tsx`'s own doc
+ * comment describes a header whose Kind label and close button "sit in their own
+ * grid row above the scrolling body" — the `auto 1fr auto` grid rows live on
+ * `.info-panel` below, so the flex layout did exist; only this row's own
+ * presentation was missing.
+ *
+ * It is `flex`, not `grid`, so the BACK control can be pushed to the left edge
+ * and the `×` to the right edge of the same row regardless of the Kind label's
+ * width, and it is `flex: none` so it cannot be squashed by the body.
+ */
+.info-panel__header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1a2230;
+  background: #07090f;
+}
+
+.info-panel__header .info-panel__kind {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.info-panel__title {
+  margin: 0 0 12px;
+  font-size: clamp(19px, 2.4vw, 24px);
+  line-height: 1.2;
+  font-weight: 650;
+  color: #e8f4ff;
+  /* Long project titles must not overflow the panel at 375px. */
+  overflow-wrap: anywhere;
+}
+
+.info-panel__summary {
+  margin: 0 0 16px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #c3d3e4;
+}
+
+/* --- Fact list ---------------------------------------------------------- */
+
+.info-panel__facts {
+  display: grid;
+  grid-template-columns: minmax(96px, 34%) 1fr;
+  gap: 8px 14px;
+  margin: 0 0 18px;
+  padding: 14px 0 0;
+  border-top: 1px solid #1a2230;
+}
+
+.info-panel__facts dt {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8fa4bd;
+  padding-top: 2px;
+}
+
+.info-panel__facts dd {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: #dbe7f3;
+  overflow-wrap: anywhere;
+}
+
+.info-panel__collaborator {
+  display: block;
+}
+
+/* On a narrow screen the two columns stop fitting; stack instead of squashing. */
+@media (max-width: 420px) {
+  .info-panel__facts {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .info-panel__facts dd {
+    margin-bottom: 8px;
+  }
+}
+
+/* --- Sections ----------------------------------------------------------- */
+
+.info-panel__section {
+  margin: 0 0 16px;
+}
+
+.info-panel__section h4 {
+  margin: 0 0 7px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8fa4bd;
+}
+
+.info-panel__section ul,
+.info-panel__section ol {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #c3d3e4;
+}
+
+.info-panel__section li + li {
+  margin-top: 4px;
+}
+
+/* --- Technology tags ---------------------------------------------------- */
+
+.info-panel__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.info-panel__tags li {
+  margin: 0;
+  padding: 3px 8px;
+  font-size: 12px;
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', monospace;
+  color: #8ceaff;
+  background: #0c1a20;
+  border: 1px solid #1d4a5c;
+}
+
+/* --- Pipeline ----------------------------------------------------------- */
+
+.info-panel__pipeline {
+  padding-left: 20px;
+}
+
+.info-panel__pipeline strong {
+  color: #dbe7f3;
+  font-weight: 600;
+}
+
+/* --- Limitations -------------------------------------------------------- *
+ *
+ * Deliberately the most prominent block after the title. The audit's rule is
+ * that a known limitation must be stated plainly where a reader meets it, so it
+ * gets a cyan left rule and full-contrast text rather than muted styling.
+ */
+.info-panel__section--limits {
+  padding: 11px 13px;
+  background: #0a1016;
+  border-left: 2px solid #38b6d9;
+}
+
+.info-panel__section--limits h4 {
+  color: #8ceaff;
+}
+
+.info-panel__section--limits ul {
+  color: #dbe7f3;
+}
+
+/* --- Links -------------------------------------------------------------- */
+
+.info-panel__link,
+.info-panel__links {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.info-panel__links {
+  display: flex;
+  gap: 18px;
+  padding-top: 12px;
+  border-top: 1px solid #1a2230;
+}
+
+.info-panel a {
+  color: #8ceaff;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.info-panel a:hover {
+  color: #c9f4ff;
+}
+
+.info-panel a:focus-visible {
+  outline: 2px solid #8ceaff;
+  outline-offset: 2px;
+}
+
+/* --- Focus ring ----------------------------------------------------------- */
+
+.info-panel__back:focus-visible,
+.info-panel__gallery-item:focus-visible {
+  outline: 2px solid #8ceaff;
+  outline-offset: 2px;
+}
+
+/*
+ * THE BACK BUTTON — the only way out besides Escape.
+ *
+ * Scoped to (0,2,0) so App.css's `.placeholder-world button` cannot override
+ * its colors. The measured pre-fix values are kept in the comment above so a
+ * future maintainer can see exactly why every property is declared.
+ */
+.placeholder-world[data-theme='dark'] button.info-panel__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px;
+  border: 1px solid #2c556f;
+  border-radius: 4px;
+  background: #0a1420 !important;
+  color: #8ceaff !important;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.placeholder-world[data-theme='dark'] button.info-panel__back:hover {
+  background: #14293a;
+  border-color: #8ceaff;
+  color: #ffffff;
+}
+
+.info-panel__missing {
+  margin: 0;
+  font-size: 14px;
+  color: #8fa4bd;
+}
+
+/* --- Dashboard gallery --------------------------------------------------- */
+
+/*
+ * ASPECT RATIO IS NOT NEGOTIABLE HERE.
+ *
+ * These five images are the actual dashboard screenshots from the repository,
+ * not decoration, and their true ratios differ sharply: 962x593 (1.62),
+ * 1838x730 (2.52), 1749x999 (1.75), and the Netflix pair. Measured before these
+ * rules existed, every preview rendered with `object-fit: fill` — the CSS
+ * initial value — because no rule targeted these classes at all. The result was
+ * the COVID-19 dashboard (2.52:1) drawn into a 2.20:1 box and the HR dashboard
+ * (1.75:1) into 1.64:1, i.e. up to 12.5% distortion of the artefact being shown.
+ *
+ * A dashboard is evidence. Stretching it distorts the evidence, so the frame
+ * letterboxes instead: a fixed-ratio stage with `object-fit: contain` centres
+ * the image at its true proportions and leaves the remainder as background.
+ */
+.info-panel__preview {
+  margin: 0 0 10px;
+}
+
+/* The stage. One fixed ratio for every dashboard, so selecting another never
+   changes the panel's layout or shifts the summary text below it. */
+.info-panel__preview img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  background: #060c16;
+  border: 1px solid #1d4a5c;
+}
+
+.info-panel__preview figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #c3d3e4;
+}
+
+.info-panel__gallery-summary {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #9fb4c9;
+}
+
+/* The selector strip. Thumbnails are also letterboxed, so the strip does not
+   silently distort the same images a second time at a second size. */
+.info-panel__gallery-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.info-panel__gallery-list li {
+  margin: 0;
+}
+
+/*
+ * Scoped for the same reason as the close controls: `App.css`'s
+ * `.placeholder-world button` was winning here too, giving every thumbnail
+ * `color: rgb(26,26,26); background: transparent; padding: 12px 24px`.
+ */
+.placeholder-world[data-theme='dark'] button.info-panel__gallery-item {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  padding: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: left;
+  color: #c3d3e4;
+  cursor: pointer;
+  background: #0a1420;
+  border: 1px solid #1b3247;
+  border-radius: 4px;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.placeholder-world[data-theme='dark'] button.info-panel__gallery-item:hover {
+  background: #0e1c2c;
+  border-color: #2c556f;
+}
+
+.placeholder-world[data-theme='dark'] button.info-panel__gallery-item[aria-pressed='true'] {
+  background: #0c1e2a;
+  border-color: #22d3ee;
+}
+
+.info-panel__gallery-item img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  background: #060c16;
+}
+
+.info-panel__gallery-label {
+  font-size: 11px;
+  line-height: 1.3;
+  color: #b9cde0;
+}
+
+/* Screen-reader-only text. Visually hidden but not display:none, so it stays in
+   the accessibility tree. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * REDUCED MOTION
+ *
+ * The panel appears with a short scale-and-fade. Under reduced motion it appears
+ * with no transition at all — the panel still opens, the interaction is preserved,
+ * and only the movement is removed. `prefers-reduced-motion` is respected by the
+ * media query rather than by a JS check, so it applies immediately and cannot be
+ * out of sync with the user's actual setting.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .info-panel {
+    animation: info-panel-in 180ms cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+
+  @keyframes info-panel-in {
+    from {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0.96);
+    }
+
+    to {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+}

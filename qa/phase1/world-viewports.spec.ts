@@ -96,8 +96,35 @@ for (const vp of VIEWPORTS) {
       const after = await page.evaluate(() => window.__worldProbe?.()?.x ?? 0);
       expect(after, 'player moved').toBeGreaterThan(before);
 
-      // Back to the hero.
-      await page.click('.placeholder-world button');
+      /*
+       * Dismiss the entry plate, then go back to the hero.
+       *
+       * Two STAGE E changes required this, and both are real behaviour rather
+       * than test plumbing:
+       *
+       * 1. The plate is a deliberate full-viewport cover at z-index 40, so it
+       *    intercepts pointer events aimed at the exit button underneath. Playwright
+       *    reported `div.world-entry intercepts pointer events` for 45s. Measured
+       *    at 1440x900: the plate occupies 1440x900@0,0 while the canvas sits at
+       *    172,108 — the plate is genuinely on top.
+       * 2. The exit is addressed by `[data-testid="world-exit"]`, NOT
+       *    `.placeholder-world button` as Phase 1 originally did. STAGE E put the
+       *    plate INSIDE `.placeholder-world`, so that loose selector now resolves
+       *    to the plate's own dismiss button. Phase 1's contract named a
+       *    container rather than a control, so it was always ambiguous once a
+       *    second button joined that container.
+       *
+       * The dismissal is conditional so the test still works if the plate is ever
+       * removed, and asserts it is actually gone rather than assuming the click
+       * worked.
+       */
+      const plateBeforeExit = page.locator('[data-testid="world-entry"]');
+      if (await plateBeforeExit.count()) {
+        await page.locator('[data-testid="world-entry-dismiss"]').click();
+        await expect(plateBeforeExit).toHaveCount(0, { timeout: 5000 });
+      }
+
+      await page.click('[data-testid="world-exit"]');
       await expect(page.locator('.cinematic-hero')).toBeVisible({ timeout: 8000 });
       expect(await page.evaluate(() => location.hash)).toBe('');
       expect(await page.locator('canvas').count(), 'canvas removed').toBe(0);
@@ -117,6 +144,19 @@ for (const vp of VIEWPORTS) {
       expect(await page.locator('canvas').count(), 'one canvas after re-entry').toBe(1);
       expect(await page.locator('[data-testid="world-canvas"] canvas').count()).toBe(1);
       await expectNoOverflow(page, 're-entered world');
+
+      /*
+       * The entry plate reappears on every entry — that is the STAGE E behaviour,
+       * not a leak. It is a deliberate full-viewport cover at z-index 40, so the
+       * canvas cannot be topmost until it is dismissed. Dismiss it first, then
+       * assert; otherwise this assertion is really asserting "the plate is
+       * absent", and it would pass for the wrong reason the day the plate broke.
+       */
+      const plate = page.locator('[data-testid="world-entry"]');
+      if (await plate.count()) {
+        await page.locator('[data-testid="world-entry-dismiss"]').click();
+        await expect(plate).toHaveCount(0, { timeout: 5000 });
+      }
 
       // No stuck overlay covering the canvas.
       const canvasTopmost = await page.evaluate(() => {
