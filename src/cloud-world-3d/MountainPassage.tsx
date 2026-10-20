@@ -345,35 +345,61 @@ export function MountainPassage() {
     // the band (lateral 7.3–18u, y 7.5–26u) was open air at both mouths. Solid
     // sandstone piers + a lintel now fill it at BOTH mouths, while the carved
     // arch silhouette (opening up to y≈7.3u) stays untouched.
+    // ---- 7b. Mouth frame walls (see-through fix, 2026-10-20) ----
+    // QA on the user's approach screenshot showed you can see STRAIGHT THROUGH
+    // the mountain next to the arch. Solid sandstone piers + a lintel now fill
+    // it at BOTH mouths, while the carved arch silhouette stays untouched.
+    //
+    // NATURAL-LOOK PASS (2026-10-20): the first version read as a flat slab
+    // glued on (uniform color, smooth plane). Now we facet the merged geometry
+    // with per-vertex jitter + warm-brown vertex color variation so it reads as
+    // carved rock that is part of the massif. A darker crease is added where the
+    // frame meets the massif flank (the visible seam from the previous pass).
     const frameGeos: THREE.BufferGeometry[] = [];
-    const FRAME_MAT_H = 27; // top of frame = massif plateau floor height
-    const LATERAL_IN = 6.4; // pier inner face tucks BEHIND the tube rim (rim R+2.1=7.3):
-    //   tangent contact at 7.3 left a hairline sky slit on the right flank
-    //   (vision-flagged at screen ~(875,500), confirmed 2026-10-20). The rim now
-    //   covers the pier seam; piers still clear the ±4.4 walkable samples.
-    const LATERAL_OUT = 26; // extended 18->26 so the frame wall overlaps the massif
-    // flank's inner 8u (previously a coplanar/adjacent seam read as a vertical
-    // slit from grazing angles: brown frame face vs. yellowish massif flank)
-    const FRAME_D = 6; // thickened 4->6 for full overlap with rim + flank
-    const LINTEL_BOTTOM = 7.0; // below rim top (7.95) so the lintel/rim seam overlaps
+    const FRAME_MAT_H = 27;
+    const LATERAL_IN = 6.4;
+    const LATERAL_OUT = 26;
+    const FRAME_D = 6;
+    const LINTEL_BOTTOM = 7.0;
     for (const pz of [TUNNEL_Z0 - 1, TUNNEL_Z1 + 1]) {
       const cx = pathCenterX(pz);
       const gy = terrainHeight(cx, pz);
       const g = (w: number, h: number, d: number, x: number, y: number) => {
-        const box = new THREE.BoxGeometry(w, h, d);
+        const box = new THREE.BoxGeometry(w, h, d, 4, 5, 2);
         box.translate(cx + x, gy + y, pz);
         frameGeos.push(box);
       };
-      // Left pier (world -x when approaching from -z): lateral 6.4..18
       g(LATERAL_OUT - LATERAL_IN, FRAME_MAT_H, FRAME_D, -(LATERAL_IN + LATERAL_OUT) / 2, FRAME_MAT_H / 2);
-      // Right pier: lateral 6.4..18
       g(LATERAL_OUT - LATERAL_IN, FRAME_MAT_H, FRAME_D, (LATERAL_IN + LATERAL_OUT) / 2, FRAME_MAT_H / 2);
-      // Lintel over the arch: full width, overlapping the rim top
       g(LATERAL_OUT * 2, FRAME_MAT_H - LINTEL_BOTTOM, FRAME_D, 0, LINTEL_BOTTOM + (FRAME_MAT_H - LINTEL_BOTTOM) / 2);
     }
+    const mergedFrame = mergeGeometries(frameGeos, false)!;
+    // Facet: jitter vertices along their local normal-ish direction + assign
+    // vertex colors with warm-brown variation so flatShading reads as low-poly rock.
+    const pos = mergedFrame.getAttribute('position') as THREE.BufferAttribute;
+    const col = new Float32Array(pos.count * 3);
+    const rng = (n: number) => {
+      let x = (n * 9301 + 49297) % 233280;
+      return x / 233280;
+    };
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      const jx = (rng(i * 3 + 1) - 0.5) * 0.55;
+      const jy = (rng(i * 3 + 2) - 0.5) * 0.55;
+      const jz = (rng(i * 3 + 3) - 0.5) * 0.55;
+      pos.setXYZ(i, x + jx, y + jy, z + jz);
+      // warm brown palette matching the cliffs: base #C9A075 with jitter
+      const t = rng(i * 5 + 7);
+      col[i * 3] = 0.78 + t * 0.12;
+      col[i * 3 + 1] = 0.62 + t * 0.10;
+      col[i * 3 + 2] = 0.46 + t * 0.08;
+    }
+    pos.needsUpdate = true;
+    mergedFrame.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    mergedFrame.computeVertexNormals();
     const frameMesh = new THREE.Mesh(
-      mergeGeometries(frameGeos, false),
-      new THREE.MeshStandardMaterial({ color: '#C9A075', roughness: 1, flatShading: true }),
+      mergedFrame,
+      new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true }),
     );
     frameMesh.castShadow = true;
     frameMesh.receiveShadow = true;
