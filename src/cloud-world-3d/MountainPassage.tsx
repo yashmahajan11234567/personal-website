@@ -295,12 +295,30 @@ export function MountainPassage() {
     const shellMesh = new THREE.Mesh(
       mergeGeometries(shellSegs, false),
       new THREE.MeshStandardMaterial({
-        color: '#8A6A48',
+        // Darkened (polish pass): #8A6A48 → #6E5238 — a deeper bore reads as a
+        // real carved tunnel from the approach instead of a shallow notch.
+        color: '#6E5238',
         roughness: 1,
         side: THREE.DoubleSide,
       }),
     );
     shellMesh.receiveShadow = true;
+
+    // Depth occluders (polish pass): dark discs just inside each mouth. From
+    // the approach the tunnel interior previously read as a bright notch; a
+    // near-black warm disc at depth sells "carved into rock, goes somewhere".
+    const occluderGeos: THREE.BufferGeometry[] = [];
+    for (const pz of [TUNNEL_Z0 + 4, TUNNEL_Z1 - 4]) {
+      const cx = pathCenterX(pz);
+      const gy = terrainHeight(cx, pz);
+      const disc = new THREE.CircleGeometry(BORE_R - 0.5, 20);
+      disc.translate(cx, gy + BORE_R * 0.62, pz);
+      occluderGeos.push(disc);
+    }
+    const occluderMesh = new THREE.Mesh(
+      mergeGeometries(occluderGeos, false),
+      new THREE.MeshBasicMaterial({ color: '#241509' }),
+    );
 
     // QA instrumentation: the placed stone boxes + the mountain footprint.
     if (typeof window !== 'undefined') {
@@ -308,7 +326,7 @@ export function MountainPassage() {
       (window as any).__cwMountainFootprint = { zStart: Z_START, zEnd: Z_END, halfWidth: HALF_W };
     }
 
-    return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, mountFace };
+    return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, occluderMesh, mountFace };
   }, []);
 
   // ---- 7. Lanterns: two warm posts flanking the entrance, always lit ----
@@ -367,6 +385,7 @@ export function MountainPassage() {
       <primitive object={parts.tubeMesh} />
       <primitive object={parts.archMesh} />
       <primitive object={parts.shellMesh} />
+      <primitive object={parts.occluderMesh} />
       {lanterns.map((l, i) => (
         <group key={i} position={[l.x, l.y, l.z]}>
           <mesh castShadow position={[0, 1.6, 0]} material={postMat}>

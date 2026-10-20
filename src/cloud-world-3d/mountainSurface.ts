@@ -158,9 +158,13 @@ export function buildMountainSurface(
 
   // Sun direction (from Sky.tsx): light comes from (-42, 78, 168).
   const lightDir = new THREE.Vector3(-42, 78, 168).normalize();
-  const rockLit = new THREE.Color('#D2A564');   // warm golden-tan (lit)
-  const rockShd = new THREE.Color('#966446');   // cooler brown (shadow)
-  const rockEdge = new THREE.Color('#E1B473');  // upper-edge highlight
+  // Polish pass 2026-10-20: widen the two-tone range (shadow #966446 → #7E5238,
+  // lit #D2A564 → #E3B878) — the old range compressed to <15% lightness spread
+  // at distance, reading as flat uniform brown. Also add a slope-aware
+  // extra darkening for steep downward faces (caves under brows read deep).
+  const rockLit = new THREE.Color('#E3B878');   // warm golden-tan (lit)
+  const rockShd = new THREE.Color('#7E5238');   // cooler brown (shadow)
+  const rockEdge = new THREE.Color('#F0CC96');  // upper-edge highlight
 
   const quad = (
     a: [number, number, number],
@@ -174,6 +178,9 @@ export function buildMountainSurface(
     const lit = Math.max(0, n.dot(lightDir));
     const col = new THREE.Color().copy(rockShd).lerp(rockLit, lit);
     if (n.y > 0.6) col.lerp(rockEdge, Math.min(1, (n.y - 0.6) * 1.4));
+    // Steep downward-facing faces (brow undersides, overhangs) darken further —
+    // carves visual depth into the tunnel mouth region.
+    if (n.y < -0.15) col.multiplyScalar(1 + n.y * 0.45); // up to −0.45 at fully down
     const r = col.r, g2 = col.g, b2 = col.b;
     const nx = n.x, ny = n.y, nz = n.z;
     // two triangles: (a, b, c) and (a, c, d); a and c repeated intentionally.

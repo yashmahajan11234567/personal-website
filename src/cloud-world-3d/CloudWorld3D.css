@@ -98,6 +98,39 @@
   max-width: 500px;
 }
 
+/* Journey hint (polish pass 2026-10-20): the raw hint previously rendered
+   as small low-contrast white text straight on the bright meadow — the
+   weakest element in every QA capture. A soft dark pill + stronger keys
+   gives AAA-style control hints: readable at any background, unobtrusive. */
+.journey-hint {
+  align-self: flex-start;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  align-items: center;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  background: rgba(20, 12, 4, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 236, 200, 0.22);
+  font-size: 0.85rem;
+  color: rgba(255, 248, 238, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  width: fit-content;
+}
+
+.journey-hint kbd {
+  background: rgba(255, 244, 220, 0.16);
+  border: 1px solid rgba(255, 236, 200, 0.38);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0.12rem 0.42rem;
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.8rem;
+  color: #FFEFD6;
+}
+
 .controls-hint {
   display: flex;
   flex-wrap: wrap;

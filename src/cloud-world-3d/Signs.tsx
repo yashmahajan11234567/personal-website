@@ -280,6 +280,17 @@ export function CloudSign({
             <cylinderGeometry args={[0.11 * s, 0.13 * s, postLen, 8]} />
             <primitive object={postMat} attach="material" />
           </mesh>
+          {/* Boulder feet (polish pass 2026-10-20): small angular rocks sunk
+              around each post base so the pole reads as planted, not floating
+              on the grass — matches the reference art's rock-anchored signs. */}
+          <mesh castShadow receiveShadow position={[-1.15 * s, -0.18, 0.05]} rotation={[0.4, 0.7, 0.2]}>
+            <dodecahedronGeometry args={[0.42 * s, 0]} />
+            <meshStandardMaterial color="#9A8B78" roughness={0.95} flatShading />
+          </mesh>
+          <mesh castShadow receiveShadow position={[1.15 * s, -0.16, -0.04]} rotation={[-0.3, 1.1, 0.35]}>
+            <dodecahedronGeometry args={[0.38 * s, 0]} />
+            <meshStandardMaterial color="#8A7C6A" roughness={0.95} flatShading />
+          </mesh>
         </>
       )}
       {/* Back board: plain wood silhouette */}

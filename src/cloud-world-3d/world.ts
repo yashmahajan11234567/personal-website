@@ -94,23 +94,27 @@ export function terrainColorAt(x: number, z: number, h: number, out: THREE.Color
   TMP.copy(SAND);
   if (z > 168) TMP.lerp(SAND_WARM, smoothstep(168, 215, z));
   out.lerp(TMP, edge);
-  // Trodden rim: narrow band at the path edge, ~8% darker.
+  // Trodden rim: narrow band at the path edge — darkened 0.08 → 0.2 in the
+  // polish pass so the path edge reads as a defined border, not a hard seam.
   const rim = smoothstep(halfW + 1.6, halfW + 0.7, d) * (1 - smoothstep(halfW - 0.1, halfW - 0.5, d));
-  out.multiplyScalar(1 - rim * 0.08);
+  out.multiplyScalar(1 - rim * 0.2);
 
   const mountainBlend = 1 - smoothstep(-95, -70, z);
   out.lerp(ROCKY, mountainBlend * 0.75);
   out.lerp(SAND_WARM, smoothstep(180, 235, z) * 0.55);
 
   // Macro color patches: two very-low-frequency HSL terms (wavelength ~40u)
-  // so the meadow reads as patched, not uniform.
+  // so the meadow reads as patched, not uniform. Amplitudes raised 2026-10-20
+  // (polish pass): 0.012/0.02 → 0.028/0.045 — at gameplay distance the old
+  // values were sub-1% lightness variation, invisible; the meadow now bands
+  // into readable patchwork like the reference art.
   const patchA = Math.sin(x * 0.16 + 1.2) * Math.sin(z * 0.13 - 0.6);
   const patchB = Math.sin(x * 0.07 - 2.0 + z * 0.09);
-  out.offsetHSL(patchA * 0.012, 0, patchB * 0.02);
+  out.offsetHSL(patchA * 0.028, 0, patchB * 0.045);
 
   // Organic per-vertex variation so large flats never look airbrushed.
   const v = Math.sin(x * 0.8 + z * 0.6) * Math.sin(x * 0.23 - z * 0.31);
-  out.offsetHSL(0, 0, v * 0.018);
+  out.offsetHSL(0, 0, v * 0.03);
 }
 
 // Deterministic RNG — same scatter on every reload.
