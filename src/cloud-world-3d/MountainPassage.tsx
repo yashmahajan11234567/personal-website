@@ -219,6 +219,10 @@ export function MountainPassage() {
     };
 
     // ---- 3. Portal stone rings (angular chunks) ----
+    // Polish pass 2026-10-20: stones ABOVE the arch shoulders (sin > 0.42)
+    // hovered in front of the dark bore and read as floating rocks above the
+    // apex — vision-flagged in the exit-area screenshot. The tube rim +
+    // arch ring already outline the mouth; only grounded side/base stones stay.
     const stones: Box[] = [];
     const stoneGeos: THREE.BufferGeometry[] = [];
     for (const pz of [TUNNEL_Z0, TUNNEL_Z1]) {
@@ -226,6 +230,7 @@ export function MountainPassage() {
       const ground = terrainHeight(cx, pz);
       for (let a = -60; a <= 240; a += 30) {
         const rad = (a * Math.PI) / 180;
+        if (Math.sin(rad) > 0.42) continue; // skip hovering shoulder/apex stones
         const ringR = 9.2;
         const s = 2.2;
         const box: Box = {
@@ -307,12 +312,25 @@ export function MountainPassage() {
     // Depth occluders (polish pass): dark discs just inside each mouth. From
     // the approach the tunnel interior previously read as a bright notch; a
     // near-black warm disc at depth sells "carved into rock, goes somewhere".
+    // Shape fix 2026-10-20: full circles poked through the arched roof (disc
+    // top at ground+7.9 vs roof crown 6.2 — visible as floating black slabs
+    // inside the mouth). Clipped to a half-disc BELOW spring-line height so
+    // the occluder can never exceed the bore's own ceiling.
     const occluderGeos: THREE.BufferGeometry[] = [];
-    for (const pz of [TUNNEL_Z0 + 4, TUNNEL_Z1 - 4]) {
+    // ENTRANCE ONLY (z = TUNNEL_Z0 + 4): from the bright valley the entrance
+    // needs a dark backwall so the bore reads deep. The EXIT gets no occluder —
+    // QA (2026-10-20 exit-approach capture) showed a black plate covering the
+    // mouth from outside, killing the sunset reveal that is the reward for
+    // walking through. The exit keeps its bore lights for backlit depth.
+    for (const pz of [TUNNEL_Z0 + 4]) {
       const cx = pathCenterX(pz);
       const gy = terrainHeight(cx, pz);
-      const disc = new THREE.CircleGeometry(BORE_R - 0.5, 20);
-      disc.translate(cx, gy + BORE_R * 0.62, pz);
+      const r = BORE_R - 0.5;
+      // Bottom half-disc (theta π..2π) with its flat edge at ground+0.35r:
+      // every point sits at or below y = 0.35r ≈ 1.65u — far under the roof
+      // crown (6.2u), so nothing can poke through the arch ceiling.
+      const disc = new THREE.CircleGeometry(r, 24, Math.PI, Math.PI);
+      disc.translate(cx, gy + r * 0.35, pz);
       occluderGeos.push(disc);
     }
     const occluderMesh = new THREE.Mesh(
@@ -329,7 +347,49 @@ export function MountainPassage() {
     return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, occluderMesh, mountFace };
   }, []);
 
-  // ---- 7. Lanterns: two warm posts flanking the entrance, always lit ----
+  // ---- 8. Journey's end plaza (polish pass 2026-10-20) ----
+  // QA walk-through showed z 230..260 as dead fog space: the path just stops
+  // after the last project marker (z=226). A small stone plaza with twin
+  // lanterns (mirroring the entrance) gives the journey a destination.
+  const plaza = useMemo(() => {
+    const PZ = 242;
+    const cx = pathCenterX(PZ);
+    const gy = terrainHeight(cx, PZ);
+    // Cobble ring: 14 low flat stones in a circle r=6.5 around the path end.
+    const cobbleGeos: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      const sx = cx + Math.cos(a) * 6.5;
+      const sz = PZ + Math.sin(a) * 6.5;
+      const g = new THREE.CylinderGeometry(0.85, 1.0, 0.4, 6);
+      g.rotateY(a);
+      g.translate(sx, terrainHeight(sx, sz) + 0.12, sz);
+      cobbleGeos.push(g);
+    }
+    const cobbleMesh = new THREE.Mesh(
+      mergeGeometries(cobbleGeos, false),
+      new THREE.MeshStandardMaterial({ color: '#B09578', roughness: 1, flatShading: true }),
+    );
+    cobbleMesh.castShadow = true;
+    cobbleMesh.receiveShadow = true;
+    // Center stone: a low broad marker rock the path flows into.
+    const heart = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(1.5, 0),
+      new THREE.MeshStandardMaterial({ color: '#C9A075', roughness: 1, flatShading: true }),
+    );
+    heart.scale.set(1.3, 0.6, 1.1);
+    heart.position.set(cx, gy + 0.35, PZ + 2.5);
+    heart.castShadow = true;
+    heart.receiveShadow = true;
+    // Twin lantern posts at the plaza mouth (same recipe as the entrance).
+    const lposts: [number, number][] = [
+      [cx - 4.6, PZ - 6],
+      [cx + 4.6, PZ - 6],
+    ].map(([x, z]) => [x, z] as [number, number]);
+    return { cobbleMesh, heart, lposts, PZ };
+  }, []);
+
+  // ---- 9. Lanterns: two warm posts flanking the entrance, always lit ----
   const lanterns = useMemo(() => {
     const z = TUNNEL_Z0 - 8;
     const cx = pathCenterX(z);
@@ -420,6 +480,20 @@ export function MountainPassage() {
       })()}
       {/* PROJECTS billboard — mounted on the mountain face above the tunnel */}
       <ProjectsBillboard position={[signPos.x, signPos.y, signPos.z]} yaw={signPos.yaw} />
+      {/* Journey's end plaza — stone ring, heart rock, twin lanterns */}
+      <primitive object={plaza.cobbleMesh} />
+      <primitive object={plaza.heart} />
+      {plaza.lposts.map(([x, z], i) => (
+        <group key={`pl-${i}`} position={[x, terrainHeight(x, z), z]}>
+          <mesh castShadow position={[0, 1.6, 0]} material={postMat}>
+            <cylinderGeometry args={[0.09, 0.11, 3.2, 8]} />
+          </mesh>
+          <mesh position={[0, 3.35, 0]} material={lanternMat}>
+            <sphereGeometry args={[0.28, 12, 10]} />
+          </mesh>
+          <pointLight position={[0, 3.35, 0]} color="#FFB45E" intensity={10} distance={14} decay={2} />
+        </group>
+      ))}
     </group>
   );
 }
