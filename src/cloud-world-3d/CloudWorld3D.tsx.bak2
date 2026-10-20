@@ -1,0 +1,739 @@
+import { useEffect, useRef, useState } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { OrbitControls, Html } from '@react-three/drei';
+import * as THREE from 'three';
+import './CloudWorld3D.css';
+
+// Skill stops data from projects.data.ts
+const SKILL_STOPS = [
+  { id: 'aws', name: 'AWS', x: -20, z: 0, side: 'left' },
+  { id: 'terraform', name: 'Terraform', x: 20, z: 0, side: 'right' },
+  { id: 'docker', name: 'Docker', x: -20, z: 20, side: 'left' },
+  { id: 'kubernetes', name: 'Kubernetes', x: 20, z: 20, side: 'right' },
+  { id: 'linux', name: 'Linux', x: -20, z: 40, side: 'left' },
+  { id: 'git', name: 'Git', x: 20, z: 40, side: 'right' },
+  { id: 'cicd', name: 'CI/CD', x: -20, z: 60, side: 'left' }
+];
+
+// Project data from projects.data.ts
+const PROJECT_DATA = [
+  {
+    id: 'nifty100-financial-analysis',
+    title: 'Nifty-100 Financial Analysis',
+    github: 'https://github.com/yashmahajan11234567/Bluestock_fintech',
+    technologies: ['Python', 'pandas', 'SQLite', 'T-SQL', 'FastAPI', 'Streamlit']
+  },
+  {
+    id: 'sql-data-warehouse',
+    title: 'SQL Data Warehouse & ETL',
+    github: 'https://github.com/yashmahajan11234567/Sql-data-warehouse',
+    technologies: ['T-SQL', 'SQL Server', 'BULK INSERT', 'Window Functions', 'Star Schema']
+  },
+  {
+    id: 'primetradeai',
+    title: 'PRIMETradeAI',
+    github: 'https://github.com/yashmahajan11234567/PRIMETradeAI',
+    technologies: ['T-SQL', 'Python', 'pandas', 'scikit-learn', 'Random Forest', 'KMeans', 'Streamlit']
+  },
+  {
+    id: 'data-analytics-dashboards',
+    title: 'Data Analytics Dashboards',
+    github: 'https://github.com/yashmahajan11234567/Projects/tree/main/Data-Analytics-Projects',
+    technologies: ['Excel', 'Tableau', 'Power BI']
+  }
+];
+
+interface CloudWorld3DProps {
+  onExit: () => void;
+}
+
+export const CloudWorld3D = ({ onExit }: CloudWorld3DProps) => {
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [webglAvailable, setWebglAvailable] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReducedMotion(mediaQuery.matches);
+    const handler = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  useEffect(() => {
+    const canvas = document.createElement('canvas');
+    try {
+      const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      setWebglAvailable(!!gl);
+    } catch {
+      setWebglAvailable(false);
+    }
+  }, []);
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      onExit();
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onExit]);
+
+  if (!webglAvailable) {
+    return (
+      <div className="cloud-world-fallback" role="region" aria-label="Cloud World - WebGL not available">
+        <div className="fallback-content">
+          <h1>Cloud World</h1>
+          <p>Your browser doesn't support WebGL, which is required for the 3D experience.</p>
+          <button onClick={onExit} className="exit-button">Return to Portfolio</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (reducedMotion) {
+    return (
+      <div className="cloud-world-reduced" role="region" aria-label="Cloud World - Reduced motion">
+        <div className="reduced-content">
+          <h1>Cloud World</h1>
+          <p>Reduced motion is enabled. The 3D experience is disabled for comfort.</p>
+          <button onClick={onExit} className="exit-button">Return to Portfolio</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="cloud-world-container" ref={containerRef}>
+      <Canvas
+        camera={{ position: [0, 15, -10], fov: 55, near: 1, far: 300 }}
+        onCreated={({ gl }) => {
+          gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        }}
+        style={{ touchAction: 'none' }}
+      >
+        <color attach="background" args={['#FFF5E1']} />
+        <fog attach="fog" args={['#FFDAB9', 50, 250]} />
+
+        {/* Valley lighting - warm sunset from left as in reference */}
+        <hemisphereLight intensity={0.6} groundColor="#4A7C59" color="#FFF5E1" />
+        <directionalLight position={[-30, 50, -20]} intensity={1.8} castShadow>
+          <orthographicCamera
+            attach="shadowCamera"
+            args={[-80, 80, 80, -80, 0.1, 300]}
+          />
+        </directionalLight>
+
+        {/* Only Skills Valley for now */}
+        <SkillsValleyZone />
+
+        {/* Skill markers */}
+        {SKILL_STOPS.map(stop => (
+          <SkillMarker key={stop.id} stop={stop} />
+        ))}
+
+        <CloudCharacter />
+
+        {/* Constrained OrbitControls - limited rotation to prevent breaking the journey */}
+        <OrbitControls
+          enablePan={false}
+          enableZoom={true}
+          enableRotate={true}
+          minDistance={15}
+          maxDistance={60}
+          minPolarAngle={Math.PI * 0.15}
+          maxPolarAngle={Math.PI * 0.7}
+          target={[0, 8, 10]}
+          enableDamping={true}
+          dampingFactor={0.05}
+          rotateSpeed={0.4}
+          zoomSpeed={0.5}
+        />
+      </Canvas>
+
+      {/* Interactive overlay for skill/project details - regular React overlay, NOT drei's Html */}
+      <div className="cloud-world-overlay">
+        <div className="overlay-content">
+          <header className="overlay-header">
+            <h2 id="overlay-title">Cloud World</h2>
+            <button onClick={onExit} className="exit-button" aria-label="Exit Cloud World">×</button>
+          </header>
+          <main className="overlay-main">
+            <div id="overlay-body">
+              <p className="placeholder-text">
+                Journey through Skills Valley → Mountain Passage → Projects Sunset
+              </p>
+              <div className="journey-hint">
+                <kbd>WASD</kbd> / <kbd>Arrow Keys</kbd> Move Character &nbsp;
+                <kbd>Mouse</kbd> Look Around &nbsp;
+                <kbd>Click</kbd> on markers for details &nbsp;
+                <kbd>Esc</kbd> Exit
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+function SkillsValleyZone() {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame((_, delta) => {
+    if (groupRef.current) {
+      // Slow rotation for valley ambiance
+      groupRef.current.rotation.y += delta * 0.001;
+    }
+  });
+
+  return (
+    <group ref={groupRef} position={[0, 0, 0]}>
+      {/* Sky dome with warm gradient color */}
+      <mesh position={[0, 0, 0]} scale={[-200, 200, 200]}>
+        <sphereGeometry args={[1, 32, 16]} />
+        <meshBasicMaterial
+          side={THREE.BackSide}
+          transparent
+          opacity={1.0}
+          color="#FFF5E1"
+        />
+      </mesh>
+
+      {/* Valley floor - light olive green from reference */}
+      <mesh receiveShadow position={[0, -0.5, 0]}>
+        <planeGeometry args={[400, 400, 10, 10]} />
+        <meshStandardMaterial
+          color="#A8C68F"
+          roughness={0.95}
+          metalness={0.0}
+        />
+      </mesh>
+
+      {/* Layered hills - back to front with reference colors */}
+      {/* Background hills (far, desaturated, beige/tan) - far back at z=-80 to 0 */}
+      <mesh receiveShadow castShadow position={[0, -2, -80]} rotation={[0, 0.1, 0]} scale={[120, 25, 80]}>
+        <sphereGeometry args={[1, 32, 16]} />
+        <meshStandardMaterial color="#D2B48C" roughness={0.9} metalness={0.02} flatShading={true} />
+      </mesh>
+      <mesh receiveShadow castShadow position={[0, -1, -60]} rotation={[0, -0.05, 0]} scale={[100, 20, 60]}>
+        <sphereGeometry args={[1, 32, 16]} />
+        <meshStandardMaterial color="#D2B48C" roughness={0.9} metalness={0.02} flatShading={true} />
+      </mesh>
+      <mesh receiveShadow castShadow position={[0, 0, -40]} rotation={[0, 0.08, 0]} scale={[80, 18, 50]}>
+        <sphereGeometry args={[1, 32, 16]} />
+        <meshStandardMaterial color="#D2B48C" roughness={0.9} metalness={0.02} flatShading={true} />
+      </mesh>
+
+      {/* Mid-ground hills (lighter sage green) - z=-20 to 15 */}
+      <mesh receiveShadow castShadow position={[0, 1, -20]} rotation={[0, -0.03, 0]} scale={[70, 15, 40]}>
+        <sphereGeometry args={[1, 32, 16]} />
+        <meshStandardMaterial color="#8FBF8F" roughness={0.9} metalness={0.02} flatShading={true} />
+      </mesh>
+      <mesh receiveShadow castShadow position={[0, 2, -5]} rotation={[0, 0.06, 0]} scale={[60, 12, 35]}>
+        <sphereGeometry args={[1, 32, 16]} />
+        <meshStandardMaterial color="#8FBF8F" roughness={0.9} metalness={0.02} flatShading={true} />
+      </mesh>
+      <mesh receiveShadow castShadow position={[0, 3, 15]} rotation={[0, -0.02, 0]} scale={[50, 10, 30]}>
+        <sphereGeometry args={[1, 32, 16]} />
+        <meshStandardMaterial color="#8FBF8F" roughness={0.9} metalness={0.02} flatShading={true} />
+      </mesh>
+
+      {/* Foreground hills (dark forest green) - z=30 to 60 */}
+      <mesh receiveShadow castShadow position={[0, 4, 30]} rotation={[0, 0.04, 0]} scale={[45, 8, 25]}>
+        <sphereGeometry args={[1, 32, 16]} />
+        <meshStandardMaterial color="#4A7C59" roughness={0.9} metalness={0.02} flatShading={true} />
+      </mesh>
+      <mesh receiveShadow castShadow position={[0, 5, 45]} rotation={[0, -0.07, 0]} scale={[40, 6, 20]}>
+        <sphereGeometry args={[1, 32, 16]} />
+        <meshStandardMaterial color="#4A7C59" roughness={0.9} metalness={0.02} flatShading={true} />
+      </mesh>
+      <mesh receiveShadow castShadow position={[0, 6, 60]} rotation={[0, 0.02, 0]} scale={[35, 5, 18]}>
+        <sphereGeometry args={[1, 32, 16]} />
+        <meshStandardMaterial color="#4A7C59" roughness={0.9} metalness={0.02} flatShading={true} />
+      </mesh>
+
+      {/* Pine tree clusters - placed on hill ridges with reference dark green */}
+      <PineTree x={-35} z={-30} scale={0.6} rotationY={0.5} />
+      <PineTree x={-32} z={-28} scale={0.55} rotationY={1.2} />
+      <PineTree x={-38} z={-32} scale={0.65} rotationY={2.1} />
+      <PineTree x={30} z={-25} scale={0.5} rotationY={0.8} />
+      <PineTree x={28} z={-27} scale={0.45} rotationY={1.5} />
+      <PineTree x={-20} z={-10} scale={0.7} rotationY={2.5} />
+      <PineTree x={-22} z={-8} scale={0.65} rotationY={3.0} />
+      <PineTree x={-40} z={10} scale={0.8} rotationY={1.0} />
+      <PineTree x={-38} z={12} scale={0.75} rotationY={1.8} />
+      <PineTree x={35} z={15} scale={0.9} rotationY={0.3} />
+      <PineTree x={37} z={17} scale={0.85} rotationY={2.8} />
+      <PineTree x={-15} z={20} scale={1.0} rotationY={2.0} />
+      <PineTree x={-13} z={22} scale={0.95} rotationY={0.7} />
+      <PineTree x={25} z={25} scale={1.0} rotationY={1.2} />
+      <PineTree x={23} z={27} scale={0.95} rotationY={2.3} />
+      <PineTree x={27} z={23} scale={1.05} rotationY={0.5} />
+      <PineTree x={-45} z={35} scale={1.2} rotationY={1.8} />
+      <PineTree x={-42} z={38} scale={1.15} rotationY={0.9} />
+      <PineTree x={40} z={40} scale={1.1} rotationY={1.5} />
+      <PineTree x={38} z={42} scale={1.05} rotationY={2.2} />
+      <PineTree x={-30} z={50} scale={1.3} rotationY={0.6} />
+      <PineTree x={-28} z={52} scale={1.25} rotationY={1.3} />
+      <PineTree x={30} z={55} scale={1.2} rotationY={1.0} />
+      <PineTree x={28} z={58} scale={1.15} rotationY={2.4} />
+      <PineTree x={-20} z={65} scale={1.4} rotationY={0.8} />
+      <PineTree x={-18} z={68} scale={1.35} rotationY={1.7} />
+
+      {/* Oversized clouds - puffy cotton-ball style, clustered left and right, high up */}
+      <StylizedCloud x={-70} y={45} z={-20} scale={5.0} puffs={4} />
+      <StylizedCloud x={65} y={40} z={-10} scale={4.5} puffs={3} />
+      <StylizedCloud x={-50} y={38} z={10} scale={3.5} puffs={3} />
+      <StylizedCloud x={55} y={42} z={25} scale={4.0} puffs={4} />
+      <StylizedCloud x={-40} y={35} z={40} scale={3.0} puffs={2} />
+      <StylizedCloud x={45} y={32} z={55} scale={3.2} puffs={2} />
+      <StylizedCloud x={-60} y={48} z={15} scale={3.8} puffs={3} />
+      <StylizedCloud x={70} y={50} z={5} scale={4.2} puffs={3} />
+    </group>
+  );
+}
+
+function PineTree({ x, z, scale = 1, rotationY = 0 }: { x: number; z: number; scale?: number; rotationY?: number }) {
+  const trunkHeight = 4 * scale;
+  const canopyHeight = 6 * scale;
+  const canopyWidth = 2.5 * scale;
+
+  return (
+    <group position={[x, trunkHeight / 2, z]} rotation={[0, rotationY, 0]} scale={[scale, scale, scale]}>
+      {/* Trunk - dark brown from reference */}
+      <mesh castShadow receiveShadow>
+        <cylinderGeometry args={[0.35, 0.25, trunkHeight, 4]} />
+        <meshStandardMaterial color="#2D1B1A" roughness={1.0} />
+      </mesh>
+      {/* Canopy - layered cones for graphic pine silhouette, dark green from reference */}
+      <group position={[0, trunkHeight * 0.6, 0]}>
+        <mesh castShadow receiveShadow>
+          <coneGeometry args={[canopyWidth, canopyHeight, 4]} />
+          <meshStandardMaterial color="#1A3D2E" roughness={0.9} flatShading={true} />
+        </mesh>
+        <mesh castShadow receiveShadow position={[0, -canopyHeight * 0.15, 0]} scale={[0.85, 0.8, 0.85]}>
+          <coneGeometry args={[canopyWidth, canopyHeight * 0.9, 4]} />
+          <meshStandardMaterial color="#15281A" roughness={0.95} flatShading={true} />
+        </mesh>
+        <mesh castShadow receiveShadow position={[0, -canopyHeight * 0.3, 0]} scale={[0.7, 0.6, 0.7]}>
+          <coneGeometry args={[canopyWidth, canopyHeight * 0.7, 4]} />
+          <meshStandardMaterial color="#0D1A0F" roughness={1.0} flatShading={true} />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+function StylizedCloud({ x, y, z, scale, puffs }: { x: number; y: number; z: number; scale: number; puffs: number }) {
+  return (
+    <group position={[x, y, z]} scale={[scale, scale * 0.55, scale]}>
+      {Array.from({ length: puffs }).map((_, i) => {
+        const offsetX = (Math.random() - 0.5) * 1.5;
+        const offsetY = Math.random() * 0.4;
+        const offsetZ = (Math.random() - 0.5) * 1.0;
+        const puffScale = 0.7 + Math.random() * 0.6;
+        return (
+          <mesh key={i} castShadow position={[offsetX, offsetY, offsetZ]} scale={[puffScale, puffScale * 0.8, puffScale]}>
+            <sphereGeometry args={[1, 16, 12]} />
+            <meshStandardMaterial
+              color="#FFFFFF"
+              roughness={0.3}
+              metalness={0.05}
+              transparent
+              opacity={0.9}
+            />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
+
+function MountainPassageZone() {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame(() => {
+      if (groupRef.current) {
+        // Subtle pulsating light in the tunnel
+        groupRef.current.position.y = Math.sin(Date.now() * 0.001) * 0.5;
+      }
+    });
+
+  return (
+    <group ref={groupRef} position={[0, 0, -30]}>
+      {/* Dark mountain walls */}
+      <mesh receiveShadow>
+        <planeGeometry args={[80, 60, 16, 12]} />
+        <meshStandardMaterial
+          color="#05051a"
+          roughness={0.95}
+          metalness={0.02}
+        />
+      </mesh>
+
+      {/* Tunnel passage - darker with accent lighting */}
+      <mesh receiveShadow position={[0, 2, -15]}>
+        <planeGeometry args={[40, 20, 8, 4]} />
+        <meshStandardMaterial
+          color="#0a0a2a"
+          roughness={0.9}
+          metalness={0.05}
+          emissive="#ff4500"
+          emissiveIntensity={0.3}
+        />
+      </mesh>
+
+      {/* Floating rock formations */}
+      {Array.from({ length: 4 }).map((_, rockIndex) => (
+        <MountainRock key={rockIndex} index={rockIndex} />
+      ))}
+    </group>
+  );
+}
+
+function MountainRock({ index }: { index: number }) {
+  const angle = (index / 4) * Math.PI * 2;
+  const radius = 25;
+  const x = Math.cos(angle) * radius;
+  const z = Math.sin(angle) * radius;
+  const y = 2 + Math.sin(index * 0.7) * 3;
+  const scale = 1.5 + Math.sin(index) * 0.5;
+
+  return (
+    <group position={[x, y, z]} rotation={[0, angle, 0]} scale={[scale, scale, scale]}>
+      <mesh castShadow receiveShadow>
+        <dodecahedronGeometry args={[1, 0]} />
+        <meshStandardMaterial
+          color="#08081f"
+          roughness={0.9}
+          metalness={0.03}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+function ProjectsSunsetZone() {
+  const groupRef = useRef<THREE.Group>(null);
+
+  useFrame((_, delta) => {
+    if (groupRef.current) {
+      // Slow rotation for sunset ambiance
+      groupRef.current.rotation.y += delta * 0.003;
+    }
+  });
+
+  return (
+    <group ref={groupRef} position={[0, 0, 60]}>
+      {/* Distant mountain silhouette */}
+      <mesh receiveShadow>
+        <planeGeometry args={[150, 40, 24, 8]} />
+        <meshStandardMaterial
+          color="#010a13"
+          roughness={0.98}
+          metalness={0.01}
+        />
+      </mesh>
+
+      {/* Sunset glow - radiating planes */}
+      {Array.from({ length: 6 }).map((_, ringIndex) => (
+        <SunsetRing key={ringIndex} index={ringIndex} />
+      ))}
+
+      {/* Foreground elements */}
+      <mesh receiveShadow position={[0, -1, 0]}>
+        <planeGeometry args={[100, 100, 16, 16]} />
+        <meshStandardMaterial
+          color="#0a1a0f"
+          roughness={0.9}
+          metalness={0.02}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+function SunsetRing({ index }: { index: number }) {
+  const progress = index / 5;
+  const radius = 20 + progress * 60;
+  const segments = 16 + Math.floor(progress * 16);
+  const thickness = 1 + progress * 2;
+  const height = 0.5;
+
+  // Sunset color gradient: orange → magenta → purple
+  let color = "#ff4500"; // orange-red
+  if (progress > 0.4) {
+    color = progress > 0.7 ? "#8b008b" : "#ff1493"; // magenta → purple
+  }
+
+  return (
+    <mesh
+      position={[0, height, 0]}
+      rotation={[Math.PI / 2, 0, 0]}
+      receiveShadow
+    >
+      <ringGeometry args={[radius - thickness, radius, segments]} />
+      <meshStandardMaterial
+        color={color}
+        roughness={0.7}
+        metalness={0.1}
+        side={THREE.DoubleSide}
+        transparent
+        opacity={0.6 - progress * 0.3}
+      />
+    </mesh>
+  );
+}
+
+function SkillMarker({ stop }: { stop: typeof SKILL_STOPS[number] }) {
+  const [hovered, setHovered] = useState(false);
+  const markerRef = useRef<THREE.Mesh>(null);
+
+  useFrame(() => {
+    if (markerRef.current) {
+      // Gentle bobbing animation
+      markerRef.current.position.y = 3 + Math.sin(Date.now() * 0.002 + stop.id.length) * 0.5;
+      // Slow rotation
+      markerRef.current.rotation.y += 0.01;
+    }
+  });
+
+  const handleClick = () => {
+    // Update overlay content
+    const titleEl = document.getElementById('overlay-title');
+    const bodyEl = document.getElementById('overlay-body');
+    if (titleEl && bodyEl) {
+      titleEl.textContent = stop.name;
+      bodyEl.innerHTML = `
+        <div className="skill-detail">
+          <h3>${stop.name}</h3>
+          <p>Cloud infrastructure and DevOps technology</p>
+          <div className="skill-icon">☁️</div>
+          <p className="hint">Navigate to next skill using WASD/Arrow Keys</p>
+        </div>
+      `;
+    }
+  };
+
+  return (
+    <>
+      <mesh
+        ref={markerRef}
+        position={[stop.x, 3, stop.z]}
+        scale={[1.2, 1.2, 1.2]}
+        onClick={handleClick}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial
+          color={stop.side === 'left' ? "#4a90e2" : "#e94a4a"}
+          roughness={0.3}
+          metalness={0.6}
+          emissive={hovered ? "#ffff00" : "#000000"}
+          emissiveIntensity={hovered ? 0.5 : 0}
+        />
+      </mesh>
+      {/* Skill label - always facing camera */}
+      <Html
+        position={[stop.x, 5, stop.z]}
+        distanceFactor={1.5}
+      >
+        <div className="skill-label">
+          <div className="skill-label-content">{stop.name}</div>
+        </div>
+      </Html>
+    </>
+  );
+}
+
+function ProjectMarker({ project }: { project: typeof PROJECT_DATA[number] }) {
+  const [hovered, setHovered] = useState(false);
+  const markerRef = useRef<THREE.Mesh>(null);
+
+  useFrame(() => {
+    if (markerRef.current) {
+      // Gentle floating animation
+      markerRef.current.position.y = 4 + Math.sin(Date.now() * 0.0015 + project.id.length) * 0.8;
+      // Slow rotation
+      markerRef.current.rotation.y += 0.008;
+    }
+  });
+
+  const handleClick = () => {
+    // Update overlay content
+    const titleEl = document.getElementById('overlay-title');
+    const bodyEl = document.getElementById('overlay-body');
+    if (titleEl && bodyEl) {
+      titleEl.textContent = project.title;
+      bodyEl.innerHTML = `
+        <div className="project-detail">
+          <h3>${project.title}</h3>
+          <p>${project.technologies.slice(0, 4).join(', ')}</p>
+          <a href="${project.github}" target="_blank" rel="noopener noreferrer" className="github-link">
+            View on GitHub →
+          </a>
+        </div>
+      `;
+    }
+  };
+
+  return (
+    <>
+      <mesh
+        ref={markerRef}
+        position={[0, 4, 0]} // Centered in projects zone (relative to ProjectsSunsetZone at [0,0,60] -> world [0,4,60])
+        scale={[1.8, 1.8, 1.8]}
+        onClick={handleClick}
+        onPointerOver={() => setHovered(true)}
+        onPointerOut={() => setHovered(false)}
+      >
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial
+          color="#ff8c00"
+          roughness={0.4}
+          metalness={0.5}
+          emissive={hovered ? "#ffff00" : "#000000"}
+          emissiveIntensity={hovered ? 0.3 : 0}
+        />
+      </mesh>
+      {/* Project label */}
+      <Html
+        position={[0, 6, 0]} // Relative to ProjectsSunsetZone
+        distanceFactor={1.5}
+      >
+        <div className="project-label">
+          <div className="project-label-content">{project.title}</div>
+        </div>
+      </Html>
+    </>
+  );
+}
+
+function CloudCharacter() {
+  const characterRef = useRef<THREE.Group>(null);
+  const [position, setPosition] = useState({ x: -20, y: 3, z: 0 }); // Start at first skill
+  const [velocity, setVelocity] = useState({ x: 0, z: 0 });
+  const keysRef = useRef<Record<string, boolean>>({});
+  const [targetSkillIndex, setTargetSkillIndex] = useState(0);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      keysRef.current[e.key.toLowerCase()] = true;
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      keysRef.current[e.key.toLowerCase()] = false;
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  useFrame((_, delta) => {
+    if (!characterRef.current) return;
+
+    const speed = 6; // Reduced for guided journey
+    const friction = 0.88;
+
+    let vx = 0;
+    let vz = 0;
+
+    // Movement constraints - prevent going too far off path
+    const maxX = 25;
+    const maxZ = 80;
+
+    if (keysRef.current['w'] || keysRef.current['arrowup']) vz -= 1;
+    if (keysRef.current['s'] || keysRef.current['arrowdown']) vz += 1;
+    if (keysRef.current['a'] || keysRef.current['arrowleft']) vx -= 1;
+    if (keysRef.current['d'] || keysRef.current['arrowright']) vx += 1;
+
+    const len = Math.hypot(vx, vz);
+    if (len > 0) {
+      vx /= len;
+      vz /= len;
+    }
+
+    setVelocity(prev => ({
+      x: prev.x * friction + vx * speed * delta,
+      z: prev.z * friction + vz * speed * delta,
+    }));
+
+    setPosition(prev => {
+      const newX = THREE.MathUtils.clamp(prev.x + velocity.x * delta, -maxX, maxX);
+      const newZ = THREE.MathUtils.clamp(prev.z + velocity.z * delta, -5, maxZ);
+      return { ...prev, x: newX, z: newZ };
+    });
+
+    // Auto-progress toward next skill when close
+    const targetSkill = SKILL_STOPS[targetSkillIndex];
+    if (targetSkill) {
+      const distanceToTarget = Math.hypot(
+        position.x - targetSkill.x,
+        position.z - targetSkill.z
+      );
+      if (distanceToTarget < 3 && targetSkillIndex < SKILL_STOPS.length - 1) {
+        setTargetSkillIndex(prev => prev + 1);
+      }
+    }
+
+    if (characterRef.current) {
+      characterRef.current.position.lerp(
+        new THREE.Vector3(position.x, position.y, position.z),
+        0.08
+      );
+
+      if (velocity.x !== 0 || velocity.z !== 0) {
+        const targetRotation = Math.atan2(velocity.x, velocity.z);
+        characterRef.current.rotation.y = THREE.MathUtils.lerp(
+          characterRef.current.rotation.y,
+          targetRotation,
+          0.08
+        );
+      }
+    }
+  });
+
+  return (
+    <group ref={characterRef} position={[position.x, position.y, position.z]}>
+      {/* Main cloud body */}
+      <mesh castShadow>
+        <sphereGeometry args={[1.4, 14, 10]} />
+        <meshStandardMaterial
+          color="#ffffff"
+          roughness={0.3}
+          metalness={0.1}
+          transparent
+          opacity={0.92}
+        />
+      </mesh>
+      {/* Lower cloud puff */}
+      <mesh castShadow position={[0, 1.2, 0]} scale={[1.1, 0.9, 1.1]}>
+        <sphereGeometry args={[1.0, 12, 8]} />
+        <meshStandardMaterial
+          color="#ffffff"
+          roughness={0.3}
+          metalness={0.1}
+          transparent
+          opacity={0.9}
+        />
+      </mesh>
+      {/* Eyes - simple dark spheres */}
+      <mesh castShadow position={[-0.3, 1.5, 0.6]} scale={[0.15, 0.15, 0.15]}>
+        <sphereGeometry args={[1, 8, 6]} />
+        <meshStandardMaterial color="#000000" />
+      </mesh>
+      <mesh castShadow position={[0.3, 1.5, 0.6]} scale={[0.15, 0.15, 0.15]}>
+        <sphereGeometry args={[1, 8, 6]} />
+        <meshStandardMaterial color="#000000" />
+      </mesh>
+    </group>
+  );
+}
+
+export default CloudWorld3D;

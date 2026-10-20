@@ -1,0 +1,183 @@
+const { chromium } = require('playwright');
+
+(async () => {
+  const browser = await chromium.launch({ headless: false, slowMo: 100 });
+  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  
+  const consoleMessages = [];
+  page.on('console', msg => consoleMessages.push({ type: msg.type(), text: msg.text() }));
+  page.on('pageerror', err => consoleMessages.push({ type: 'error', text: err.message }));
+  
+  await page.goto('http://localhost:5195/#/cloud-world', { waitUntil: 'networkidle' });
+  await page.waitForTimeout(3000);
+  
+  console.log('=== VISUAL JOURNEY VERIFICATION ===\n');
+  
+  // Helper to scroll to specific frame
+  const scrollToFrame = async (frame) => {
+    await page.evaluate((f) => {
+      if (window.scrollToFrame) {
+        window.scrollToFrame(f);
+      } else {
+        window.scrollTo(0, f * 500); // fallback
+      }
+    }, frame);
+    await page.waitForTimeout(1000);
+    
+    const currentFrame = await page.evaluate(() => window.frameIndex || 0);
+    console.log(`Scrolled to frame ~${currentFrame}`);
+    return currentFrame;
+  };
+  
+  // Check Skills clouds at frame 48 (start), 69 (middle), 90 (end)
+  console.log('--- SKILLS ENVIRONMENT (frames 48-90) ---');
+  for (const frame of [48, 69, 90]) {
+    await scrollToFrame(frame);
+    
+    // Check hotspot visibility and position
+    const hotspots = await page.$$('[data-testid="skill-cloud"]');
+    console.log(`Frame ${frame}: ${hotspots.length} skill hotspots visible`);
+    
+    // Check labels
+    const labels = await page.$$eval('[data-testid="skill-cloud"]', els => 
+      els.map(el => ({
+        text: el.textContent?.trim() || '',
+        visible: el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0,
+        bounds: el.getBoundingClientRect()
+      }))
+    );
+    labels.forEach(l => {
+      if (l.visible) console.log(`  Label: "${l.text}" at (${Math.round(l.bounds.x)}, ${Math.round(l.bounds.y)}) size ${Math.round(l.bounds.width)}x${Math.round(l.bounds.height)}`);
+    });
+  }
+  
+  // Check mountain gate at frame 90
+  console.log('\n--- MOUNTAIN GATE (frame 90) ---');
+  await scrollToFrame(90);
+  const gateHint = await page.$('[data-testid="mountain-gate-hint"]');
+  if (gateHint) {
+    const visible = await gateHint.isVisible();
+    console.log(`Mountain gate hint visible: ${visible}`);
+  }
+  
+  // Check scroll lock - try to scroll past frame 90
+  console.log('\n--- SCROLL LOCK TEST ---');
+  const beforeScroll = await page.evaluate(() => window.scrollY);
+  await page.mouse.wheel(0, 5000);
+  await page.waitForTimeout(1000);
+  const afterScroll = await page.evaluate(() => window.scrollY);
+  const frameAfter = await page.evaluate(() => window.frameIndex || 0);
+  console.log(`Scroll Y before: ${beforeScroll}, after: ${afterScroll}, frame: ${frameAfter}`);
+  console.log(`Scroll locked at gate: ${frameAfter <= 90}`);
+  
+  // Press Enter to traverse mountain
+  console.log('\n--- MOUNTAIN TRAVERSAL (Enter at gate) ---');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(8000); // Wait for traversal to complete
+  
+  const frameAfterTraversal = await page.evaluate(() => window.frameIndex || 0);
+  console.log(`Frame after traversal: ${frameAfterTraversal}`);
+  console.log(`Reached projects environment: ${frameAfterTraversal >= 165}`);
+  
+  // Check Projects clouds at frame 165 (start), 178 (middle), 191 (end)
+  console.log('\n--- PROJECTS ENVIRONMENT (frames 165-191) ---');
+  for (const frame of [165, 178, 191]) {
+    await scrollToFrame(frame);
+    
+    const hotspots = await page.$$('[data-testid="project-cloud"]');
+    console.log(`Frame ${frame}: ${hotspots.length} project hotspots visible`);
+    
+    const labels = await page.$$eval('[data-testid="project-cloud"]', els => 
+      els.map(el => ({
+        text: el.textContent?.trim() || '',
+        visible: el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0,
+        bounds: el.getBoundingClientRect()
+      }))
+    );
+    labels.forEach(l => {
+      if (l.visible) console.log(`  Label: "${l.text}" at (${Math.round(l.bounds.x)}, ${Math.round(l.bounds.y)}) size ${Math.round(l.bounds.width)}x${Math.round(l.bounds.height)}`);
+    });
+  }
+  
+  // Test click on first project cloud
+  console.log('\n--- PROJECT CLOUD CLICK TEST ---');
+  await scrollToFrame(170);
+  const projectHotspots = await page.$$('[data-testid="project-cloud"]');
+  if (projectHotspots.length > 0) {
+    // Get center of first hotspot
+    const box = await projectHotspots[0].boundingBox();
+    if (box) {
+      await page.mouse.click(box.x + box.width/2, box.y + box.height/2);
+      await page.waitForTimeout(1000);
+      
+      // Check expansion panel
+      const panel = await page.$('[data-testid="project-expansion-panel"]');
+      if (panel && await panel.isVisible()) {
+        console.log('Project expansion panel opened successfully');
+        
+        // Check for GitHub link
+        const link = await page.$('[data-testid="project-external-link"]');
+        if (link) {
+          const href = await link.getAttribute('href');
+          console.log(`External link found: ${href}`);
+        }
+        
+        // Close with Escape
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+        console.log('Closed with Escape');
+      }
+    }
+  }
+  
+  // Test click on first skill cloud
+  console.log('\n--- SKILL CLOUD CLICK TEST ---');
+  await scrollToFrame(60);
+  const skillHotspots = await page.$$('[data-testid="skill-cloud"]');
+  if (skillHotspots.length > 0) {
+    const box = await skillHotspots[0].boundingBox();
+    if (box) {
+      await page.mouse.click(box.x + box.width/2, box.y + box.height/2);
+      await page.waitForTimeout(1000);
+      
+      const panel = await page.$('[data-testid="skill-expansion-panel"]');
+      if (panel && await panel.isVisible()) {
+        console.log('Skill expansion panel opened successfully');
+        
+        // Close with Escape
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(500);
+        console.log('Closed with Escape, frame restored');
+      }
+    }
+  }
+  
+  // Check mobile viewport
+  console.log('\n--- MOBILE VIEWPORT TEST ---');
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.waitForTimeout(1000);
+  await scrollToFrame(60);
+  const mobileSkillHotspots = await page.$$('[data-testid="skill-cloud"]');
+  console.log(`Mobile (375px): ${mobileSkillHotspots.length} skill hotspots visible`);
+  
+  // Check reduced motion
+  console.log('\n--- REDUCED MOTION TEST ---');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(2000);
+  await scrollToFrame(60);
+  const reducedSkillHotspots = await page.$$('[data-testid="skill-cloud"]');
+  console.log(`Reduced motion: ${reducedSkillHotspots.length} skill hotspots visible`);
+  
+  // Final checks
+  console.log('\n=== CONSOLE ERRORS ===');
+  const errors = consoleMessages.filter(m => m.type === 'error');
+  if (errors.length === 0) {
+    console.log('No console errors');
+  } else {
+    errors.forEach(e => console.log(`ERROR: ${e.text}`));
+  }
+  
+  await browser.close();
+  console.log('\n=== VISUAL JOURNEY VERIFICATION COMPLETE ===');
+})();

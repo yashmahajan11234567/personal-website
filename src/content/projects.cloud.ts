@@ -11,7 +11,11 @@
  *    `contribution` describes ONLY that added work. The original author is named
  *    in `collaborators` because crediting them is required, not optional.
  *
- * 2. MediGen — `solo`. All 45 commits are the author's.
+ * 2. DevOps Masterclass — `course`. College open-elective coursework. Every
+ *    fact in the entry was verified against the live repository (seven
+ *    workflow files, the Devops/ and K8s/ trees, 40 commits). It is presented
+ *    as coursework, never as production experience, per the audit's hardest
+ *    rule.
  *
  * 3. Go microservices — `collaborative`. Joint college project. Git commit counts
  *    are NOT a contribution measure here: development happened on one machine,
@@ -34,7 +38,7 @@ export const CLOUD_PROJECTS: readonly Project[] = [
     world: 'cloud',
     authorship: 'extended-existing',
     contribution:
-      'Took an existing Flask application and productionized it: containerization, multi-service orchestration, an eight-job CI/CD pipeline, AWS infrastructure as code, configuration management, automated deployment, and a deployment validation step.',
+      'Took an existing Flask application and productionized it end to end: containerization, Kubernetes on Minikube with probes and rollback, a GitHub Actions pipeline to GHCR, a Prometheus/Grafana/Loki monitoring stack, AWS infrastructure as code, Ansible provisioning, and functional-audit fixes across the app (RBAC, admin CRUD, notifications).',
     collaborators: [
       {
         name: 'Ruturaj Warkad',
@@ -42,17 +46,23 @@ export const CLOUD_PROJECTS: readonly Project[] = [
       },
     ],
     description:
-      'A digital prescription verification system. This entry covers the DevOps and productionization work: turning an existing application into a containerised, continuously delivered, infrastructure-as-code deployment on AWS.',
+      'A prescription verification system (doctors issue, pharmacists verify by ID, admins manage) deployed to Minikube with readiness/liveness probes and rollback, monitored by Prometheus, Grafana and Loki, delivered by a GitHub Actions pipeline to GHCR, with Terraform/Ansible provisioning for AWS EC2.',
     technologies: [
+      'Kubernetes',
+      'Minikube',
       'Docker',
       'Docker Compose',
       'GitHub Actions',
+      'Prometheus',
+      'Grafana',
+      'Loki',
       'Terraform',
       'AWS',
       'Ansible',
       'Flask',
       'Gunicorn',
       'pytest',
+      'Playwright',
     ],
     workflow: {
       metaphor: 'productionization-rig',
@@ -62,102 +72,104 @@ export const CLOUD_PROJECTS: readonly Project[] = [
           label: 'Existing application',
           detail: 'Flask app originally written by Ruturaj Warkad — the starting point, not my work',
         },
-        { id: 'docker', label: 'Docker', detail: 'Application containerised for deployment' },
-        { id: 'compose', label: 'Docker Compose', detail: 'Multi-service orchestration with PostgreSQL' },
-        { id: 'tests', label: 'Tests', detail: '183 passing, 2 skipped' },
+        { id: 'app', label: 'App work', detail: 'RBAC roles (doctor/pharmacist/admin), admin CRUD, notifications, seeding fixes — validated by a 19/19 Playwright pass' },
+        { id: 'docker', label: 'Docker', detail: 'Single-stage slim image, gunicorn on :5000, named volume for the SQLite file' },
+        { id: 'compose', label: 'Docker Compose', detail: 'Local stack with persistent prescription data' },
+        { id: 'tests', label: 'Tests', detail: 'pytest suite + 10 Playwright E2E scripts (19/19 recorded in the functional audit)' },
         {
           id: 'ci',
           label: 'CI/CD',
-          detail: 'Eight jobs across 330 lines; apply and deploy gated on workflow_dispatch plus the production environment',
+          detail: 'Three jobs: ruff+pytest, pip-audit+Trivy (CRITICAL/HIGH gate), Buildx push to GHCR',
+        },
+        {
+          id: 'k8s',
+          label: 'Kubernetes',
+          detail: 'Minikube via kustomize: RollingUpdate, /health probes, resource limits, Secret, PVC persistence',
+        },
+        {
+          id: 'observability',
+          label: 'Monitoring',
+          detail: 'Prometheus ServiceMonitor, Grafana 5-panel dashboard (ConfigMap), Loki + Promtail log aggregation',
         },
         {
           id: 'terraform',
           label: 'Terraform',
-          detail: 'Eight AWS resources declared; terraform validate passes',
+          detail: 'Eight AWS resources declared (VPC through EC2); terraform validate passes',
         },
-        { id: 'aws', label: 'AWS', detail: 'VPC, subnet, security group, and EC2 provisioned as code' },
-        { id: 'ansible', label: 'Ansible', detail: 'Configuration applied from a generated inventory' },
-        {
-          id: 'deploy',
-          label: 'Deployment',
-          detail: 'Automated deploy finished by a health-check poll and a /login smoke test',
-        },
+        { id: 'ansible', label: 'Ansible', detail: 'Docker install + image build + container run on EC2, health-check final step' },
       ],
     },
     results: [
-      '183 tests passed, 2 skipped — executed during the audit',
-      'terraform validate passes — executed during the audit',
-      'CI/CD pipeline: 8 jobs, 330 lines',
-      'Terraform: 8 AWS resources, 133 lines',
-      'Production deployment gated behind workflow_dispatch and a production environment',
-      'No plaintext credentials in the repository; secrets.yml is untracked with example files committed',
+      'Playwright E2E: 19/19 pass recorded against the Minikube deployment (functional audit)',
+      'Kubernetes: RollingUpdate + kubectl rollout undo demonstrated; PVC kept SQLite across pod restarts',
+      'Monitoring live-verified: Prometheus up{job="rxverify"}=1, Grafana dashboard rendering, Loki ingestion returning streams',
+      'CI pipeline: 3 jobs to GHCR; Trivy fails the build on CRITICAL/HIGH',
+      'Terraform: 8 AWS resources, validate passes; Ansible playbook ends in a health-check probe',
     ],
     limitations: [
-      'The application layer was authored by a collaborator; the claim here is the DevOps and productionization layer',
+      'The application layer was authored by a collaborator; the claim here is the DevOps layer plus the functional-audit fixes',
+      'Kubernetes runs on Minikube (local cluster), not a managed cloud cluster',
       'Deployment targets a single EC2 instance rather than a highly available topology',
+      'Loki holds gunicorn startup logs in the recorded demo; app-level log volume is thin',
     ],
     github: 'https://github.com/yashmahajan11234567/digital-prescription-verification-devops',
     evidence: [
-      '.github/workflows/ci-cd.yml — the eight-job pipeline',
-      'terraform/main.tf — eight AWS resources, validate passes',
-      'ansible/deploy.yml — the provisioning playbook',
-      'pytest run — 183 passed, 2 skipped',
+      'k8s/ — deployment.yaml (probes, limits, PVC), servicemonitor.yaml, grafana-dashboard-configmap.yaml, loki.yaml, promtail.yaml, kustomization.yaml',
+      '.github/workflows/ci.yml — the three-job pipeline',
+      'reports/functional-test-results.md — 19/19 Playwright pass; reports/live-health-audit.md — monitoring live-verified',
+      'docs/sre.md — SLIs/SLOs and error-budget policy; docs/incident-example.md — rollback incident writeup',
+      'terraform/main.tf — eight AWS resources; ansible/deploy.yml — the provisioning playbook',
     ],
   },
   {
-    id: 'medigen',
-    title: 'MediGen — OCR Document Pipeline',
+    id: 'devops-masterclass',
+    title: 'Full-Stack AI DevOps Masterclass',
     world: 'cloud',
-    authorship: 'solo',
+    authorship: 'course',
     contribution:
-      'Built the container architecture, image preprocessing pipeline, API, and frontend, including the health-check contract and readiness gating.',
+      'Completed the coursework end to end: built and containerised the practice applications, wrote the GitHub Actions CI workflows, and authored the Kubernetes manifests for local and cloud deployments.',
     description:
-      'An OCR document-processing service: images are preprocessed and parsed into structured documents behind a FastAPI service with a React frontend, delivered as a container stack.',
+      'A coursework repository from a college open elective: small containerised web applications (Node.js, Python, Spring Boot) with Docker Compose stacks, GitHub Actions CI workflows, and Kubernetes deployment exercises across local, AWS, Azure, and GCP.',
     technologies: [
       'Docker',
       'Docker Compose',
-      'nginx',
-      'FastAPI',
-      'React',
-      'PaddleOCR',
-      'OpenCV',
-      'Alembic',
-      'Render',
-      'pytest',
+      'GitHub Actions',
+      'Kubernetes',
+      'Node.js',
+      'Python',
+      'Java',
     ],
     workflow: {
-      metaphor: 'service-pod',
+      metaphor: 'service-cluster',
       stages: [
-        { id: 'app', label: 'Application', detail: 'React frontend with a FastAPI backend' },
+        { id: 'apps', label: 'Applications', detail: 'Hello and tax-calculator apps in Node.js, Python, and Spring Boot' },
+        { id: 'containers', label: 'Containers', detail: 'One Dockerfile per service; multi-app Docker Compose stacks' },
         {
-          id: 'build',
-          label: 'Multi-stage build',
-          detail: 'node:18-alpine builder to nginx:alpine runtime, non-root user',
+          id: 'ci',
+          label: 'CI workflows',
+          detail: 'Seven workflow files: per-app build/test pipelines plus environment and secrets exercises',
         },
         {
-          id: 'compose',
-          label: 'Compose',
-          detail: 'Healthchecks on every service, readiness gated with service_healthy, Alembic migrations run before startup',
+          id: 'k8s',
+          label: 'Kubernetes',
+          detail: 'Deployment, Service, ConfigMap, and Secret manifests exercised on local, AWS, Azure, and GCP',
         },
-        { id: 'deploy', label: 'Deploy', detail: 'Render blueprint with a declared health check path' },
       ],
     },
     results: [
-      '174 unit tests passing',
-      'Non-root container user (uid/gid 1001) across four Dockerfiles',
-      'nginx serves gzip with immutable caching on fingerprinted assets',
+      'Seven GitHub Actions workflow files committed in .github/workflows',
+      'Containerised applications for all three language stacks',
+      'Kubernetes manifests covering deployments, services, config, and secrets',
     ],
     limitations: [
-      'No CI/CD pipeline — no .github, .gitlab-ci.yml, Jenkinsfile, or CircleCI config exists',
-      'No infrastructure as code and no cloud provider SDK usage',
-      'Deployed to Render (PaaS), not to a cloud provider',
+      'Coursework from a college open elective — practice material, not production experience',
+      'No cloud provider resources are provisioned by the repository itself; the K8s exercises were run against local clusters',
     ],
-    github: 'https://github.com/yashmahajan11234567/Medigen',
+    github: 'https://github.com/yashmahajan11234567/Full-Stack-AI-DevOps-Masterclass',
     evidence: [
-      'Four Dockerfiles — multi-stage builds, non-root users',
-      'docker-compose.yml — readiness gating and healthchecks',
-      'render.yaml — deployment blueprint',
-      '174 unit tests passing',
+      '.github/workflows/ — seven workflow files',
+      'Devops/ — containerised applications and Docker Compose stacks',
+      'K8s/ — Kubernetes manifests for local and cloud exercises',
     ],
   },
   {

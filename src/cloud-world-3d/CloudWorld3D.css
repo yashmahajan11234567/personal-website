@@ -1,0 +1,197 @@
+.cloud-world-container {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  touch-action: none;
+  z-index: 1000;
+}
+
+.cloud-world-container canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cloud-world-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2000;
+}
+
+.cloud-world-overlay .overlay-content {
+  /* Auto on children only — the inset:0 content box itself must stay
+     click-through or it swallows every pointer event before the canvas,
+     killing OrbitControls (mouse-look) and marker clicks. */
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #ffffff;
+}
+
+/* Interactive overlay widgets stay clickable. */
+.cloud-world-overlay .overlay-content button,
+.cloud-world-overlay .overlay-content a {
+  pointer-events: auto;
+}
+
+.overlay-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.overlay-header h2 {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.exit-button {
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.exit-button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: scale(1.05);
+}
+
+.exit-button:focus-visible {
+  outline: 2px solid #ff9900;
+  outline-offset: 2px;
+}
+
+.overlay-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.placeholder-text {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.8);
+  max-width: 500px;
+}
+
+.controls-hint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: ui-monospace, 'SFMono-Regular', 'Cascadia Mono', Consolas, monospace;
+}
+
+.controls-hint kbd {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+.cloud-world-fallback,
+.cloud-world-reduced {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: #0a0a0f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.fallback-content,
+.reduced-content {
+  text-align: center;
+  padding: 2rem;
+  max-width: 400px;
+}
+
+.fallback-content h1,
+.reduced-content h1 {
+  margin: 0 0 1rem;
+  font-size: 2rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.fallback-content p,
+.reduced-content p {
+  margin: 0 0 2rem;
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.exit-button {
+  background: rgba(255, 153, 0, 0.2);
+  border: 2px solid #ff9900;
+  color: #ff9900;
+  padding: 0.75rem 2rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.exit-button:hover {
+  background: rgba(255, 153, 0, 0.4);
+  transform: translateY(-2px);
+}
+
+.exit-button:focus-visible {
+  outline: 2px solid #ff9900;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cloud-world-overlay .overlay-content {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .cloud-world-overlay .overlay-content {
+    padding: 1.5rem;
+  }
+
+  .overlay-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .controls-hint {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}

@@ -502,10 +502,10 @@ export const InfoPanel = ({ kind, id, onClose, initialDashboardId }: InfoPanelPr
           real `<button>` with visible text, in the normal tab order, carrying an
           accessible name that states where it goes.
 
-          It calls the same `onClose` as the `×` and the footer strip. All three
-          are equivalent routes out; none of them depends on the keyboard. The
-          `×` is kept because "close this dialog" and "go back to the world" are
-          both reasonable intentions and both are served now.
+          It calls the same `onClose` the previous `×` and footer strip used.
+          Escape is the other route out. The labelled button replaced the bare
+          `×` glyph because a 16px symbol is not a discoverable "leave this
+          dialog" control for a mouse-only visitor.
         */}
         <button
           type="button"
@@ -517,27 +517,6 @@ export const InfoPanel = ({ kind, id, onClose, initialDashboardId }: InfoPanelPr
           <span aria-hidden="true">&larr;</span>
           Back
           <span className="visually-hidden"> to the world</span>
-        </button>
-
-        {/*
-          THE ALWAYS-VISIBLE CLOSE CONTROL.
-
-          The previous close button was a full-width muted strip at the very
-          BOTTOM of a scrolling container - the lowest-contrast element in the
-          panel, and off-screen entirely when the page auto-scrolled. This is a
-          labelled icon button in the header, so it is visible and hit-testable
-          without scrolling whatever the body length. The footer Close button is
-          kept as well, so there are three routes out and none depends on
-          scrolling.
-        */}
-        <button
-          type="button"
-          className="info-panel__close-icon"
-          onClick={onClose}
-          data-testid="panel-close-icon"
-          aria-label={`Close this ${kind} panel`}
-        >
-          <span aria-hidden="true">&times;</span>
         </button>
       </header>
 
@@ -558,16 +537,6 @@ export const InfoPanel = ({ kind, id, onClose, initialDashboardId }: InfoPanelPr
           <p className="info-panel__missing">That project is not in the content model.</p>
         )}
       </div>
-
-      <button
-        type="button"
-        className="info-panel__close"
-        onClick={onClose}
-        data-testid="panel-close"
-      >
-        Close
-        <span className="visually-hidden"> this {kind} panel</span>
-      </button>
     </aside>
   );
 };

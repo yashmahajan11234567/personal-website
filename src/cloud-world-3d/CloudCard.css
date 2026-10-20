@@ -1,0 +1,307 @@
+/* CloudCard — full-screen information overlay (new-requirements Stage 3).
+ * A viewport-fixed scrim dims + blurs the 3D world, with a large centered
+ * cloud-shaped card on top. Visual language matches the wooden signs: warm
+ * wood tones, cream cloud silhouette, cyan #37C8E8 accents. Exactly ONE
+ * button ("Return to World"); Escape and scrim clicks also close. */
+
+.cloud-card-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 3000; /* above the world overlay (2000) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4vmin;
+  background: rgba(24, 14, 8, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: cloud-card-scrim-in 0.25s ease-out both;
+}
+
+@keyframes cloud-card-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The cloud-shaped card: a wide rounded silhouette with puff bumps, built
+ * from border-radius lobes. Inner .cloud-card-body holds the readable text
+ * so the shape never clips content. */
+.cloud-card {
+  position: relative;
+  width: min(760px, 94vw);
+  padding: 6.5vmin 6vmin 6vmin;
+  /* Cream cloud body */
+  background: linear-gradient(180deg, #fff8ea 0%, #f7ead2 100%);
+  /* Layered border-radii = cloud silhouette */
+  border-radius:
+    6vmin 6vmin 6vmin 6vmin,
+    12vmin 12vmin 12vmin 12vmin;
+  /* Top puffs drawn as pseudo-circles via box-shadow */
+  box-shadow:
+    0 24px 60px rgba(20, 10, 4, 0.45),
+    inset 0 0 0 3px rgba(139, 94, 52, 0.25);
+  animation: cloud-card-pop-in 0.28s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  /* Cloud lobes: circles fanned above the card body */
+  --puff: 11vmin;
+}
+
+/* Cloud puffs — 5 overlapping circles forming the cloud's crown, echoing
+ * the sign plank silhouette (flat base, piled lobes). */
+.cloud-card::before,
+.cloud-card::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--puff) * -0.62);
+  left: 0;
+  right: 0;
+  height: var(--puff);
+  pointer-events: none;
+}
+.cloud-card::before {
+  background:
+    radial-gradient(circle at 18% 100%, #fff8ea 68%, transparent 69%),
+    radial-gradient(circle at 42% 100%, #fff8ea 72%, transparent 73%),
+    radial-gradient(circle at 66% 100%, #fff8ea 68%, transparent 69%),
+    radial-gradient(circle at 88% 100%, #fff8ea 72%, transparent 73%);
+}
+.cloud-card::after {
+  left: 50%;
+  transform: translateX(-50%);
+  width: 46%;
+  top: calc(var(--puff) * -1.05);
+  height: calc(var(--puff) * 1.15);
+  background:
+    radial-gradient(circle at 30% 100%, #fff8ea 70%, transparent 71%),
+    radial-gradient(circle at 70% 100%, #fff8ea 70%, transparent 71%);
+}
+
+@keyframes cloud-card-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.cloud-card.cloud-card--in {
+  /* class kept for the enter hook; the animation above plays on mount */
+}
+
+.cloud-card-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1.1rem;
+  font-family: Georgia, 'Times New Roman', serif;
+  color: #33200f;
+}
+
+.cloud-card-kicker {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: #8b5e34;
+  padding: 0.3rem 1rem;
+  border: 1.5px solid rgba(139, 94, 52, 0.4);
+  border-radius: 999px;
+  background: rgba(139, 94, 52, 0.08);
+}
+
+.cloud-card-title {
+  margin: 0;
+  font-size: clamp(1.6rem, 4.2vmin, 2.4rem);
+  font-weight: 700;
+  color: #33200f;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.cloud-card-desc {
+  margin: 0;
+  max-width: 56ch;
+  font-size: clamp(1rem, 2.6vmin, 1.15rem);
+  line-height: 1.65;
+  color: #4a3423;
+}
+
+.cloud-card-meta {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.cloud-card-chips {
+  display: inline-block;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.85rem;
+  color: #6b4a2b;
+  background: rgba(139, 94, 52, 0.12);
+  border-radius: 999px;
+  padding: 0.35rem 1rem;
+}
+
+/* The project card's repository link. Cyan family matching the Return pill,
+   but visually secondary: plain text link, not a second button. #17677A is the
+   darkest tint that keeps the hue; measured contrast vs the card body gradient
+   is 6.09:1 (lightest stop) / 5.36:1 (darkest stop) — above the 4.5:1 AA floor
+   for this 15px text, which #1D7F96 (4.38:1) was not. */
+.cloud-card-github {
+  display: inline-block;
+  margin-top: 0.55rem;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #17677a;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cloud-card-github:hover {
+  color: #0f4c5c;
+}
+
+.cloud-card-github:focus-visible {
+  outline: 3px solid #13323d;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The meta row must stack chips above the link cleanly. */
+.cloud-card-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ---- Category overlays (2026-10-16 redesign) ----
+   A category card lists its real skills with summaries, evidence repos and
+   a "Training only" chip for scaffold claims. Same cream/serif language as
+   the rest of the card; the list is left-aligned for scannability. */
+.cloud-card-category {
+  width: 100%;
+  max-width: 30rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cloud-card-skill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  text-align: left;
+}
+
+.cloud-card-skill-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  padding: 0.45rem 0.7rem;
+  background: rgba(139, 94, 52, 0.08);
+  border-radius: 0.6rem;
+}
+
+.cloud-card-skill-name {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #33200f;
+}
+
+.cloud-card-skill-summary {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.85rem;
+  color: #5a4632;
+}
+
+.cloud-card-skill-chip {
+  align-self: flex-start;
+  margin-top: 0.2rem;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8a5a1c;
+  background: rgba(218, 160, 102, 0.25);
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+}
+
+.cloud-card-skill-repos {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.72rem;
+  color: #7a6647;
+  margin-top: 0.15rem;
+}
+
+.cloud-card-cover-note {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 0.78rem;
+  color: #6b5638;
+  text-align: left;
+  margin: 0;
+  padding-left: 0.2rem;
+}
+
+.cloud-card-return {
+  margin-top: 0.6rem;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #13323d;
+  background: linear-gradient(180deg, #7fdcef 0%, #37c8e8 100%);
+  border: none;
+  border-radius: 999px;
+  padding: 0.85rem 2.6rem;
+  cursor: pointer;
+  box-shadow:
+    0 6px 18px rgba(55, 200, 232, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cloud-card-return:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 10px 24px rgba(55, 200, 232, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.cloud-card-return:focus-visible {
+  outline: 3px solid #13323d;
+  outline-offset: 2px;
+}
+
+/* Narrow screens: shrink the puffs, keep the silhouette recognizable. */
+@media (max-width: 560px) {
+  .cloud-card {
+    --puff: 8vmin;
+    padding: 7vmin 5vmin 6vmin;
+  }
+  .cloud-card-desc {
+    font-size: 0.95rem;
+  }
+}
+
+/* Reduced motion: no entrance animation, instant display. */
+@media (prefers-reduced-motion: reduce) {
+  .cloud-card-scrim,
+  .cloud-card {
+    animation: none !important;
+  }
+  .cloud-card-return {
+    transition: none !important;
+  }
+}

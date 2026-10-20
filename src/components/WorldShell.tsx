@@ -656,7 +656,7 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
           </dd>
           <dt>Close a panel</dt>
           <dd>
-            Press <kbd>Escape</kbd> or activate the Close button
+            Press <kbd>Escape</kbd> or activate the Back button
           </dd>
         </dl>
 

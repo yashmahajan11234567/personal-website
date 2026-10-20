@@ -23,7 +23,7 @@ import { defineConfig, devices } from '@playwright/test';
  * Nothing about production behaviour, the hero, gameplay, or the content
  * model changes: this file only decides which dev server the tests talk to.
  */
-const TEST_PORT = 5173;
+const TEST_PORT = 5195;
 const TEST_ORIGIN = `http://localhost:${TEST_PORT}`;
 
 export default defineConfig({

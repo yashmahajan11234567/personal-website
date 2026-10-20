@@ -128,31 +128,43 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
     if (typeof window === 'undefined') return;
     if (window.matchMedia('(hover: none), (pointer: coarse)').matches) return;
 
-    const container = containerRef.current;
-    if (!container) return;
-
+    /*
+     * The listener lives on `window`, not on the hero container (audit
+     * 2026-10-16, K2). On the container it required focus INSIDE the hero,
+     * but the hero is tabIndex={-1} and the page's only tab stop is the skip
+     * link — so a keyboard-only user could never trigger this route and could
+     * not reach the world boards at all. The guards below keep the shortcut
+     * safe now that every keydown is seen: it fires only when the world is
+     * not yet selected, no modal owns the event, and focus is not on a
+     * control whose Enter/Space means "activate this".
+     */
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
       if (event.defaultPrevented || event.repeat) return;
+      // Once a world is chosen the shortcut has nothing to offer: the hero is
+      // on its way out, and Enter/Space belong to whatever is focused there.
+      if (useGameStore.getState().currentWorld !== 'hero') return;
+      // A modal dialog (info panel, cloud card) owns the keyboard; never steal.
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
       // Never intercept when focus is already on a control: Enter/Space there
       // means "activate this", and stealing it would break board selection.
       const active = document.activeElement;
-      if (active && active !== document.body && container.contains(active)) {
+      if (active && active !== document.body && containerRef.current?.contains(active)) {
         const tag = active.tagName;
         if (tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') {
           return;
         }
       }
       event.preventDefault();
-      container.focus();
+      containerRef.current?.focus();
       window.scrollTo({
         top: (document.documentElement.scrollHeight - window.innerHeight) * 0.7,
         behavior: 'smooth',
       });
     };
 
-    container.addEventListener('keydown', onKeyDown);
-    return () => container.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [reducedMotion]);
 
   // Sync cinematicPhase to store so AccentGlowLayer can gate atmosphere to selection phase

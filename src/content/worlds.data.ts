@@ -54,7 +54,7 @@ export const WORLD_CONFIGS: readonly WorldConfig[] = [
       'terraform',
       'ansible',
     ],
-    projectOrder: ['rxverify', 'medigen', 'go-microservices'],
+    projectOrder: ['rxverify', 'devops-masterclass', 'go-microservices'],
     // Kubernetes is reachable but never required. See the note above.
     optionalBranch: {
       skillId: 'kubernetes',

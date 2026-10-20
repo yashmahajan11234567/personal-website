@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto('http://localhost:4173/#/cloud-world', { waitUntil: 'load' });
+await page.waitForSelector('canvas', { timeout: 15000 });
+await page.waitForFunction(() => window.__cwScene, { timeout: 25000 });
+await page.waitForTimeout(2500);
+await page.evaluate(() => { window.__cwQaCam = { pos: [0, 7, 80], target: [0, 16, 100] }; });
+await page.waitForTimeout(900);
+await page.screenshot({ path: 'qa-screenshots-polish/c7-entrance-high2.png' });
+console.log('shot: c7-entrance-high2');
+await browser.close();

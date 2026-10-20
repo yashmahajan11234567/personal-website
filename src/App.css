@@ -5,6 +5,16 @@
   width: 100%;
 }
 
+/*
+ * Suspense fallback while the Cloud World chunk loads (audit 2026-10-16, K3).
+ * It paints the app background so the handoff from the hero shows no flash;
+ * it is aria-hidden because it is a brief blank frame, not content.
+ */
+.cloud-world-loading {
+  min-height: 100vh;
+  background: var(--color-bg, #f5f5f5);
+}
+
 .placeholder-world {
   min-height: 100vh;
   display: flex;

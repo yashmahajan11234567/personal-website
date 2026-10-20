@@ -1,0 +1,146 @@
+{
+  "base": "http://localhost:4173/#/cloud-world",
+  "mode": "headed",
+  "fps": 34.3,
+  "idle": {
+    "spanS": 10.26,
+    "samples": 352,
+    "driftX": 0,
+    "driftY": 0,
+    "driftZ": 0
+  },
+  "cloudDrift": {
+    "spanS": 10.26,
+    "dx": 11.827,
+    "uPerS": 1.153,
+    "wrapped": false
+  },
+  "movement": {
+    "w": {
+      "spanS": 1.19,
+      "dx": 0.664,
+      "dz": 8.519,
+      "avgSpeedUPerS": 7.17,
+      "peakSpeedUPerS": 15.11
+    },
+    "s": {
+      "spanS": 1.11,
+      "dx": -0.307,
+      "dz": -7.367,
+      "avgSpeedUPerS": 6.64,
+      "peakSpeedUPerS": 10.69
+    },
+    "a": {
+      "spanS": 1.21,
+      "dx": 8.489,
+      "dz": 0.094,
+      "avgSpeedUPerS": 6.99,
+      "peakSpeedUPerS": 11.01
+    },
+    "d": {
+      "spanS": 1.09,
+      "dx": -6.774,
+      "dz": -2.402,
+      "avgSpeedUPerS": 6.57,
+      "peakSpeedUPerS": 12.55
+    },
+    "ArrowUp": {
+      "spanS": 1.09,
+      "dx": -1.003,
+      "dz": 7.47,
+      "avgSpeedUPerS": 6.9,
+      "peakSpeedUPerS": 11.2
+    },
+    "ArrowDown": {
+      "spanS": 1.49,
+      "dx": -0.172,
+      "dz": -9.116,
+      "avgSpeedUPerS": 6.1,
+      "peakSpeedUPerS": 17.32
+    },
+    "ArrowLeft": {
+      "spanS": 1.51,
+      "dx": 9.693,
+      "dz": 1.13,
+      "avgSpeedUPerS": 6.48,
+      "peakSpeedUPerS": 15.37
+    },
+    "ArrowRight": {
+      "spanS": 1.11,
+      "dx": -6.681,
+      "dz": -3.62,
+      "avgSpeedUPerS": 6.83,
+      "peakSpeedUPerS": 12.72
+    }
+  },
+  "momentum": [
+    {
+      "dt": 1.01,
+      "vx": -0.597,
+      "vz": 7.771
+    },
+    {
+      "dt": 1.04,
+      "vx": -0.564,
+      "vz": 7.774
+    },
+    {
+      "dt": 1.08,
+      "vx": -0.533,
+      "vz": 7.776
+    },
+    {
+      "dt": 1.08,
+      "vx": -0.518,
+      "vz": 7.777
+    },
+    {
+      "dt": 1.11,
+      "vx": -0.503,
+      "vz": 7.778
+    },
+    {
+      "dt": 1.13,
+      "vx": -0.461,
+      "vz": 7.132
+    },
+    {
+      "dt": 1.15,
+      "vx": -0.388,
+      "vz": 5.997
+    },
+    {
+      "dt": 1.18,
+      "vx": -0.356,
+      "vz": 5.499
+    },
+    {
+      "dt": 1.21,
+      "vx": -0.326,
+      "vz": 5.043
+    },
+    {
+      "dt": 1.23,
+      "vx": -0.274,
+      "vz": 4.24
+    },
+    {
+      "dt": 1.26,
+      "vx": -0.231,
+      "vz": 3.566
+    },
+    {
+      "dt": 1.29,
+      "vx": -0.211,
+      "vz": 3.27
+    }
+  ],
+  "mouseLook": {
+    "avatarMoveDuringLook": 0,
+    "expectedZero": true
+  },
+  "consoleIssues": [
+    "[warning] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+    "[warning] THREE.WebGLShadowMap: PCFSoftShadowMap has been removed. Using PCFShadowMap instead."
+  ]
+}

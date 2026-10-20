@@ -72,7 +72,7 @@ export const DATA_PROJECTS: readonly Project[] = [
       '14 of 714 tests fail under the installed pandas 3.0.5; the project pins 2.3.3',
       'scikit-learn is declared but was not executed in the audited environment',
     ],
-    github: 'https://github.com/yashmahajan11234567/Bluestock_fintech',
+    github: 'https://github.com/yashmahajan11234567/Bluestock-fintech',
     evidence: [
       'db/schema.sql — 11-table schema with 16 indexes',
       'validator.py — the 16 data-quality rules',

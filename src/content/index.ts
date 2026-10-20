@@ -11,8 +11,8 @@
  * later as a missing panel in the game.
  */
 
-import { CLOUD_SKILLS } from './skills.cloud';
 import { CLOUD_PROJECTS } from './projects.cloud';
+import { CLOUD_SKILLS } from './skills.cloud';
 import { DATA_PROJECTS } from './projects.data';
 import { DATA_SKILLS } from './skills.data';
 import type { PortfolioContent, Project, Skill, WorldConfig, WorldId } from './types';

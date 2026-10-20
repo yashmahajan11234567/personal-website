@@ -1,0 +1,16 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+await page.goto('http://localhost:4173/#/cloud-world', { waitUntil: 'load' });
+await page.waitForSelector('canvas', { timeout: 15000 });
+await page.waitForFunction(() => Array.isArray(window.__cwMountainDomes) && window.__cwMountFace, { timeout: 25000 });
+await page.waitForTimeout(2500);
+await page.evaluate(() => { window.__cwQaCam = { pos: [0, 9, 50], target: [0, 10, 100] }; });
+await page.waitForTimeout(900);
+await page.screenshot({ path: 'qa-screenshots-redesign/12-vista-fixed.png' });
+console.log('shot: 12-vista-fixed');
+await page.evaluate(() => { window.__cwQaCam = { pos: [0, 8, 66], target: [0, 12, 98] }; });
+await page.waitForTimeout(900);
+await page.screenshot({ path: 'qa-screenshots-redesign/13-vista-closer.png' });
+console.log('shot: 13-vista-closer');
+await browser.close();

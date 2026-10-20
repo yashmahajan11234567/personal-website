@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud World Prototype — Projects Arrival</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    color: #fff;
+  }
+  .scene {
+    position: relative;
+    width: 100vw; height: 100vh;
+    background: url('/assets/ending.png') center/cover no-repeat;
+  }
+  .scene::before {
+    content: '';
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 30%, rgba(255,140,60,0.15) 0%, transparent 60%),
+      radial-gradient(ellipse at 50% 100%, rgba(10,20,30,0.25) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .clouds-layer {
+    position: absolute; inset: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .cloud-node {
+    position: absolute;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    color: inherit;
+    font-family: inherit;
+    cursor: pointer;
+    pointer-events: auto;
+    transition: transform 220ms ease, filter 220ms ease;
+  }
+  .cloud-shape {
+    position: relative;
+    width: 120px; height: 70px;
+    background:
+      radial-gradient(ellipse at 35% 35%, rgba(255,255,255,0.95) 0%, rgba(246,239,230,0.9) 35%, rgba(230,218,205,0.85) 70%, rgba(200,185,170,0.7) 100%);
+    border-radius: 62% 38% 46% 54% / 58% 42% 58% 42%;
+    box-shadow:
+      inset 0 -10px 20px rgba(160,140,120,0.18),
+      inset 0 6px 14px rgba(255,255,255,0.45),
+      0 12px 28px rgba(0,0,0,0.25);
+    transition: box-shadow 220ms ease;
+  }
+  .cloud-shape::before, .cloud-shape::after {
+    content: '';
+    position: absolute;
+    background: inherit;
+    border-radius: inherit;
+    filter: brightness(1.02);
+  }
+  .cloud-shape::before {
+    width: 70%; height: 70%;
+    top: -15%; left: 10%;
+    opacity: 0.9;
+  }
+  .cloud-shape::after {
+    width: 55%; height: 55%;
+    bottom: -10%; right: 8%;
+    opacity: 0.85;
+  }
+  .cloud-node:hover .cloud-shape, .cloud-node:focus-visible .cloud-shape {
+    box-shadow:
+      inset 0 -10px 20px rgba(160,140,120,0.18),
+      inset 0 6px 14px rgba(255,255,255,0.45),
+      0 0 28px rgba(255,220,180,0.45),
+      0 16px 36px rgba(0,0,0,0.3);
+    transform: translateY(-4px) scale(1.04);
+  }
+  .cloud-label {
+    font-size: 12px; font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    pointer-events: none;
+  }
+  .cloud-node.expanded {
+    pointer-events: auto;
+    z-index: 10;
+  }
+  .cloud-node.expanded .cloud-shape {
+    width: 200px; height: 116px;
+    box-shadow:
+      inset 0 -14px 28px rgba(160,140,120,0.22),
+      inset 0 8px 20px rgba(255,255,255,0.5),
+      0 0 40px rgba(255,200,140,0.5),
+      0 20px 48px rgba(0,0,0,0.35);
+  }
+  .cloud-content {
+    display: none;
+    flex-direction: column; align-items: center; gap: 8px;
+    padding: 16px 20px;
+    background: rgba(255,250,245,0.92);
+    color: #3a2a1a;
+    border-radius: 14px;
+    box-shadow: 0 14px 36px rgba(0,0,0,0.4);
+    max-width: 320px;
+    text-align: center;
+  }
+  .cloud-node.expanded .cloud-content { display: flex; }
+  .cloud-content h3 {
+    font-size: 16px; font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #2a1a0a;
+  }
+  .cloud-content p {
+    font-size: 13px; line-height: 1.45;
+    color: #4a3a2a;
+  }
+  .cloud-content a {
+    color: #b74f2d;
+    text-decoration: underline;
+  }
+
+  /* Projects positions — organic placement within the scene */
+  .p1 { left: 16%; top: 28%; }
+  .p2 { left: 44%; top: 22%; }
+  .p3 { left: 70%; top: 26%; }
+</style>
+</head>
+<body>
+<div class="scene">
+  <div class="clouds-layer" role="navigation" aria-label="Project clouds">
+    <button class="cloud-node p1" aria-label="NIFTY-100" onclick="toggleCloud(this)">
+      <span class="cloud-shape"></span>
+      <span class="cloud-label">NIFTY-100</span>
+      <div class="cloud-content">
+        <h3>NIFTY-100</h3>
+        <p>Index analysis and market overview.</p>
+        <p class="meta">Authorship: solo · coursework analysis</p>
+        <p class="meta">Limitations: static dataset snapshot only.</p>
+      </div>
+    </button>
+    <button class="cloud-node p2" aria-label="MediGen" onclick="toggleCloud(this)">
+      <span class="cloud-shape"></span>
+      <span class="cloud-label">MediGen</span>
+      <div class="cloud-content">
+        <h3>MediGen</h3>
+        <p>Generative healthcare assistant prototype.</p>
+        <p class="meta">Authorship: solo project.</p>
+        <p class="meta">Limitations: prototype only, not production.</p>
+      </div>
+    </button>
+    <button class="cloud-node p3" aria-label="Go Microservices" onclick="toggleCloud(this)">
+      <span class="cloud-shape"></span>
+      <span class="cloud-label">Go Microservices</span>
+      <div class="cloud-content">
+        <h3><a href="https://github.com/painjanevivek/Real-Time-Balance-Visibility" target="_blank" rel="noopener noreferrer">Go Microservices</a></h3>
+        <p>Real-time balance visibility service.</p>
+        <p class="meta">Authorship: collaborative college project.</p>
+        <p class="meta">Limitations: commit skew visible due to shared machine.</p>
+      </div>
+    </button>
+  </div>
+</div>
+<script>
+  function toggleCloud(node) {
+    const wasExpanded = node.classList.contains('expanded');
+    document.querySelectorAll('.cloud-node.expanded').forEach(n => n.classList.remove('expanded'));
+    if (!wasExpanded) node.classList.add('expanded');
+  }
+</script>
+</body>
+</html>

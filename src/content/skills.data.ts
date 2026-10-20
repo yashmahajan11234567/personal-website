@@ -39,8 +39,9 @@ import type { Skill } from './types';
 
 /** The fintech analytics app. Two of the six skills are demonstrated here. */
 const REPO_FINTECH = {
-  name: 'Bluestock_fintech',
-  url: 'https://github.com/yashmahajan11234567/Bluestock_fintech',
+  name: 'Bluestock-fintech',
+  // Renamed on GitHub (was `Bluestock_fintech`, which 404s since the rename).
+  url: 'https://github.com/yashmahajan11234567/Bluestock-fintech',
 } as const;
 
 /** The medallion SQL Server warehouse. */

@@ -1,0 +1,23 @@
+{
+  "obs": {
+    "cloud": {
+      "spanS": 13.33,
+      "dx": 15.05,
+      "uPerS": 1.129,
+      "dy": -0.27,
+      "displacedAtLeast10u": true
+    },
+    "avatar": {
+      "driftX": 0,
+      "driftY": 0,
+      "driftZ": 0
+    }
+  },
+  "clearance": {
+    "camY": null,
+    "camZ": null,
+    "sampleCloudY": 48.1,
+    "note": "sample formation only; band min y=30, camera max y≈39.8 at polar 0.2π"
+  },
+  "errors": []
+}
