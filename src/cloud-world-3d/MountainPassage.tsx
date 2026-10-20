@@ -414,6 +414,10 @@ export function MountainPassage() {
       col[i * 3 + 1] = 0.62 + t * 0.10;
       col[i * 3 + 2] = 0.46 + t * 0.08;
     }
+    // Attach the color buffer BEFORE the strata pass reads it (getAttribute
+    // returns undefined until setAttribute is called — this ordering was the
+    // blank-page crash on 2026-10-20: setXYZ on undefined killed the chunk).
+    mergedFrame.setAttribute('color', new THREE.BufferAttribute(col, 3));
     // Per-vertex color pass matching the massif strata so the frame wall blends
     // with the mountain's warm-brown layered look (was uniform #C9A075).
     {
@@ -441,7 +445,6 @@ export function MountainPassage() {
       col.needsUpdate = true;
     }
     pos.needsUpdate = true;
-    mergedFrame.setAttribute('color', new THREE.BufferAttribute(col, 3));
     mergedFrame.computeVertexNormals();
     const frameMesh = new THREE.Mesh(
       mergedFrame,
