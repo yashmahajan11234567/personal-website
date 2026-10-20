@@ -338,13 +338,53 @@ export function MountainPassage() {
       new THREE.MeshBasicMaterial({ color: '#241509' }),
     );
 
+    // ---- 7b. Mouth frame walls (see-through fix, 2026-10-20) ----
+    // QA on the user's approach screenshot showed you can see STRAIGHT THROUGH
+    // the mountain next to the arch: the tube rim tops out at y≈7.5u, the massif's
+    // inner-face floor starts at y≈26u, and the brow is an open-ended strip —
+    // the band (lateral 7.3–18u, y 7.5–26u) was open air at both mouths. Solid
+    // sandstone piers + a lintel now fill it at BOTH mouths, while the carved
+    // arch silhouette (opening up to y≈7.3u) stays untouched.
+    const frameGeos: THREE.BufferGeometry[] = [];
+    const FRAME_MAT_H = 27; // top of frame = massif plateau floor height
+    const LATERAL_IN = 6.4; // pier inner face tucks BEHIND the tube rim (rim R+2.1=7.3):
+    //   tangent contact at 7.3 left a hairline sky slit on the right flank
+    //   (vision-flagged at screen ~(875,500), confirmed 2026-10-20). The rim now
+    //   covers the pier seam; piers still clear the ±4.4 walkable samples.
+    const LATERAL_OUT = 26; // extended 18->26 so the frame wall overlaps the massif
+    // flank's inner 8u (previously a coplanar/adjacent seam read as a vertical
+    // slit from grazing angles: brown frame face vs. yellowish massif flank)
+    const FRAME_D = 6; // thickened 4->6 for full overlap with rim + flank
+    const LINTEL_BOTTOM = 7.0; // below rim top (7.95) so the lintel/rim seam overlaps
+    for (const pz of [TUNNEL_Z0 - 1, TUNNEL_Z1 + 1]) {
+      const cx = pathCenterX(pz);
+      const gy = terrainHeight(cx, pz);
+      const g = (w: number, h: number, d: number, x: number, y: number) => {
+        const box = new THREE.BoxGeometry(w, h, d);
+        box.translate(cx + x, gy + y, pz);
+        frameGeos.push(box);
+      };
+      // Left pier (world -x when approaching from -z): lateral 6.4..18
+      g(LATERAL_OUT - LATERAL_IN, FRAME_MAT_H, FRAME_D, -(LATERAL_IN + LATERAL_OUT) / 2, FRAME_MAT_H / 2);
+      // Right pier: lateral 6.4..18
+      g(LATERAL_OUT - LATERAL_IN, FRAME_MAT_H, FRAME_D, (LATERAL_IN + LATERAL_OUT) / 2, FRAME_MAT_H / 2);
+      // Lintel over the arch: full width, overlapping the rim top
+      g(LATERAL_OUT * 2, FRAME_MAT_H - LINTEL_BOTTOM, FRAME_D, 0, LINTEL_BOTTOM + (FRAME_MAT_H - LINTEL_BOTTOM) / 2);
+    }
+    const frameMesh = new THREE.Mesh(
+      mergeGeometries(frameGeos, false),
+      new THREE.MeshStandardMaterial({ color: '#C9A075', roughness: 1, flatShading: true }),
+    );
+    frameMesh.castShadow = true;
+    frameMesh.receiveShadow = true;
+
     // QA instrumentation: the placed stone boxes + the mountain footprint.
     if (typeof window !== 'undefined') {
       (window as any).__cwMountainDomes = [...stones];
       (window as any).__cwMountainFootprint = { zStart: Z_START, zEnd: Z_END, halfWidth: HALF_W };
     }
 
-    return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, occluderMesh, mountFace };
+    return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, occluderMesh, frameMesh, mountFace };
   }, []);
 
   // ---- 8. Journey's end plaza (polish pass 2026-10-20) ----
@@ -446,6 +486,7 @@ export function MountainPassage() {
       <primitive object={parts.archMesh} />
       <primitive object={parts.shellMesh} />
       <primitive object={parts.occluderMesh} />
+      <primitive object={parts.frameMesh} />
       {lanterns.map((l, i) => (
         <group key={i} position={[l.x, l.y, l.z]}>
           <mesh castShadow position={[0, 1.6, 0]} material={postMat}>
