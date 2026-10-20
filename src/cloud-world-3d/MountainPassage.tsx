@@ -79,14 +79,9 @@ export function MountainPassage() {
     const PSZ = 28; // broad summit along z
     const crestLine = (z: number): number => {
       const main = PEAK_H * Math.exp(-((z - PEAK_Z) ** 2) / (2 * PSZ ** 2));
-      const leftShoulder = 45 * Math.exp(-((z - 112) ** 2) / (2 * 22 ** 2));
-      const rightShoulder = 40 * Math.exp(-((z - 168) ** 2) / (2 * 20 ** 2));
-      // Forward ramp: the massif rises AFTER the tunnel mouth (z ≈ 100), so
-      // the arch zone stays low — the rounded arch reads as a real opening
-      // carved into the base, and the PROJECTS board mounted just ahead of
-      // the mouth (z ≈ 92) clears the rock. The summit (150u) towers behind
-      // the tunnel, so the mountain reads as a real massif.
-      const ramp = Math.min(1, Math.max(0, (z - 92) / 26)); // 0 at z<=92, 1 at z>=118
+      const leftShoulder = 60 * Math.exp(-((z - 112) ** 2) / (2 * 22 ** 2));
+      const rightShoulder = 55 * Math.exp(-((z - 168) ** 2) / (2 * 20 ** 2));
+      const ramp = Math.min(1, Math.max(0, (z - 92) / 26));
       return Math.max(0, main * ramp + leftShoulder * Math.min(1, ramp * 1.4) + rightShoulder * ramp);
     };
     // Tapered footprint: wide at the foot, narrow at the crest (88 → 24).
@@ -249,16 +244,41 @@ export function MountainPassage() {
         stoneGeos.push(g);
       }
     }
+    // ---- 3b. Mouth surround — faceted stone ring bridging tube rim → massif face ----
+    // Phase A (2026-10-20): the tunnel mouth previously read as disconnected slabs
+    // (horizontal seam + floating block below arch). A ring of faceted stone chunks
+    // now bridges the tube's outer edge to the massif face, making the mouth read
+    // as one continuous carved opening.
+    const surroundGeos: THREE.BufferGeometry[] = [];
+    for (const pz of [TUNNEL_Z0 - 0.8, TUNNEL_Z1 + 0.8]) {
+      const cx = pathCenterX(pz);
+      const gy = terrainHeight(cx, pz);
+      for (let a = 0; a < 360; a += 20) {
+        const rad = (a * Math.PI) / 180;
+        const ringR = BORE_R + 2.2;
+        const s = 1.6;
+        const x = cx + Math.cos(rad) * ringR;
+        const z = pz;
+        const y = gy + (rad > Math.PI ? 0.2 : 1.0) + Math.abs(Math.sin(rad)) * 0.6;
+        const g = new THREE.IcosahedronGeometry(s, 0);
+        g.translate(x, y, z);
+        surroundGeos.push(g);
+      }
+    }
     const stoneMesh = new THREE.Mesh(mergeGeometries(stoneGeos, false), rockA);
     stoneMesh.castShadow = true;
     stoneMesh.receiveShadow = true;
+
+    const surroundMesh = new THREE.Mesh(mergeGeometries(surroundGeos, false), rockA);
+    surroundMesh.castShadow = true;
+    surroundMesh.receiveShadow = true;
 
     // ---- 4. Stone lining tubes at each mouth (the visible bore rim) ----
     const tubeGeos: THREE.BufferGeometry[] = [];
     for (const pz of [TUNNEL_Z0 - 0.8, TUNNEL_Z1 + 0.8]) {
       const cx = pathCenterX(pz);
       const gy = terrainHeight(cx, pz);
-      const tube = new THREE.CylinderGeometry(BORE_R + 2.1, BORE_R + 2.5, 3.6, 18, 1, true);
+      const tube = new THREE.CylinderGeometry(BORE_R + 2.1, BORE_R + 2.5, 3.6, 24, 1, true);
       tube.rotateX(Math.PI / 2);
       tube.translate(cx, gy + 0.25, pz);
       tubeGeos.push(tube);
@@ -292,7 +312,7 @@ export function MountainPassage() {
     for (let z = TUNNEL_Z0 + 2; z < TUNNEL_Z1; z += 4) {
       const cx = pathCenterX(z);
       const gy = terrainHeight(cx, z);
-      const seg = new THREE.CylinderGeometry(SHELL_R, SHELL_R, 4.4, 14, 1, true, Math.PI / 2, Math.PI);
+      const seg = new THREE.CylinderGeometry(SHELL_R, SHELL_R + 0.3, 4.4, 24, 1, true, Math.PI / 2, Math.PI);
       seg.rotateX(Math.PI / 2);
       seg.translate(cx, gy + 0.2, z + 2);
       shellSegs.push(seg);
@@ -436,7 +456,7 @@ export function MountainPassage() {
       (window as any).__cwMountainFootprint = { zStart: Z_START, zEnd: Z_END, halfWidth: HALF_W };
     }
 
-    return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, occluderMesh, frameMesh, mountFace };
+    return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, occluderMesh, frameMesh, surroundMesh, mountFace };
   }, []);
 
   // ---- 8. Journey's end plaza (polish pass 2026-10-20) ----
@@ -539,6 +559,7 @@ export function MountainPassage() {
       <primitive object={parts.shellMesh} />
       <primitive object={parts.occluderMesh} />
       <primitive object={parts.frameMesh} />
+      <primitive object={parts.surroundMesh} />
       {lanterns.map((l, i) => (
         <group key={i} position={[l.x, l.y, l.z]}>
           <mesh castShadow position={[0, 1.6, 0]} material={postMat}>

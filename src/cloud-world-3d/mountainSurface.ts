@@ -165,6 +165,7 @@ export function buildMountainSurface(
   const rockLit = new THREE.Color('#E3B878');   // warm golden-tan (lit)
   const rockShd = new THREE.Color('#7E5238');   // cooler brown (shadow)
   const rockEdge = new THREE.Color('#F0CC96');  // upper-edge highlight
+  const rockMid = new THREE.Color('#B88A5A');   // mid-tone for skirt-core grading
 
   const quad = (
     a: [number, number, number],
@@ -176,7 +177,8 @@ export function buildMountainSurface(
     const n = faceNormal(a, b, c, hintX);
     // Two-tone color from face normal vs sun: lit faces warm, shadow faces cool.
     const lit = Math.max(0, n.dot(lightDir));
-    const col = new THREE.Color().copy(rockShd).lerp(rockLit, lit);
+    const col = new THREE.Color().copy(rockShd).lerp(rockMid, Math.min(1, lit * 2));
+    col.lerp(rockLit, Math.max(0, lit - 0.5) * 2);
     if (n.y > 0.6) col.lerp(rockEdge, Math.min(1, (n.y - 0.6) * 1.4));
     // Steep downward-facing faces (brow undersides, overhangs) darken further —
     // carves visual depth into the tunnel mouth region.
