@@ -244,24 +244,37 @@ export function MountainPassage() {
         stoneGeos.push(g);
       }
     }
-    // ---- 3b. Mouth surround — faceted stone ring bridging tube rim → massif face ----
-    // Phase A (2026-10-20): the tunnel mouth previously read as disconnected slabs
-    // (horizontal seam + floating block below arch). A ring of faceted stone chunks
-    // now bridges the tube's outer edge to the massif face, making the mouth read
-    // as one continuous carved opening.
+    // ---- 3b. Mouth surround — continuous faceted stone band (arch course) ----
+    // History: v1 was a full 360° icosahedron ring (black — missing color attr —
+    // with gaps that read as a broken seam in the user's video). v2 was an
+    // upper-half chunk arc with baked sandstone (color fixed, but vision QA
+    // still read "mosaic of assembled blocks with seams").
+    // v3 (final-product pass): ONE continuous faceted half-torus band as the
+    // arch course — connected geometry, per-vertex jitter, baked sandstone
+    // strata — plus a few small icosahedron accent rocks at the springing
+    // lines. Reads as carved stone coursing, keeps the low-poly facets.
     const surroundGeos: THREE.BufferGeometry[] = [];
     for (const pz of [TUNNEL_Z0 - 0.8, TUNNEL_Z1 + 0.8]) {
       const cx = pathCenterX(pz);
       const gy = terrainHeight(cx, pz);
-      for (let a = 0; a < 360; a += 20) {
-        const rad = (a * Math.PI) / 180;
-        const ringR = BORE_R + 2.2;
-        const s = 1.6;
-        const x = cx + Math.cos(rad) * ringR;
-        const z = pz;
-        const y = gy + (rad > Math.PI ? 0.2 : 1.0) + Math.abs(Math.sin(rad)) * 0.6;
-        const g = new THREE.IcosahedronGeometry(s, 0);
-        g.translate(x, y, z);
+      const band = new THREE.TorusGeometry(BORE_R + 2.4, 1.45, 7, 22, Math.PI);
+      band.rotateX(Math.PI / 2); // stand the arc upright, spanning the mouth
+      const bandN = band.toNonIndexed(); // non-indexed to match Icosahedron for merge
+      bandN.setAttribute('uv', bandN.getAttribute('uv')); // keep attrs aligned
+      // Facet jitter — deterministic, pure function of index (weld-safe).
+      {
+        const p = bandN.getAttribute('position') as THREE.BufferAttribute;
+        for (let i = 0; i < p.count; i++) {
+          const j = (n: number) => ((((i * 31 + n) * 9301 + 49297) % 233280) / 233280 - 0.5);
+          p.setXYZ(i, p.getX(i) + j(1) * 0.28, p.getY(i) + j(2) * 0.28, p.getZ(i) + j(3) * 0.18);
+        }
+      }
+      bandN.translate(cx, gy + 0.4, pz);
+      surroundGeos.push(bandN);
+      // Accent rocks at the springing lines (grounded, small, hand-set look)
+      for (const side of [-1, 1]) {
+        const g = new THREE.IcosahedronGeometry(1.05, 0);
+        g.translate(cx + side * (BORE_R + 2.6), gy + 0.7, pz + 0.3);
         surroundGeos.push(g);
       }
     }
@@ -272,6 +285,41 @@ export function MountainPassage() {
     const surroundMesh = new THREE.Mesh(mergeGeometries(surroundGeos, false), rockA);
     surroundMesh.castShadow = true;
     surroundMesh.receiveShadow = true;
+
+    // BAKE VERTEX COLORS for the icosahedron-based meshes (stones + surround).
+    // rockA has vertexColors: true; geometries without a 'color' attribute read
+    // (0,0,0) on the GPU → rendered BLACK (the black-rocks bug in the user's
+    // 2026-10-20 evening video). Painting height-stratified sandstone here puts
+    // them in the same color family as the massif under the same material.
+    const bakeSandstone = (geo: THREE.BufferGeometry) => {
+      const p = geo.getAttribute('position') as THREE.BufferAttribute;
+      const c = new Float32Array(p.count * 3);
+      const lo = new THREE.Color('#8F6844'); // shadowed sandstone
+      const mid = new THREE.Color('#B88A5A');
+      const hi = new THREE.Color('#D9B183'); // sunlit sandstone
+      let mn = p.getY(0), mx = mn;
+      for (let i = 0; i < p.count; i++) {
+        const y = p.getY(i);
+        if (y < mn) mn = y;
+        if (y > mx) mx = y;
+      }
+      const sp = Math.max(1e-3, mx - mn);
+      const cc = new THREE.Color();
+      for (let i = 0; i < p.count; i++) {
+        const t = (p.getY(i) - mn) / sp;
+        cc.copy(lo).lerp(mid, Math.min(1, t * 1.8));
+        if (t > 0.55) cc.lerp(hi, (t - 0.55) * 1.4);
+        // slight per-vertex warm jitter so flat facets read as varied stone
+        const j = (((i * 17 + 3) * 9301 + 49297) % 233280) / 233280;
+        cc.offsetHSL(0.005 - j * 0.01, 0, (j - 0.5) * 0.05);
+        c[i * 3] = cc.r;
+        c[i * 3 + 1] = cc.g;
+        c[i * 3 + 2] = cc.b;
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
+    };
+    bakeSandstone(stoneMesh.geometry);
+    bakeSandstone(surroundMesh.geometry);
 
     // ---- 4. Stone lining tubes at each mouth (the visible bore rim) ----
     const tubeGeos: THREE.BufferGeometry[] = [];
