@@ -394,6 +394,32 @@ export function MountainPassage() {
       col[i * 3 + 1] = 0.62 + t * 0.10;
       col[i * 3 + 2] = 0.46 + t * 0.08;
     }
+    // Per-vertex color pass matching the massif strata so the frame wall blends
+    // with the mountain's warm-brown layered look (was uniform #C9A075).
+    {
+      const pos = mergedFrame.getAttribute('position') as THREE.BufferAttribute;
+      const col = mergedFrame.getAttribute('color') as THREE.BufferAttribute;
+      let minY = pos.getY(0), maxY = minY;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      const span = Math.max(1e-3, maxY - minY);
+      const mcolor = new THREE.Color();
+      const rLow = new THREE.Color('#A87B52');
+      const rMid = new THREE.Color('#C9A075');
+      const rHigh = new THREE.Color('#E2BE8F');
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const t = (y - minY) / span;
+        mcolor.copy(rLow).lerp(rMid, Math.min(1, t * 1.8));
+        if (t > 0.55) mcolor.lerp(rHigh, (t - 0.55) * 1.4);
+        mcolor.offsetHSL(0, 0, Math.sin(y * 0.35 + pos.getX(i) * 0.11) * 0.02);
+        col.setXYZ(i, mcolor.r, mcolor.g, mcolor.b);
+      }
+      col.needsUpdate = true;
+    }
     pos.needsUpdate = true;
     mergedFrame.setAttribute('color', new THREE.BufferAttribute(col, 3));
     mergedFrame.computeVertexNormals();
