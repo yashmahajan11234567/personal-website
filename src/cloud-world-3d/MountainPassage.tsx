@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 // @ts-ignore — BufferGeometryUtils ships as ESM without bundled types here
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { pathCenterX, terrainHeight } from './world';
+import { pathCenterX, smoothstep, terrainHeight } from './world';
 import { buildMountainSurface } from './mountainSurface';
 import { ProjectsBillboard } from './ProjectsBillboard';
 
@@ -113,11 +113,27 @@ export function MountainPassage() {
       if (!inTunnel && corridorDist < CORRIDOR_EDGE) {
         return 0;
       }
-      // Outside the corridor: parabolic rise from ground at the corridor
-      // edge to crest at the footprint edge — solid connected rock all
-      // around the bore, no floating slab.
+      // Outside the corridor: rise from ground at the corridor edge toward
+      // the crest. The lateral exponent MORPHS with z: parabolic (t²) in the
+      // far field, but fast-rising (t^0.5) in the mouth zone — otherwise the
+      // flank beside the portal brow is <1u tall and sky shows through the
+      // vertical slit between the brow edge and the flank (defect seen in
+      // the 2026-10-20 screenshot).
+      const w = smoothstep(118, 96, z); // 1 at the mouth → 0 past the summit
+      const lateralExp = 2 - 1.5 * w; // 0.5 at mouth → 2.0 far field
       const t = (corridorDist - CORRIDOR_EDGE) / (hw - CORRIDOR_EDGE);
-      return crest * t * t;
+      const flank = crest * Math.pow(t, lateralExp);
+      // Mouth-zone floor: the flank never sits below MOUTH_FLOOR across the
+      // portal brow's full z-band (mountZ−5.5 … mountZ+6 ≈ 92..103.5) and the
+      // floor EXCEEDS the brow top (22u) so the brow's edges always have rock
+      // behind them — no sky slit beside or above the brow. The floor's z
+      // ramp (84→92 in, fade 103→114 out) is matched to the brow band: the
+      // old 86→100 ramp left the floor at only 8-23u INSIDE the brow band,
+      // which read as a ground-to-top sky slit right of the arch.
+      const MOUTH_FLOOR = 26;
+      const floorZ = MOUTH_FLOOR * smoothstep(84, 92, z) * (1 - smoothstep(103, 114, z));
+      const floor = floorZ * Math.min(1, (corridorDist - CORRIDOR_EDGE) / 2);
+      return Math.max(flank, floor);
     };
     const surfaceGeo = buildMountainSurface(
       { zStart: Z_START, zEnd: Z_END, zStep: 5, halfWidth: HALF_W, seed: 501, crestHeight, edgeFloor: 0.12, halfWidthAt },
@@ -174,7 +190,7 @@ export function MountainPassage() {
     const mountGround = terrainHeight(mountCx, mountZ);
     const mountFaceY = mountGround + 16;
     const faceGeo = buildMountainSurface(
-      { zStart: mountZ - 4, zEnd: mountZ + 6, zStep: 5, halfWidth: 9, seed: 502, crestHeight: () => 22, edgeFloor: 0.75 },
+      { zStart: mountZ - 5.5, zEnd: mountZ + 6, zStep: 5, halfWidth: 16, seed: 502, crestHeight: () => 22, edgeFloor: 0.85 },
       pathCenterX,
       terrainHeight,
     );
