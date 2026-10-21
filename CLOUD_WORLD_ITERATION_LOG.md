@@ -1257,3 +1257,54 @@ facade/piers/billboard-anchor), new QA: `qa/cat-projects-suite.mjs`,
 `qa/creambbox.cjs`, `qa/mesh-inventory3.mjs`, `qa/silhouette-probe.mjs`,
 capture scripts. Protected files untouched (`src/game/**`,
 `worlds.data.ts`, `types.ts`, `App.tsx`). Nothing committed or pushed.
+
+---
+
+# Post-Recovery Verification — 2026-10-21 (late) · COMPLETE
+
+**Context:** D: (Toshiba 1TB external, Harddisk1) dropped off the bus at
+~22:38 with the entire RECON rebuild uncommitted (disk Event 11 controller
+errors logged 13+ times across the day; NTFS last reported healthy 22:34).
+Drive reseated by user, remounted, `git fsck` clean, HEAD intact. Recovery
+commit `1b7ce22` pushed to origin (verified via `ls-remote`), plus a full
+`git bundle` snapshot on C: (750MB, `--all`). Stale vite preview (PID 19460,
+CWD on the dead volume) killed and replaced.
+
+## Verification battery on the pushed tree (fresh build @ [::1]:4173)
+- Build: `✓ built in 1.07s`, 0 errors.
+- `qa/cat-projects-suite.mjs`: **56/56 PASS**, 0 console/page errors.
+- `qa/stage4-final-regression.mjs`: **13/13 PASS**.
+- `qa/fps-final.mjs`: **42.0 fps pinned vista / 51.0 fps walking** (20s
+  windows, 840/1020 frames) — clears the 30fps gate that the prior 28.6-28.7
+  pass missed; the ~42% triangle reduction (272,872 tris) recovered it.
+- `qa/probe-seethru-full.mjs`: reported **FAIL (38 clusters)** —
+  investigated and disproven; see below. Mountain is opaque.
+
+## The seethru FAIL is a false positive (evidence, not verdict)
+1. **Stale sky model:** the probe's `isSky` requires `b > 130`, but the
+   RECON build's actual sky at the scanned heights measures
+   rgb(218-236, 170-186, **99-112**) — the real sky cannot pass the probe's
+   own predicate. What passes is cream rgb(255,228,135).
+2. **Pixel forensics:** clusters 1-2 (y~274-300) are 75-1031 px within
+   tight tolerance of the billboard marquee-bulb cream; the big y331-482
+   patch is the sign face itself (man-made, dark-bordered — vision-verified
+   as "the billboard", not sky); remaining small flags are AA edges and a
+   bulb's bottom lit edge (color-check: bulb-edge matches the sky gradient
+   at its y by coincidence, L1 distance 15, but rock is continuous above
+   and below — vision-verified).
+3. **Flood-fill connectivity test** (`qa/skyline-floodfill-holecheck.mjs`):
+   every true-sky pixel connected to the top sky band = legitimate
+   (skyline notches are the RECON design); **zero isolated sky patches
+   inside rock** after excluding the billboard/bulb regions. The 4x138px
+   "vertical sliver" in the oblique view is the billboard's cream left
+   frame border (vision-verified).
+
+## Verdict
+Mountain geometry is continuous and opaque from both probe angles. The
+probe needs a RECON-era sky model before it can be used as a gate again —
+rebuild the `isSky` predicate from the measured gradient
+(r>205, g>160, b>80, b<0.55r, g<0.85r, g>0.7r) and exclude the billboard
+rect. Tracked as a tooling debt item, not a scene defect.
+
+Files changed this pass: `qa/skyline-floodfill-holecheck.mjs` (new),
+`qa/cluster-color-check.mjs` (new). Nothing else touched.
