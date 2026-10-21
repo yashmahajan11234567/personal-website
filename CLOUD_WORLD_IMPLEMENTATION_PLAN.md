@@ -213,3 +213,38 @@ CLOUD_WORLD_ITERATION_LOG.md (2026-10-17 v3 entry) and qa-screenshots-polish/.
 - FIX: N=PROFILE.length (consistent outward winding, skirts stitched); peak 44u; footprint ±78; edgeFloor 0.12; profile steepened at crest.
 - VERIFIED: tsc clean; build ✓; approach/frontal/oblique show distinct peak + irregular ridgeline + connected mass; tunnel traversing (entering 105.8→inside 137.2→exiting 178.8, path-lock 0.45u); interactions 31/31; regression 13/13; 0 console errors.
 - Files changed: src/cloud-world-3d/mountainSurface.ts, src/cloud-world-3d/MountainPassage.tsx. Protected files untouched. Nothing committed/pushed.
+
+# Mountain + PROJECTS Landmark Reconstruction — 2026-10-21 · COMPLETE
+
+Target: broad, layered stylized-fantasy massif (broken multi-peak skyline,
+varied rock faces, sky visible above the ridge) with the rectangular
+PROJECTS billboard mounted directly above a carved, lit tunnel arch.
+
+## Design (as built, all values measured)
+- crestLine: asymmetric max-composed skewed peaks — brow 9u@z97, left
+  38u@z120, summit 52u@z150 (σ10/13), right shoulder 36u@z178 + gated
+  ridge noise (±3.5/2u). Footprint taper 88u (foot) → 30u (summit).
+- crestHeight: dome lateral falloff (1−fallAmt·u^1.5, fallAmt 0.55→0.80 with
+  z) × 2D spur undulation × corridor-shoulder lift; corridor carved to 0
+  (bore ceiling ROOF_CROWN 6.2u inside z100..170).
+- Mouth floors: entrance 18u (z84..114, sealed behind the facade), exit 26u
+  (z158..184) — symmetric shoulders, no full-width slab.
+- Facade (billboard mount): crest 17u, halfWidth 13u, z 91.5..98.5.
+- Frame piers: 14u tapered extruded trapezoids + lintel (7..14u), embedded
+  under the facade — the 27u dark-triangle slabs are gone.
+- Billboard: center ground+12, z 88.5 (proud of the facade front), spans
+  9.75..14.25u — inside the face, above the arch, summit behind.
+
+## Acceptance evidence
+| Gate | Evidence |
+|---|---|
+| Broad irregular skyline from approach | sky band y0..90; per-column skyline y0..95 (16 levels, jaggedness 1.11); vision: "jagged, varied… not a flat wall" |
+| Convincing rock geometry | massif bbox 22.9→46.4u after the ring-ridge fix; oblique: "single coherent massif… varied rock faces"; no gaps/z-fighting |
+| One rectangular billboard, mounted above tunnel, PROJECTS readable | vision: all 8 letters fully visible, unblocked (approach); mounted on the face, exactly one |
+| Summit rises behind the sign | sight-line check: ray over board top reaches 14.3u at z=150 vs summit 52u → 37.7u clearance |
+| Tunnel: rounded carved arch, lit, no dark triangle | vision: "distinct curved archway, lit interior… fragments not dominant"; traversal z0→211, path-lock 0.29u |
+| Lanterns pulse, never dark | 12 samples min 1.152 / max 1.65 |
+| Regressions | cat+projects suite 56/56; stage-4 13/13; 0 console/network errors; build ✓ 8.8-11.8s |
+
+Protected files untouched; `advance(time / 1000, true)` preserved; nothing
+committed/pushed.

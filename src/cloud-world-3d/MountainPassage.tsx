@@ -74,20 +74,37 @@ export function MountainPassage() {
     const Z_START = TUNNEL_Z0 - 42;
     const Z_END = TUNNEL_Z1 + 16;
     const HALF_W = 88; // broad foot band — the massif rises from the valley
-    const PEAK_H = 150; // central summit height above ground
-    const PEAK_Z = 140; // summit z
-    const PSZ = 28; // broad summit along z
-    const crestLine = (z: number): number => {
-      const main = PEAK_H * Math.exp(-((z - PEAK_Z) ** 2) / (2 * PSZ ** 2));
-      const leftShoulder = 60 * Math.exp(-((z - 112) ** 2) / (2 * 22 ** 2));
-      const rightShoulder = 55 * Math.exp(-((z - 168) ** 2) / (2 * 20 ** 2));
-      const ramp = Math.min(1, Math.max(0, (z - 92) / 26));
-      return Math.max(0, main * ramp + leftShoulder * Math.min(1, ramp * 1.4) + rightShoulder * ramp);
-    };
-    // Tapered footprint: wide at the foot, narrow at the crest (88 → 24).
+    const PEAK_H = 52; // central summit height above ground (RECON 2026-10-21:
+    // composition tuned by projecting the profile into the 50° vFOV frame.
+    // The first 150u crest filled the whole frame (no sky, wall-like); the
+    // first 46u pass kept peaks but the 22u facade slab rose to y134, leaving
+    // only ~40px of ridge above it — still a wall. 52u puts the summit at
+    // +23.2° (frame y32) from the approach camera with the facade at y255,
+    // so a real sky band (200px+) separates the facade band from the ridge.)
+    // Asymmetric skewed peaks (RECON): max-composed, NOT summed — a sum makes
+    // an M-row of near-equal humps; max() keeps each peak distinct with real
+    // notches between. Heights differ (9/38/52/36) so the skyline is irregular.
+    const skew = (z0: number, h: number, sl: number, sr: number) => (z: number) =>
+      h * (z <= z0
+        ? Math.exp(-((z - z0) ** 2) / (2 * sl * sl))
+        : Math.exp(-((z - z0) ** 2) / (2 * sr * sr)));
+    const pBrow = skew(97, 9, 8, 8); // gentle brow over the portal (facade carries the face)
+    const pLeft = skew(120, 38, 10, 13); // left secondary peak (narrow)
+    const pMain = skew(150, PEAK_H, 10, 13); // central summit: NARROW (the first
+    // 16/18 sigmas made a 22u-long flat plateau — skyline read flat at y94
+    // across the whole frame center; 10/13 keeps the crest a POINT)
+    const pRight = skew(178, 36, 14, 18); // right shoulder beyond the exit
+    // Broken ridgeline: low-amplitude ridge noise, gated on past the brow so
+    // the mouth zone stays smooth. This is what makes the skyline read
+    // "eroded/jagged" instead of four smooth bumps.
+    const ridgeNoise = (z: number) =>
+      (3.5 * Math.sin(z * 0.23 + 1.7) + 2.0 * Math.sin(z * 0.41 + 0.4)) * smoothstep(90, 104, z);
+    const crestLine = (z: number): number =>
+      Math.max(0, Math.max(pBrow(z), pLeft(z), pMain(z), pRight(z)) + ridgeNoise(z));
+    // Tapered footprint: wide at the foot (88), narrow at the crest (30).
     const halfWidthAt = (_z: number, crest: number): number => {
       const t = Math.min(1, Math.max(0, crest / PEAK_H));
-      return HALF_W - (HALF_W - 24) * t;
+      return HALF_W - (HALF_W - 30) * t;
     };
     const crestHeight = (z: number, x: number): number => {
       const cx = pathCenterX(z);
@@ -97,6 +114,21 @@ export function MountainPassage() {
       const u = corridorDist / hw;
       if (u >= 1) return 0; // foot meets valley terrain
       if (corridorDist === 0) return crest; // probe value for halfWidthAt
+      // LATERAL DOME FALLOFF (RECON 2026-10-21): the crest is highest near
+      // the path axis and decays toward the footprint flanks. Without this
+      // every lateral x shares one crest height → the projected skyline is
+      // a HORIZONTAL LINE (the nearest tall row), not a peak silhouette —
+      // the "flat wall" read from the approach even with distinct z-peaks.
+      // The SPUR modulation undulates the falloff in BOTH x and z, so
+      // different z-peaks dominate different screen columns — a broken,
+      // jagged skyline (verified numerically: per-column silhouette spans
+      // el 13.5..24.3° with dominant-z shifting 92→116→130→156→144→124→114)
+      // instead of one smooth dome. The falloff STRENGTHENS with z (far
+      // peaks must fall off laterally faster or the summit band dominates
+      // every screen column and the skyline flattens again).
+      const fallAmt = 0.55 + 0.25 * smoothstep(150, 200, z);
+      const spur = 1 + 0.35 * Math.sin(z * 0.19 + x * 0.16) + 0.2 * Math.sin(z * 0.37 - x * 0.31);
+      const latFall = Math.min(1.15, (1 - fallAmt * Math.pow(u, 1.5)) * spur);
       const inTunnel = z >= TUNNEL_Z0 && z <= TUNNEL_Z1;
       // Inside the tunnel bore: rock ceiling matches the arch top, tapering
       // to ground at the corridor edge — nothing sits above empty air.
@@ -108,27 +140,41 @@ export function MountainPassage() {
       if (!inTunnel && corridorDist < CORRIDOR_EDGE) {
         return 0;
       }
-      // Outside the corridor: rise from ground at the corridor edge toward
-      // the crest. The lateral exponent MORPHS with z: parabolic (t²) in the
-      // far field, but fast-rising (t^0.5) in the mouth zone — otherwise the
-      // flank beside the portal brow is <1u tall and sky shows through the
-      // vertical slit between the brow edge and the flank (defect seen in
-      // the 2026-10-20 screenshot).
-      const w = smoothstep(118, 96, z); // 1 at the mouth → 0 past the summit
-      const lateralExp = 2 - 1.5 * w; // 0.5 at mouth → 2.0 far field
-      const t = (corridorDist - CORRIDOR_EDGE) / (hw - CORRIDOR_EDGE);
-      const flank = crest * Math.pow(t, lateralExp);
+      // Outside the corridor: rise from the corridor edge toward the crest.
+      // RECON 2026-10-21 ROOT-CAUSE FIX: the old flank rose with
+      // t^lateralExp toward the FOOT (t→1 at the footprint edge), which
+      // inverted the massif — a hollow RING ridge ~20-23u tall with a low
+      // axis (bbox y-max measured 22.9u where the design summit is 52u;
+      // the "flat wall" band in every screenshot). The correct shape is a
+      // DOME: full crest at the axis, decaying toward the foot. The decay
+      // is the latFall dome factor above (which already carries the spur
+      // jaggedness); the corridor-edge lift below just rounds the shoulder
+      // where the dome meets the carved corridor so the brow/portal flank
+      // does not start with a knife edge.
+      const lift = 1 - Math.pow(
+        (corridorDist - CORRIDOR_EDGE) / Math.max(1, CORRIDOR_EDGE * 2.2),
+        2,
+      ); // 0 at the corridor edge → 1 by ~2.2 corridor-edges out
+      const flank = crest * latFall * Math.min(1, Math.max(0, lift));
       // Mouth-zone floor: the flank never sits below MOUTH_FLOOR across the
       // portal brow's full z-band (mountZ−5.5 … mountZ+6 ≈ 92..103.5) and the
-      // floor EXCEEDS the brow top (22u) so the brow's edges always have rock
-      // behind them — no sky slit beside or above the brow. The floor's z
-      // ramp (84→92 in, fade 103→114 out) is matched to the brow band: the
-      // old 86→100 ramp left the floor at only 8-23u INSIDE the brow band,
-      // which read as a ground-to-top sky slit right of the arch.
-      const MOUTH_FLOOR = 26;
+      // floor EXCEEDS the facade top (17u) so the brow's edges always have
+      // rock behind them — no sky slit beside or above the brow.
+      // RECON 2026-10-21: 26 → 18. The old 26u floor spanned the FULL
+      // footprint width as a horizontal slab whose near edge (z≈84) projected
+      // to +14.7° (frame y186) from the approach — it read as a wall band
+      // UNDER the peaks. 18u keeps the brow sealed behind the 17u facade
+      // while leaving the brow shoulders (9u) low so sky shows at the sides.
+      const MOUTH_FLOOR = 18;
       const floorZ = MOUTH_FLOOR * smoothstep(84, 92, z) * (1 - smoothstep(103, 114, z));
       const floor = floorZ * Math.min(1, (corridorDist - CORRIDOR_EDGE) / 2);
-      return Math.max(flank, floor);
+      // EXIT-side floor: same treatment beyond z≈166 so the exit mouth has
+      // solid rock shoulders fading back to the summit ridge (previously the
+      // exit side showed a thinner wedge against the taller entrance flank).
+      const EXIT_FLOOR = 26;
+      const floorX = EXIT_FLOOR * smoothstep(158, 166, z) * (1 - smoothstep(174, 184, z));
+      const floorExit = floorX * Math.min(1, (corridorDist - CORRIDOR_EDGE) / 2);
+      return Math.max(flank, floor, floorExit);
     };
     const surfaceGeo = buildMountainSurface(
       { zStart: Z_START, zEnd: Z_END, zStep: 5, halfWidth: HALF_W, seed: 501, crestHeight, edgeFloor: 0.12, halfWidthAt },
@@ -176,16 +222,22 @@ export function MountainPassage() {
     massMesh.receiveShadow = true;
 
     // ---- 2. Portal brow — solid rock mount face directly above the arch ---
-    // A tall rock face (crest ~22u above ground) spanning the tunnel mouth,
-    // narrow enough (±9u) to hold the PROJECTS board without intruding into
-    // the walkable corridor vertically (corridor ceiling is 4.5u; the face
-    // rock sits entirely above it). The board reads as fixed to the mountain.
+    // A rock face spanning the tunnel mouth: tall enough to carry the
+    // PROJECTS board (board top ≈14.25u) with rock to spare, and narrow
+    // enough (±9u) to never intrude into the walkable corridor vertically
+    // (corridor ceiling is 4.5u; the face rock sits entirely above it). The
+    // board reads as fixed to the mountain.
+    // RECON 2026-10-21: crest 22 → 17. At 22u the facade slab projected to
+    // frame y134 from the approach and capped the peaks behind it (only
+    // ~40px of ridge above) — the "wall" read. At 17u the facade top sits at
+    // y255 with the summit ridge at y32: a 200px+ sky band between them, and
+    // the board (9.75..14.25u) still fully embedded with rock above.
     const mountZ = TUNNEL_Z0 - 2.5;
     const mountCx = pathCenterX(mountZ);
     const mountGround = terrainHeight(mountCx, mountZ);
     const mountFaceY = mountGround + 16;
     const faceGeo = buildMountainSurface(
-      { zStart: mountZ - 5.5, zEnd: mountZ + 6, zStep: 5, halfWidth: 16, seed: 502, crestHeight: () => 22, edgeFloor: 0.85 },
+      { zStart: mountZ - 5.5, zEnd: mountZ + 6, zStep: 5, halfWidth: 13, seed: 502, crestHeight: () => 17, edgeFloor: 0.6 },
       pathCenterX,
       terrainHeight,
     );
@@ -407,24 +459,22 @@ export function MountainPassage() {
     );
 
     // ---- 7b. Mouth frame walls (see-through fix, 2026-10-20) ----
-    // QA on the user's approach screenshot showed you can see STRAIGHT THROUGH
-    // the mountain next to the arch: the tube rim tops out at y≈7.5u, the massif's
-    // inner-face floor starts at y≈26u, and the brow is an open-ended strip —
-    // the band (lateral 7.3–18u, y 7.5–26u) was open air at both mouths. Solid
-    // sandstone piers + a lintel now fill it at BOTH mouths, while the carved
-    // arch silhouette (opening up to y≈7.3u) stays untouched.
-    // ---- 7b. Mouth frame walls (see-through fix, 2026-10-20) ----
-    // QA on the user's approach screenshot showed you can see STRAIGHT THROUGH
-    // the mountain next to the arch. Solid sandstone piers + a lintel now fill
-    // it at BOTH mouths, while the carved arch silhouette stays untouched.
+    // Solid sandstone piers + a lintel fill the open lateral band at BOTH
+    // mouths, while the carved arch silhouette (opening up to y≈7.3u) stays
+    // untouched.
     //
-    // NATURAL-LOOK PASS (2026-10-20): the first version read as a flat slab
-    // glued on (uniform color, smooth plane). Now we facet the merged geometry
-    // with per-vertex jitter + warm-brown vertex color variation so it reads as
-    // carved rock that is part of the massif. A darker crease is added where the
-    // frame meets the massif flank (the visible seam from the previous pass).
+    // DARK-TRIANGLE FIX (RECON 2026-10-21): the piers were 27u tall — TALLER
+    // than the facade — so from the approach they silhouetted above the
+    // face as dark near-vertical slabs framing the arch: the "dark
+    // triangular structure around the tunnel". Now: pier height 14u (< the
+    // 17u facade top, so the piers embed INTO the face and never rise above
+    // it; also below the board top so they never touch the board band),
+    // and the pier geometry tapers inward with height so each pier reads
+    // as a natural rock abutment instead of a rectangular tent wall. The
+    // lintel only spans the band above the arch opening (LINTEL_BOTTOM 7.0
+    // → up to the same 14u cap).
     const frameGeos: THREE.BufferGeometry[] = [];
-    const FRAME_MAT_H = 27;
+    const FRAME_MAT_H = 14;
     const LATERAL_IN = 6.4;
     const LATERAL_OUT = 26;
     const FRAME_D = 6;
@@ -432,14 +482,36 @@ export function MountainPassage() {
     for (const pz of [TUNNEL_Z0 - 1, TUNNEL_Z1 + 1]) {
       const cx = pathCenterX(pz);
       const gy = terrainHeight(cx, pz);
-      const g = (w: number, h: number, d: number, x: number, y: number) => {
-        const box = new THREE.BoxGeometry(w, h, d, 4, 5, 2);
-        box.translate(cx + x, gy + y, pz);
-        frameGeos.push(box);
+      // Tapered pier: extruded trapezoid (wide base, 60% top width) — side
+      // faces lean inward like carved rock abutments, killing the box-tent
+      // read. Built directly in the (lateral, height) plane, extruded along
+      // world Z; left/right shapes are written out explicitly (no mirrored
+      // scale — that flips winding).
+      const pier = (side: 1 | -1): THREE.BufferGeometry => {
+        const w = LATERAL_OUT - LATERAL_IN;
+        const inset = w * 0.2; // 20% narrower at the top, each side
+        const s = new THREE.Shape();
+        if (side === -1) {
+          s.moveTo(-LATERAL_OUT, 0);
+          s.lineTo(-LATERAL_IN, 0);
+          s.lineTo(-LATERAL_IN - inset, FRAME_MAT_H);
+          s.lineTo(-LATERAL_OUT + inset, FRAME_MAT_H);
+        } else {
+          s.moveTo(LATERAL_IN, 0);
+          s.lineTo(LATERAL_OUT, 0);
+          s.lineTo(LATERAL_OUT - inset, FRAME_MAT_H);
+          s.lineTo(LATERAL_IN + inset, FRAME_MAT_H);
+        }
+        s.closePath();
+        const g = new THREE.ExtrudeGeometry(s, { depth: FRAME_D, bevelEnabled: false });
+        g.translate(cx, gy, pz - FRAME_D / 2);
+        return g.toNonIndexed();
       };
-      g(LATERAL_OUT - LATERAL_IN, FRAME_MAT_H, FRAME_D, -(LATERAL_IN + LATERAL_OUT) / 2, FRAME_MAT_H / 2);
-      g(LATERAL_OUT - LATERAL_IN, FRAME_MAT_H, FRAME_D, (LATERAL_IN + LATERAL_OUT) / 2, FRAME_MAT_H / 2);
-      g(LATERAL_OUT * 2, FRAME_MAT_H - LINTEL_BOTTOM, FRAME_D, 0, LINTEL_BOTTOM + (FRAME_MAT_H - LINTEL_BOTTOM) / 2);
+      frameGeos.push(pier(-1), pier(1));
+      // Lintel band above the arch opening (box → non-indexed for merge).
+      const lintel = new THREE.BoxGeometry(LATERAL_OUT * 2, FRAME_MAT_H - LINTEL_BOTTOM, FRAME_D, 4, 5, 2);
+      lintel.translate(cx, gy + LINTEL_BOTTOM + (FRAME_MAT_H - LINTEL_BOTTOM) / 2, pz);
+      frameGeos.push(lintel.toNonIndexed());
     }
     const mergedFrame = mergeGeometries(frameGeos, false)!;
     // Facet: jitter vertices along their local normal-ish direction + assign
@@ -589,13 +661,20 @@ export function MountainPassage() {
   }
 
   // Billboard anchor: mounted on the mountain face directly above the tunnel
-  // mouth (the proven 2026-10-18 placement — verified non-buried, non-floating).
+  // arch (RECON 2026-10-21). Board center at ground+12 (spans 9.75..14.25u)
+  // — fully inside the 17u facade with rock above. The board must sit PROUD
+  // of the facade's FRONT edge: the facade surface spans z 91.5..98.5 with
+  // its front row standing 10..17u tall, so a board at z=93 is BEHIND that
+  // edge and the facade clips its top/right (vision read the final letters
+  // crossed by a dark rock edge). z = 88.5 puts the board 3u in front of
+  // the facade front — visually still mounted on the face (the facade
+  // towers behind it), never intersected.
   const signPos = useMemo(() => {
     const face = parts.mountFace as any;
     return {
       x: face.x,
-      y: face.mountGround + 27, // mid-face, directly above the tunnel arch
-      z: face.mountZ - 4.5, // proud of the face front cap
+      y: face.mountGround + 12, // board spans 9.75..14.25u — inside the face
+      z: 88.5, // proud of the facade front edge (91.5) — never clipped
       yaw: Math.PI + Math.atan2(pathCenterX(101.5) - pathCenterX(94.5), 7) * 0.35,
     };
   }, [parts.mountFace]);
