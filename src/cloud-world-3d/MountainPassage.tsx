@@ -296,33 +296,29 @@ export function MountainPassage() {
         stoneGeos.push(g);
       }
     }
-    // ---- 3b. Mouth surround — continuous faceted stone band (arch course) ----
+    // ---- 3b. Mouth surround — accent rocks only (VIS-006 fix, 2026-10-22) ----
     // History: v1 was a full 360° icosahedron ring (black — missing color attr —
     // with gaps that read as a broken seam in the user's video). v2 was an
     // upper-half chunk arc with baked sandstone (color fixed, but vision QA
-    // still read "mosaic of assembled blocks with seams").
-    // v3 (final-product pass): ONE continuous faceted half-torus band as the
-    // arch course — connected geometry, per-vertex jitter, baked sandstone
-    // strata — plus a few small icosahedron accent rocks at the springing
-    // lines. Reads as carved stone coursing, keeps the low-poly facets.
+    // still read "mosaic of assembled blocks with seams"). v3 tried ONE
+    // continuous faceted half-torus band, but rotateX(π/2) laid the arc FLAT
+    // into the XZ plane: instead of an upright arch course it became a
+    // horizontal stone collar at ankle height arcing ~7u INTO the bore
+    // (entrance band crossed the walkable centerline at z 105.3..108.3, top
+    // y = ground+1.94; exit band at z 176.9..179.9, right on the exit path —
+    // geometry-probe measured, 2026-10-22). It was never gated by
+    // boxClearsCorridor, and from mid-bore it read as a wall of sheared rock
+    // shards across the mouth (vision: "75-80% of the opening width, lower
+    // 40% of its height"). An upright variant is not an option either: its
+    // top would hover at y≈8 above the arch apex — the same "floating rocks
+    // over the portal" read the 2026-10-20 pass already vision-flagged and
+    // rejected. The tube rim + arch ring + portal stones already outline the
+    // mouth (2026-10-20 note), so the band is removed outright. The springing
+    // accent rocks stay (grounded beside the mouth, clear of the corridor).
     const surroundGeos: THREE.BufferGeometry[] = [];
     for (const pz of [TUNNEL_Z0 - 0.8, TUNNEL_Z1 + 0.8]) {
       const cx = pathCenterX(pz);
       const gy = terrainHeight(cx, pz);
-      const band = new THREE.TorusGeometry(BORE_R + 2.4, 1.45, 7, 22, Math.PI);
-      band.rotateX(Math.PI / 2); // stand the arc upright, spanning the mouth
-      const bandN = band.toNonIndexed(); // non-indexed to match Icosahedron for merge
-      bandN.setAttribute('uv', bandN.getAttribute('uv')); // keep attrs aligned
-      // Facet jitter — deterministic, pure function of index (weld-safe).
-      {
-        const p = bandN.getAttribute('position') as THREE.BufferAttribute;
-        for (let i = 0; i < p.count; i++) {
-          const j = (n: number) => ((((i * 31 + n) * 9301 + 49297) % 233280) / 233280 - 0.5);
-          p.setXYZ(i, p.getX(i) + j(1) * 0.28, p.getY(i) + j(2) * 0.28, p.getZ(i) + j(3) * 0.18);
-        }
-      }
-      bandN.translate(cx, gy + 0.4, pz);
-      surroundGeos.push(bandN);
       // Accent rocks at the springing lines (grounded, small, hand-set look)
       for (const side of [-1, 1]) {
         const g = new THREE.IcosahedronGeometry(1.05, 0);

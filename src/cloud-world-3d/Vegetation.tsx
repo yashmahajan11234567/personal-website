@@ -396,6 +396,20 @@ export function RocksAndGrass() {
     while (fi < 40 && guard < 400) {
       guard++;
       const z = -30 + rnd() * 255;
+      // VIS-002 fix (2026-10-22): no flowers inside the mountain passage.
+      // The bore spans z 100..170 and its mouths open into stone aprons —
+      // nothing grows there. The old placement hiked the path edge
+      // (lateral 2.9..5.0u), which lands INSIDE the ±5.2u bore radius, so 6
+      // instances grew in the tunnel interior and 5 more in the mouth aprons
+      // (one directly on the exit walkway at z≈176.6, vision-confirmed
+      // "flowers scattered on the path outside the exit"). Resampling z
+      // keeps the full flower count (40) — rejected draws consume only the
+      // z rnd(), flowers are the LAST consumers of this PRNG stream, and
+      // the ~66% accept rate sits far inside the 400-draw guard.
+      // Window (92, 178) = the canyon entry/exit ramps (same bounds as
+      // pathCenterX's canyon smoothstep), so valley and sunset zones keep
+      // their flowers.
+      if (z > 92 && z < 178) continue;
       const side = rnd() < 0.5 ? -1 : 1;
       const d = pathHalfWidth(z) + 0.6 + rnd() * 1.8;
       const x = pathCenterX(z) + side * d;
