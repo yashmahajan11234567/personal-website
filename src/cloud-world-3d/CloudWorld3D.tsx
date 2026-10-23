@@ -186,6 +186,10 @@ const CANYON_Z0 = 97;
 const CANYON_Z1 = 178;
 const CANYON_FOLLOW_DISTANCE = 9.5; // u — closer third-person inside the bore
 const BORE_CEILING_CLEAR = 4.0; // max camera height above the floor inside
+// Bore arch (shell) radius — mirrors MountainPassage.tsx SHELL_R (BORE_R-0.4):
+// the visible free space inside the bore is this half-cylinder centered at
+// floor+0.2. The lateral clamp derives its height-aware limit from it.
+const BORE_SHELL_R = 4.8;
 function CameraTargetRig({
   controlsRef,
   targetPosRef,
@@ -249,15 +253,32 @@ function CameraTargetRig({
     const cam = controls.object as THREE.Camera;
     if (cam.position.z > CANYON_Z0 - 2 && cam.position.z < CANYON_Z1) {
       const axisX = pathCenterX(cam.position.z);
-      const maxLateral = 3.4;
-      if (Math.abs(cam.position.x - axisX) > maxLateral) {
-        cam.position.x = axisX + Math.sign(cam.position.x - axisX) * maxLateral;
-      }
       const floorY = terrainHeight(axisX, cam.position.z);
+      // VIS-001 fix (2026-10-22): the lateral limit is HEIGHT-AWARE. The bore
+      // free space is the arched shell (radius BORE_SHELL_R centered
+      // floor+0.2): a flat ±3.4 clamp validated only at low heights let the
+      // camera reach the clamp-box corner (x=±3.4, y=floor+4.0), which sits
+      // OUTSIDE the arch (free half-width at y=4.0 is 2.44u) — corner-test
+      // screenshots showed 88% flat warm-rock fill (camera inside the dome
+      // rock, vision-confirmed). At the camera's height h the free half-width
+      // is sqrt(BORE_SHELL_R^2 − (h−floor−0.2)^2); keep a 1.0u margin and
+      // never exceed the old flat cap. Order matters: clamp y FIRST, then
+      // derive the lateral limit from the clamped height.
       const maxY = floorY + BORE_CEILING_CLEAR;
       if (cam.position.y > maxY) cam.position.y = THREE.MathUtils.lerp(cam.position.y, maxY, 0.5);
       const minY = floorY + 0.9;
       if (cam.position.y < minY) cam.position.y = THREE.MathUtils.lerp(cam.position.y, minY, 0.5);
+      const archH = Math.min(
+        Math.max(0, cam.position.y - floorY - 0.2),
+        BORE_SHELL_R - 0.01,
+      );
+      const maxLateral = Math.min(
+        3.4,
+        Math.sqrt(Math.max(0, BORE_SHELL_R * BORE_SHELL_R - archH * archH)) - 1.0,
+      );
+      if (Math.abs(cam.position.x - axisX) > maxLateral) {
+        cam.position.x = axisX + Math.sign(cam.position.x - axisX) * maxLateral;
+      }
     }
 
     controls.update();
@@ -266,15 +287,22 @@ function CameraTargetRig({
     // internal spherical each update, so the corridor clamps must win.
     if (cam.position.z > CANYON_Z0 - 2 && cam.position.z < CANYON_Z1) {
       const axisX = pathCenterX(cam.position.z);
-      const maxLateral = 3.4;
-      if (Math.abs(cam.position.x - axisX) > maxLateral) {
-        cam.position.x = axisX + Math.sign(cam.position.x - axisX) * maxLateral;
-      }
       const floorY = terrainHeight(axisX, cam.position.z);
       const maxY = floorY + BORE_CEILING_CLEAR;
       if (cam.position.y > maxY) cam.position.y = maxY;
       const minY = floorY + 0.9;
       if (cam.position.y < minY) cam.position.y = minY;
+      const archH = Math.min(
+        Math.max(0, cam.position.y - floorY - 0.2),
+        BORE_SHELL_R - 0.01,
+      );
+      const maxLateral = Math.min(
+        3.4,
+        Math.sqrt(Math.max(0, BORE_SHELL_R * BORE_SHELL_R - archH * archH)) - 1.0,
+      );
+      if (Math.abs(cam.position.x - axisX) > maxLateral) {
+        cam.position.x = axisX + Math.sign(cam.position.x - axisX) * maxLateral;
+      }
     }
   });
   return null;
