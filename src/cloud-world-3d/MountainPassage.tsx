@@ -94,17 +94,24 @@ export function MountainPassage() {
     // 16/18 sigmas made a 22u-long flat plateau — skyline read flat at y94
     // across the whole frame center; 10/13 keeps the crest a POINT)
     const pRight = skew(178, 36, 14, 18); // right shoulder beyond the exit
+    // VIS-009: add asymmetric tertiary peaks for more natural, irregular silhouette
+    const pLeft2 = skew(108, 22, 9, 11);
+    const pRight2 = skew(190, 24, 12, 15);
     // Broken ridgeline: low-amplitude ridge noise, gated on past the brow so
     // the mouth zone stays smooth. This is what makes the skyline read
-    // "eroded/jagged" instead of four smooth bumps.
+    // "eroded/jagged" instead of four smooth bumps. VIS-009: add subtle multi-octave
+    // variation for a more natural, less periodic jagged silhouette.
     const ridgeNoise = (z: number) =>
-      (3.5 * Math.sin(z * 0.23 + 1.7) + 2.0 * Math.sin(z * 0.41 + 0.4)) * smoothstep(90, 104, z);
+      ((3.5 * Math.sin(z * 0.23 + 1.7) + 2.0 * Math.sin(z * 0.41 + 0.4)) +
+       1.2 * Math.sin(z * 0.67 + 2.3) + 0.8 * Math.sin(z * 0.13 - 0.9)) * smoothstep(90, 104, z);
     const crestLine = (z: number): number =>
-      Math.max(0, Math.max(pBrow(z), pLeft(z), pMain(z), pRight(z)) + ridgeNoise(z));
+      Math.max(0, Math.max(pBrow(z), pLeft(z), pLeft2(z), pMain(z), pRight2(z), pRight(z)) + ridgeNoise(z));
     // Tapered footprint: wide at the foot (88), narrow at the crest (30).
-    const halfWidthAt = (_z: number, crest: number): number => {
+    const halfWidthAt = (z: number, crest: number): number => {
       const t = Math.min(1, Math.max(0, crest / PEAK_H));
-      return HALF_W - (HALF_W - 30) * t;
+      // VIS-009: slight taper variation to break up straight silhouette edges
+      const wiggle = 1 + 0.04 * Math.sin(z * 0.17);
+      return (HALF_W - (HALF_W - 30) * t) * wiggle;
     };
     const crestHeight = (z: number, x: number): number => {
       const cx = pathCenterX(z);
@@ -126,8 +133,9 @@ export function MountainPassage() {
       // instead of one smooth dome. The falloff STRENGTHENS with z (far
       // peaks must fall off laterally faster or the summit band dominates
       // every screen column and the skyline flattens again).
+      // VIS-009: add x-dependent ridge noise to break up flat polygon bands
       const fallAmt = 0.55 + 0.25 * smoothstep(150, 200, z);
-      const spur = 1 + 0.35 * Math.sin(z * 0.19 + x * 0.16) + 0.2 * Math.sin(z * 0.37 - x * 0.31);
+      const spur = 1 + 0.35 * Math.sin(z * 0.19 + x * 0.16) + 0.2 * Math.sin(z * 0.37 - x * 0.31) + 0.12 * Math.sin(x * 0.43 + z * 0.11);
       const latFall = Math.min(1.15, (1 - fallAmt * Math.pow(u, 1.5)) * spur);
       const inTunnel = z >= TUNNEL_Z0 && z <= TUNNEL_Z1;
       // VIS-008 (2026-10-25): the tunnel-zone roof carve is REMOVED. A
@@ -242,13 +250,13 @@ export function MountainPassage() {
       }
       mergedMass.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     }
-    const rockA = new THREE.MeshStandardMaterial({
+    const stoneA = new THREE.MeshStandardMaterial({
       color: '#FFFFFF',
       roughness: 1,
       vertexColors: true,
       flatShading: true,
     });
-    const massMesh = new THREE.Mesh(mergedMass, rockA);
+    const massMesh = new THREE.Mesh(mergedMass, stoneA);
     massMesh.castShadow = true;
     massMesh.receiveShadow = true;
 
@@ -298,7 +306,7 @@ export function MountainPassage() {
       pathCenterX,
       terrainHeight,
     );
-    const faceMesh = new THREE.Mesh(faceGeo, rockA);
+    const faceMesh = new THREE.Mesh(faceGeo, stoneA);
     faceMesh.castShadow = true;
     faceMesh.receiveShadow = true;
     const faceFrontZ = mountZ - 4;
@@ -383,11 +391,11 @@ export function MountainPassage() {
         surroundGeos.push(g);
       }
     }
-    const stoneMesh = new THREE.Mesh(mergeGeometries(stoneGeos, false), rockA);
+    const stoneMesh = new THREE.Mesh(mergeGeometries(stoneGeos, false), stoneA);
     stoneMesh.castShadow = true;
     stoneMesh.receiveShadow = true;
 
-    const surroundMesh = new THREE.Mesh(mergeGeometries(surroundGeos, false), rockA);
+    const surroundMesh = new THREE.Mesh(mergeGeometries(surroundGeos, false), stoneA);
     surroundMesh.castShadow = true;
     surroundMesh.receiveShadow = true;
 
@@ -422,7 +430,7 @@ export function MountainPassage() {
         }
       }
     }
-    const mouthBlocksMesh = new THREE.Mesh(mergeGeometries(mouthBlockGeos, false), rockA);
+    const mouthBlocksMesh = new THREE.Mesh(mergeGeometries(mouthBlockGeos, false), stoneA);
     mouthBlocksMesh.castShadow = true;
     mouthBlocksMesh.receiveShadow = true;
 
