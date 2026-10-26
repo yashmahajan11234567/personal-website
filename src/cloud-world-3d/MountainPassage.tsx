@@ -399,7 +399,7 @@ export function MountainPassage() {
     surroundMesh.castShadow = true;
     surroundMesh.receiveShadow = true;
 
-    // ---- 3c. SOLID MOUTH BLOCKS (forensic plan Stage 1, 2026-10-25) ----
+    // ---- 3c. SOLID MOUTH BLOCKS (forensic plan Stage 1, 2026-10-25) ---
     // The massif is a single-sided heightfield: its "walls" around the bore
     // are 2D surfaces with no thickness, and the old 18u/26u sealing floors
     // read as enormous flat cliffs beside a 7.3u arch (RC-1). These blocks
@@ -407,6 +407,9 @@ export function MountainPassage() {
     // mouth (both sides, both mouths) that closes the gap between the bore
     // shell and the terrain with real 3D rock — so nothing tall flanks the
     // opening and no backface stack is ever visible from outside.
+    // VIS-009: add a grounding row of low flat rocks at the terrain contact
+    // line so nothing reads as hovering above the ground (video showed a
+    // gap/shadow line at the exit mouth where rock met grass).
     const mouthBlockGeos: THREE.BufferGeometry[] = [];
     for (const pz of [TUNNEL_Z0 - 1, TUNNEL_Z1 + 1]) {
       const cx = pathCenterX(pz);
@@ -428,6 +431,18 @@ export function MountainPassage() {
           g.translate(bx, terrainHeight(bx, bz) + h * 0.55, bz);
           mouthBlockGeos.push(g);
         }
+        // Grounding row: low flat rocks sitting ON the terrain at the outer
+        // edge of the skirt, bridging the skirt-to-terrain transition so the
+        // rock reads as rooted, not floating.
+        const gx = cx + side * (BORE_R + 16 + rnd() * 3);
+        const gz = pz + (rnd() - 0.5) * 6;
+        const gy = terrainHeight(gx, gz);
+        const gw = 3.4 + rnd() * 2;
+        const gh = 0.9 + rnd() * 0.8;
+        const gd = 3.4 + rnd() * 2;
+        const groundG = new THREE.BoxGeometry(gw, gh, gd, 3, 2, 2).toNonIndexed();
+        groundG.translate(gx, gy + gh * 0.5, gz);
+        mouthBlockGeos.push(groundG);
       }
     }
     const mouthBlocksMesh = new THREE.Mesh(mergeGeometries(mouthBlockGeos, false), stoneA);
@@ -493,21 +508,45 @@ export function MountainPassage() {
     const tubeMesh = new THREE.Mesh(mergeGeometries(tubeGeos, false), tubeMat);
     tubeMesh.receiveShadow = true;
 
-    // ---- 5. Arch rings at each mouth ----
+    // ---- 5. Arch rings at each mouth ---
     const archGeos: THREE.BufferGeometry[] = [];
+    // VIS-009: under-ceiling rock ledges beneath each mouth opening so the
+    // underside of the bore reads as carved rock with irregular ledges,
+    // not a flat planar ceiling (video showed flat undersides at entrance).
+    const underLedgeGeos: THREE.BufferGeometry[] = [];
     for (const pz of [TUNNEL_Z0 - 0.2, TUNNEL_Z1 + 0.2]) {
       const cx = pathCenterX(pz);
       const gy = terrainHeight(cx, pz);
       const arch = new THREE.TorusGeometry(BORE_R + 0.9, 0.55, 10, 28, Math.PI);
       arch.translate(cx, gy + 0.3, pz);
       archGeos.push(arch);
+      // Ledges: short radial struts dropping from the shell crown down to
+      // the arch crown, staggered around the bore so the underside reads
+      // as stepped rock shelves rather than a smooth flat plane.
+      for (let a = 0; a < 2 * Math.PI; a += Math.PI / 3) {
+        const lx = Math.cos(a) * (BORE_R + 1.4);
+        const lz = Math.sin(a) * 0.6;
+        const lw = 0.9 + Math.sin(a * 3) * 0.35;
+        const lh = 1.6 + Math.sin(a * 5) * 0.5;
+        const ld = 1.0;
+        const lg = new THREE.BoxGeometry(lw, lh, ld, 2, 2, 1);
+        lg.translate(cx + lx, gy + 0.3 + BORE_R - lh / 2, pz + lz);
+        lg.rotateZ(a);
+        underLedgeGeos.push(lg);
+      }
     }
     const archMesh = new THREE.Mesh(
       mergeGeometries(archGeos, false),
       new THREE.MeshStandardMaterial({ color: '#B08A60', roughness: 1 }),
     );
 
-    // ---- 6. Inner tunnel shell: arched ceiling + upper walls (lit depth) ----
+    // Under-ceiling rock ledges: stone material, baked sandstone colors.
+    const underLedgeMesh = new THREE.Mesh(mergeGeometries(underLedgeGeos, false), stoneA);
+    underLedgeMesh.castShadow = true;
+    underLedgeMesh.receiveShadow = true;
+    bakeSandstone(underLedgeMesh.geometry);
+
+    // ---- 6. Inner tunnel shell: arched ceiling + upper walls (lit depth) ---
     const shellSegs: THREE.BufferGeometry[] = [];
     const SHELL_R = BORE_R - 0.4;
     // STAGE 3 (forensic plan 2026-10-25): lap the carved mouths by ~1.5u so
@@ -518,12 +557,25 @@ export function MountainPassage() {
       const seg = new THREE.CylinderGeometry(SHELL_R, SHELL_R + 0.3, 4.4, 24, 1, true, Math.PI / 2, Math.PI);
       seg.rotateX(Math.PI / 2);
       seg.translate(cx, gy + 0.2, z + 2);
+      // VIS-009: irregular rock variegation on inner shell so bore walls read
+      // as carved stone, not smooth plastic (video: interior looked stretched
+      // and featureless). Jitter vertices radially + heightwise per segment.
+      const sPos = seg.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < sPos.count; i++) {
+        const x = sPos.getX(i), y = sPos.getY(i), zz = sPos.getZ(i);
+        const rnd = mulberry32(i * 131 + z * 17);
+        sPos.setXYZ(i,
+          x + (rnd() - 0.5) * 0.18,
+          y + (rnd() - 0.5) * 0.14,
+          zz + (rnd() - 0.5) * 0.18);
+      }
+      seg.computeVertexNormals();
       shellSegs.push(seg);
     }
     const shellMesh = new THREE.Mesh(
       mergeGeometries(shellSegs, false),
       new THREE.MeshStandardMaterial({
-        color: '#7D5F42',
+        color: '#8B6B4F',
         roughness: 1,
         side: THREE.DoubleSide,
       }),
@@ -672,7 +724,7 @@ export function MountainPassage() {
       (window as any).__cwMountainFootprint = { zStart: Z_START, zEnd: Z_END, halfWidth: HALF_W };
     }
 
-    return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, frameMesh, surroundMesh, mountFace, mouthBlocksMesh };
+    return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, frameMesh, surroundMesh, mountFace, mouthBlocksMesh, underLedgeMesh };
   }, []);
 
   // ---- 8. Journey's end plaza (polish pass 2026-10-20) ----
@@ -783,6 +835,7 @@ export function MountainPassage() {
       <primitive object={parts.shellMesh} />
       <primitive object={parts.frameMesh} />
       <primitive object={parts.surroundMesh} />
+      <primitive object={parts.underLedgeMesh} />
       {lanterns.map((l, i) => (
         <group key={i} position={[l.x, l.y, l.z]}>
           <mesh castShadow position={[0, 1.6, 0]} material={postMat}>

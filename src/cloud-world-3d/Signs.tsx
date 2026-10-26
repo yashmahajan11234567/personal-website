@@ -201,12 +201,12 @@ export function CloudSign({
       {/* Timber posts — grounded signs only; wall mounts hang on the rock */}
       {!isMounted && (
         <>
-          <mesh castShadow position={[-1.15 * s, postBaseY + postLen / 2, 0]}>
-            <cylinderGeometry args={[0.11 * s, 0.13 * s, postLen, 8]} />
+          <mesh castShadow position={[-1.15 * s, postBaseY + postLen / 2, 0]} rotation={[0, 0, 0.08]}>
+            <cylinderGeometry args={[0.16 * s, 0.19 * s, postLen, 10]} />
             <primitive object={postMat} attach="material" ref={postMatRef} />
           </mesh>
-          <mesh castShadow position={[1.15 * s, postBaseY + postLen / 2, 0]}>
-            <cylinderGeometry args={[0.11 * s, 0.13 * s, postLen, 8]} />
+          <mesh castShadow position={[1.15 * s, postBaseY + postLen / 2, 0]} rotation={[0, 0, -0.08]}>
+            <cylinderGeometry args={[0.16 * s, 0.19 * s, postLen, 10]} />
             <primitive object={postMat} attach="material" />
           </mesh>
           {/* Boulder feet (polish pass 2026-10-20): small angular rocks sunk

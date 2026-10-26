@@ -9,15 +9,26 @@ function SunsetSkySphere() {
   const gradientTexture = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
-    canvas.height = 256;
+    canvas.height = 512;
     const ctx = canvas.getContext('2d');
     if (!ctx) return new THREE.Texture();
     const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0.0, '#FFB74D'); // zenith
-    gradient.addColorStop(0.5, '#FFCC80'); // horizon
-    gradient.addColorStop(1.0, '#FFB74D'); // nadir
+    // Warm sunset gradient: deep orange at zenith, soft peach at horizon,
+    // pale warm near-nadir so the horizon band reads as sky not a flat block.
+    gradient.addColorStop(0.0, '#E89B5D'); // deep warm zenith
+    gradient.addColorStop(0.45, '#FFCC80'); // warm horizon band
+    gradient.addColorStop(0.75, '#FFE8B8'); // soft peach below horizon
+    gradient.addColorStop(1.0, '#FFD694'); // pale warm nadir
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Subtle vertical cloud streaks at the horizon for atmospheric depth.
+    ctx.fillStyle = 'rgba(255, 220, 180, 0.25)';
+    for (let i = 0; i < 6; i++) {
+      const x = (i / 6) * canvas.width;
+      ctx.beginPath();
+      ctx.ellipse(x, canvas.height * 0.55, canvas.width * 0.12, canvas.height * 0.08, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
     texture.wrapS = THREE.ClampToEdgeWrapping;
