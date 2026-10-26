@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 // @ts-ignore — BufferGeometryUtils ships as ESM without bundled types here
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { pathCenterX, smoothstep, terrainHeight } from './world';
+import { pathCenterX, smoothstep, terrainHeight, mulberry32 } from './world';
 import { buildMountainSurface } from './mountainSurface';
 import { ProjectsBillboard } from './ProjectsBillboard';
 
@@ -130,13 +130,22 @@ export function MountainPassage() {
       const spur = 1 + 0.35 * Math.sin(z * 0.19 + x * 0.16) + 0.2 * Math.sin(z * 0.37 - x * 0.31);
       const latFall = Math.min(1.15, (1 - fallAmt * Math.pow(u, 1.5)) * spur);
       const inTunnel = z >= TUNNEL_Z0 && z <= TUNNEL_Z1;
-      // Inside the tunnel bore: rock ceiling matches the arch top, tapering
-      // to ground at the corridor edge — nothing sits above empty air.
-      if (inTunnel && corridorDist < CORRIDOR_EDGE) {
-        const t = 1 - corridorDist / CORRIDOR_EDGE;
-        return ROOF_CROWN * t * t;
-      }
-      // Outside the tunnel zone, within the corridor: clear approach path.
+      // VIS-008 (2026-10-25): the tunnel-zone roof carve is REMOVED. A
+      // single-sided heightfield cannot carry an open trench: the sparse
+      // profile used to bridge it (the floating canopy — down-facing quads
+      // n.y≈-0.9, the "flat underside + pillars" in video 135213), and once
+      // profile columns sampled the carve the trench became a through-slot
+      // (grazing rays pass between the flank walls → sky/plates at frame
+      // top, diag004 P4 + vis007 01/02). The massif therefore passes OVER
+      // the bore as a solid dome (the architecture's original contract:
+      // "crestHeight floors the profile above the walkable tube"). The bore
+      // void is formed by the inner shell (r 4.95), the facade carve, and
+      // the mouth tubes — never by carving this sheet. ROOF_CLEAR keeps the
+      // sheet above the shell + arch ring everywhere.
+      // VIS-008 (2026-10-25): OUTSIDE the tunnel zone the corridor stays an
+      // open approach floor (return 0). The canopy above it is gone because
+      // the flank ramp below now rises SMOOTHLY from the corridor edge and
+      // the new profile columns sample that ramp — no floating underside.
       if (!inTunnel && corridorDist < CORRIDOR_EDGE) {
         return 0;
       }
@@ -151,27 +160,49 @@ export function MountainPassage() {
       // jaggedness); the corridor-edge lift below just rounds the shoulder
       // where the dome meets the carved corridor so the brow/portal flank
       // does not start with a knife edge.
-      const lift = 1 - Math.pow(
-        (corridorDist - CORRIDOR_EDGE) / Math.max(1, CORRIDOR_EDGE * 2.2),
-        2,
-      ); // 0 at the corridor edge → 1 by ~2.2 corridor-edges out
-      const flank = crest * latFall * Math.min(1, Math.max(0, lift));
-      // Mouth-zone floor: the flank never sits below MOUTH_FLOOR across the
-      // portal brow's full z-band (mountZ−5.5 … mountZ+6 ≈ 92..103.5) and the
-      // floor EXCEEDS the facade top (17u) so the brow's edges always have
-      // rock behind them — no sky slit beside or above the brow.
-      // RECON 2026-10-21: 26 → 18. The old 26u floor spanned the FULL
-      // footprint width as a horizontal slab whose near edge (z≈84) projected
-      // to +14.7° (frame y186) from the approach — it read as a wall band
-      // UNDER the peaks. 18u keeps the brow sealed behind the 17u facade
-      // while leaving the brow shoulders (9u) low so sky shows at the sides.
-      const MOUTH_FLOOR = 18;
+      // VIS-008 RAMP FIX: the old lift `1 - ((dx-6.5)/14.3)²` measured ≈1
+      // AT the edge and 0 beyond dx≈21 — an inverted ramp that jumped the
+      // flank 0→full-crest within ~0.5u of the corridor (a vertical cliff
+      // wall) and flattened everything past dx 21. That discontinuity was
+      // the root cause of BOTH the floating canopy (the sparse profile
+      // bridged across it with a flat ceiling) and the thin-plate walls
+      // (diag004 P4) after the columns materialized it. Replaced with a
+      // smooth rise whose WIDTH depends on z: narrow (7u) beside the tunnel
+      // zone so the bore is framed by continuous rock walls on both
+      // exterior sides (no sky slots beside the ±13u facade — diag004 P4
+      // follow-up), widening to 18u toward the massif ends so the far
+      // approach/exit flanks stay gentle valley slopes.
+      // VIS-008: Z-MODULATED LIFT — near the mouths the flank must land at
+      // the corridor edge (solid rock walls beside the bore, no sky slots
+      // beside the ±13u facade); toward the massif ends it rises over 18u.
+      const zIntoMassif = Math.min(
+        smoothstep(Z_START + 4, TUNNEL_Z0 - 8, z),
+        1 - smoothstep(TUNNEL_Z1 + 8, Z_END - 4, z),
+      );
+      const rampW = 18 - 11 * zIntoMassif; // 18u far → 7u beside the bore
+      const lift = smoothstep(CORRIDOR_EDGE, CORRIDOR_EDGE + rampW, corridorDist);
+      // Inside the tunnel zone the dome passes OVER the bore: clamp the
+      // sheet to a 7u floor (shell r≈4.95 + arch ring 6.65 + margin) so the
+      // bore void survives and the character never sees rock inside it.
+      const ROOF_CLEAR = 7.0;
+      const flank = Math.max(
+        crest * latFall * Math.min(1, Math.max(0, lift)),
+        inTunnel ? ROOF_CLEAR * Math.min(1, Math.max(0, lift)) : 0,
+      );
+      // Mouth-zone floor: SOLID MOUTH REBUILD (forensic plan Stage 1,
+      // 2026-10-25): the old 18u sealing floor made the massif flanks rise to
+      // a FLAT 18u slab around a 7.3u arch — the "enormous flat brown wall"
+      // (numeric cross-sections in .hermes/plans/2026-10-25_010613). The seal
+      // is now carried by explicit solid mouth blocks (see mouthBlocks below);
+      // the heightfield floor drops to a low organic shoulder so the arch is
+      // the dominant feature, not a notch in a cliff.
+      const MOUTH_FLOOR = 4.5;
       const floorZ = MOUTH_FLOOR * smoothstep(84, 92, z) * (1 - smoothstep(103, 114, z));
       const floor = floorZ * Math.min(1, (corridorDist - CORRIDOR_EDGE) / 2);
-      // EXIT-side floor: same treatment beyond z≈166 so the exit mouth has
-      // solid rock shoulders fading back to the summit ridge (previously the
-      // exit side showed a thinner wedge against the taller entrance flank).
-      const EXIT_FLOOR = 26;
+      // EXIT-side floor: same treatment beyond z≈166 (Stage 1): low shoulder,
+      // continuity carried by the solid exit blocks; the pRight crest keeps
+      // the mountain silhouette above the exit opening.
+      const EXIT_FLOOR = 4.5;
       const floorX = EXIT_FLOOR * smoothstep(158, 166, z) * (1 - smoothstep(174, 184, z));
       const floorExit = floorX * Math.min(1, (corridorDist - CORRIDOR_EDGE) / 2);
       return Math.max(flank, floor, floorExit);
@@ -232,12 +263,38 @@ export function MountainPassage() {
     // ~40px of ridge above) — the "wall" read. At 17u the facade top sits at
     // y255 with the summit ridge at y32: a 200px+ sky band between them, and
     // the board (9.75..14.25u) still fully embedded with rock above.
+    // STAGE 2 (forensic plan 2026-10-25): the old slab had NO opening — the
+    // arch shell was embedded inside its volume and only "emerged" via
+    // FrontSide culling (RC-3: the buried-arch read). The crest profile is
+    // now CARVE-AWARE: full 17u outside the bore radius, arched cut (same
+    // ROOF_CROWN·t² family as the massif carve) inside, so the arch opening
+    // is a hole in the facade bounded by front-facing rock on all sides.
     const mountZ = TUNNEL_Z0 - 2.5;
     const mountCx = pathCenterX(mountZ);
     const mountGround = terrainHeight(mountCx, mountZ);
     const mountFaceY = mountGround + 16;
+    const FACE_CARVE_R = CORRIDOR_EDGE; // match the massif corridor carve (6.5)
+    const carvedFaceHeight = (z: number, x: number): number => {
+      const dx = Math.abs(x - pathCenterX(z));
+      if (dx >= FACE_CARVE_R) {
+        // FORENSIC vision pass (vis007/02, 2026-10-25): a constant 17u crest
+        // drew a straight horizontal top edge across the mouth — a slab read.
+        // Rock-strata variation (three terms, ±2.6u) breaks the line, and a
+        // gentle rise toward the outer edge (17→19.5 by |dx|=13) seats the
+        // facade into the massif shoulder behind it.
+        const strata = 1.7 * Math.sin(x * 0.42 + 1.1) + 1.1 * Math.sin(z * 0.55 + x * 0.2) + 0.8 * Math.sin(x * 0.18 - z * 0.31 + 2.2);
+        const shoulder = 2.5 * smoothstep(7.5, 13, dx);
+        return Math.max(8, 17 + strata + shoulder);
+      }
+      // Arched cut identical to the massif bore carve (ROOF_CROWN·t² over
+      // CORRIDOR_EDGE) so facade opening and carved passage are one profile;
+      // the torus ring (r 6.1) lines the inside edge and the tube rim
+      // (r 7.3) rings it in front of the rock — both at the opening edge.
+      const t = 1 - dx / FACE_CARVE_R;
+      return Math.max(0, ROOF_CROWN * t * t);
+    };
     const faceGeo = buildMountainSurface(
-      { zStart: mountZ - 5.5, zEnd: mountZ + 6, zStep: 5, halfWidth: 13, seed: 502, crestHeight: () => 17, edgeFloor: 0.6 },
+      { zStart: mountZ - 5.5, zEnd: mountZ + 6, zStep: 5, halfWidth: 13, seed: 502, crestHeight: carvedFaceHeight, edgeFloor: 0.6 },
       pathCenterX,
       terrainHeight,
     );
@@ -334,6 +391,41 @@ export function MountainPassage() {
     surroundMesh.castShadow = true;
     surroundMesh.receiveShadow = true;
 
+    // ---- 3c. SOLID MOUTH BLOCKS (forensic plan Stage 1, 2026-10-25) ----
+    // The massif is a single-sided heightfield: its "walls" around the bore
+    // are 2D surfaces with no thickness, and the old 18u/26u sealing floors
+    // read as enormous flat cliffs beside a 7.3u arch (RC-1). These blocks
+    // are the actual sealing VOLUME: a low, lumpy rock skirt around each
+    // mouth (both sides, both mouths) that closes the gap between the bore
+    // shell and the terrain with real 3D rock — so nothing tall flanks the
+    // opening and no backface stack is ever visible from outside.
+    const mouthBlockGeos: THREE.BufferGeometry[] = [];
+    for (const pz of [TUNNEL_Z0 - 1, TUNNEL_Z1 + 1]) {
+      const cx = pathCenterX(pz);
+      const rnd = mulberry32(pz > 130 ? 911 : 707);
+      for (const side of [-1, 1]) {
+        for (let i = 0; i < 9; i++) {
+          // Lateral band from just outside the bore wall out to ~13u; rows
+          // tighten toward the exit so the skirt stays behind the portal.
+          const t = i / 8; // 0..1 along the lateral band
+          const lx = BORE_R + 0.9 + t * 7.2; // 6.1 .. 13.3 from centerline
+          const bx = cx + side * lx + (rnd() - 0.5) * 1.6;
+          const bz = pz + (rnd() - 0.5) * 4.2;
+          // Rise gently with lateral distance: hugging the bore keeps the
+          // opening low; the outer edge shoulders up toward the flank.
+          const h = 1.1 + t * 2.6 + rnd() * 1.4;
+          const w = 2.6 + rnd() * 1.5;
+          const g = new THREE.IcosahedronGeometry(1, 0);
+          g.scale(w, h, w * 0.85);
+          g.translate(bx, terrainHeight(bx, bz) + h * 0.55, bz);
+          mouthBlockGeos.push(g);
+        }
+      }
+    }
+    const mouthBlocksMesh = new THREE.Mesh(mergeGeometries(mouthBlockGeos, false), rockA);
+    mouthBlocksMesh.castShadow = true;
+    mouthBlocksMesh.receiveShadow = true;
+
     // BAKE VERTEX COLORS for the icosahedron-based meshes (stones + surround).
     // rockA has vertexColors: true; geometries without a 'color' attribute read
     // (0,0,0) on the GPU → rendered BLACK (the black-rocks bug in the user's
@@ -368,6 +460,7 @@ export function MountainPassage() {
     };
     bakeSandstone(stoneMesh.geometry);
     bakeSandstone(surroundMesh.geometry);
+    bakeSandstone(mouthBlocksMesh.geometry);
 
     // ---- 4. Stone lining tubes at each mouth (the visible bore rim) ----
     const tubeGeos: THREE.BufferGeometry[] = [];
@@ -380,7 +473,11 @@ export function MountainPassage() {
       tubeGeos.push(tube);
     }
     const tubeMat = new THREE.MeshStandardMaterial({
-      color: '#A97F58',
+      // RECORDING 144628 (Fix C): the light smooth rim (#A97F58) against the
+      // darker segmented shell behind it read as a disconnected "smooth arch
+      // that doesn't join the ribs". Deepen the rim toward the shell family so
+      // the mouth reads as one carved portal: rim shades into the first rib.
+      color: '#96714E',
       roughness: 1,
       side: THREE.DoubleSide,
       flatShading: true,
@@ -405,7 +502,9 @@ export function MountainPassage() {
     // ---- 6. Inner tunnel shell: arched ceiling + upper walls (lit depth) ----
     const shellSegs: THREE.BufferGeometry[] = [];
     const SHELL_R = BORE_R - 0.4;
-    for (let z = TUNNEL_Z0 + 2; z < TUNNEL_Z1; z += 4) {
+    // STAGE 3 (forensic plan 2026-10-25): lap the carved mouths by ~1.5u so
+    // the shell meets the facade carve with no visible seam.
+    for (let z = TUNNEL_Z0 - 1.5; z < TUNNEL_Z1 + 2.5; z += 4) {
       const cx = pathCenterX(z);
       const gy = terrainHeight(cx, z);
       const seg = new THREE.CylinderGeometry(SHELL_R, SHELL_R + 0.3, 4.4, 24, 1, true, Math.PI / 2, Math.PI);
@@ -416,43 +515,20 @@ export function MountainPassage() {
     const shellMesh = new THREE.Mesh(
       mergeGeometries(shellSegs, false),
       new THREE.MeshStandardMaterial({
-        // Darkened (polish pass): #8A6A48 → #6E5238 — a deeper bore reads as a
-        // real carved tunnel from the approach instead of a shallow notch.
-        color: '#6E5238',
+        color: '#7D5F42',
         roughness: 1,
         side: THREE.DoubleSide,
       }),
     );
     shellMesh.receiveShadow = true;
 
-    // Depth occluders (polish pass): dark discs just inside each mouth. From
-    // the approach the tunnel interior previously read as a bright notch; a
-    // near-black warm disc at depth sells "carved into rock, goes somewhere".
-    // Shape fix 2026-10-20: full circles poked through the arched roof (disc
-    // top at ground+7.9 vs roof crown 6.2 — visible as floating black slabs
-    // inside the mouth). Clipped to a half-disc BELOW spring-line height so
-    // the occluder can never exceed the bore's own ceiling.
-    const occluderGeos: THREE.BufferGeometry[] = [];
-    // ENTRANCE ONLY (z = TUNNEL_Z0 + 4): from the bright valley the entrance
-    // needs a dark backwall so the bore reads deep. The EXIT gets no occluder —
-    // QA (2026-10-20 exit-approach capture) showed a black plate covering the
-    // mouth from outside, killing the sunset reveal that is the reward for
-    // walking through. The exit keeps its bore lights for backlit depth.
-    for (const pz of [TUNNEL_Z0 + 4]) {
-      const cx = pathCenterX(pz);
-      const gy = terrainHeight(cx, pz);
-      const r = BORE_R - 0.5;
-      // Bottom half-disc (theta π..2π) with its flat edge at ground+0.35r:
-      // every point sits at or below y = 0.35r ≈ 1.65u — far under the roof
-      // crown (6.2u), so nothing can poke through the arch ceiling.
-      const disc = new THREE.CircleGeometry(r, 24, Math.PI, Math.PI);
-      disc.translate(cx, gy + r * 0.35, pz);
-      occluderGeos.push(disc);
-    }
-    const occluderMesh = new THREE.Mesh(
-      mergeGeometries(occluderGeos, false),
-      new THREE.MeshBasicMaterial({ color: '#241509' }),
-    );
+    // STAGE 3 (forensic plan 2026-10-25): entrance occluder disc REMOVED.
+    // The old flat/gradient MeshBasicMaterial disc was the single biggest
+    // driver of the "blocked wall / can't walk in" read (RC-2): from outside
+    // the bright valley it silhouetted as a slab because the FrontSide
+    // facade/wall layers were culled and the disc rendered unlit. With a real
+    // carved facade opening + solid mouth blocks, the bore reads deep via
+    // the interior shell and the warm bore lights (unchanged). No backwall.
 
     // ---- 7b. Mouth frame walls (see-through fix, 2026-10-20) ----
     // Solid sandstone piers + a lintel fill the open lateral band at BOTH
@@ -471,10 +547,14 @@ export function MountainPassage() {
     // → up to the same 14u cap).
     const frameGeos: THREE.BufferGeometry[] = [];
     const FRAME_MAT_H = 14;
-    const LATERAL_IN = 6.4;
+    // STAGE 2 (forensic plan 2026-10-25): piers now sit ON the bore wall
+    // (inner edge 5.2 = BORE_R, was 6.4 — a 1.2u daylight gap the old slab
+    // hid) and the lintel bottom meets the carve crown (6.2, was 7.0) so
+    // the opening is bounded by rock, not floating bands.
+    const LATERAL_IN = BORE_R;
     const LATERAL_OUT = 26;
     const FRAME_D = 6;
-    const LINTEL_BOTTOM = 7.0;
+    const LINTEL_BOTTOM = 6.2;
     for (const pz of [TUNNEL_Z0 - 1, TUNNEL_Z1 + 1]) {
       const cx = pathCenterX(pz);
       const gy = terrainHeight(cx, pz);
@@ -504,9 +584,18 @@ export function MountainPassage() {
         return g.toNonIndexed();
       };
       frameGeos.push(pier(-1), pier(1));
-      // Lintel band above the arch opening (box → non-indexed for merge).
-      const lintel = new THREE.BoxGeometry(LATERAL_OUT * 2, FRAME_MAT_H - LINTEL_BOTTOM, FRAME_D, 4, 5, 2);
-      lintel.translate(cx, gy + LINTEL_BOTTOM + (FRAME_MAT_H - LINTEL_BOTTOM) / 2, pz);
+      // Lintel band above the arch opening. FORENSIC STAGE 2 revision
+      // (2026-10-25, vision on vis007/02): the old box spanned the full
+      // LATERAL_OUT*2 = 52u at 7.8u tall — from the frontal approach its
+      // flat front face filled the top of the frame as a slab over the
+      // arch (most of |dx|>8 is buried inside the now-17u carved facade,
+      // so the width was dead flat area). Narrowed to the opening band
+      // (±8.2) and lowered (6.2→10.5) so it reads as a rock band hugging
+      // the arch crown; the facade + piers carry everything beyond it.
+      const LINTEL_W = 16.4;
+      const LINTEL_TOP = 10.5;
+      const lintel = new THREE.BoxGeometry(LINTEL_W, LINTEL_TOP - LINTEL_BOTTOM, FRAME_D, 3, 3, 2);
+      lintel.translate(cx, gy + LINTEL_BOTTOM + (LINTEL_TOP - LINTEL_BOTTOM) / 2, pz);
       frameGeos.push(lintel.toNonIndexed());
     }
     const mergedFrame = mergeGeometries(frameGeos, false)!;
@@ -575,7 +664,7 @@ export function MountainPassage() {
       (window as any).__cwMountainFootprint = { zStart: Z_START, zEnd: Z_END, halfWidth: HALF_W };
     }
 
-    return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, occluderMesh, frameMesh, surroundMesh, mountFace };
+    return { massMesh, faceMesh, stoneMesh, tubeMesh, archMesh, shellMesh, frameMesh, surroundMesh, mountFace, mouthBlocksMesh };
   }, []);
 
   // ---- 8. Journey's end plaza (polish pass 2026-10-20) ----
@@ -680,10 +769,10 @@ export function MountainPassage() {
       <primitive object={parts.massMesh} />
       <primitive object={parts.faceMesh} />
       <primitive object={parts.stoneMesh} />
+      <primitive object={parts.mouthBlocksMesh} />
       <primitive object={parts.tubeMesh} />
       <primitive object={parts.archMesh} />
       <primitive object={parts.shellMesh} />
-      <primitive object={parts.occluderMesh} />
       <primitive object={parts.frameMesh} />
       <primitive object={parts.surroundMesh} />
       {lanterns.map((l, i) => (
@@ -707,11 +796,29 @@ export function MountainPassage() {
       {/* Interior bore lights — warm, capped, no shadow casting */}
       {(() => {
         const out: { pos: [number, number, number]; intensity: number }[] = [];
-        for (const z of [TUNNEL_Z0 - 1, TUNNEL_Z0 + 6, 118, 135, 152, TUNNEL_Z1 - 2]) {
+        for (const z of [TUNNEL_Z0 - 1, TUNNEL_Z0 + 6, 118, 135, 152, TUNNEL_Z1 - 2, TUNNEL_Z1 - 6]) {
           const cx = pathCenterX(z);
           out.push({
             pos: [cx, terrainHeight(cx, z) + 3, z],
-            intensity: z <= TUNNEL_Z0 + 6 || z === TUNNEL_Z1 - 2 ? 20 : 6,
+            // VIDEO PASS 2026-10-24: mid-bore read dim/flat between the two
+            // bright mouths (user video: "flat lighting, no shadows" inside
+            // the bore). 6 → 8 lifts the mid-section so the carved walls have
+            // form while mouths stay brighter (20). VIS-004's "close, no
+            // change" is superseded by the user's explicit fix mandate.
+            // RECORDING 144628: the exit read as a DEAD END from mid-bore —
+            // the approach-side of the exit mouth was unlit, so the far end
+            // showed a small backlit ring with no lit path leading to it.
+            // TUNNEL_Z1-6 at 12 paints a warm pool just inside the exit so
+            // the far floor visibly leads out; z=152 raised 8→10 so the far
+            // half is not the dimmest stretch.
+            intensity:
+              z <= TUNNEL_Z0 + 6 || z === TUNNEL_Z1 - 2
+                ? 20
+                : z === TUNNEL_Z1 - 6
+                  ? 12
+                  : z === 152
+                    ? 10
+                    : 8,
           });
         }
         return out.map((l, i) => (

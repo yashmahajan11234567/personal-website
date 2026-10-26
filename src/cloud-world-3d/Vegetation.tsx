@@ -51,6 +51,11 @@ export function getTreeSpecs(): TreeSpec[] {
     if (dist < 18) continue; // keep mid-valley clearing open
     const d = Math.abs(x - pathCenterX(z));
     if (d < 6.5) continue; // path clearance (broadleaf canopy can reach ~3.1u)
+    // FORENSIC FIX (vis007/08, 2026-10-25): trees with |dx| 6.5..9 inside the
+    // passage z-band stand in the hollow under the massif skin (the heightfield
+    // is single-sided) and their canopies clip through the carved bore into the
+    // exit aperture. No trees may stand within the massif footprint band.
+    if (z > 88 && z < 186 && d < 10) continue;
     const y = terrainHeight(x, z);
     // Depth layers: foreground big, background smaller.
     let scale: number;

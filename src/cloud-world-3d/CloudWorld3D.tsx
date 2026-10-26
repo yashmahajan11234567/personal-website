@@ -178,7 +178,8 @@ const FOLLOW_MAX_DELTA_SQUARED = 0.0025;
 // the normal 15u orbit (camera ~7.5u up) would sit inside rock. While the
 // avatar is in the canyon stretch, pull the orbit closer and clamp the
 // camera under the bore ceiling so the view stays inside the carved passage.
-const CANYON_Z0 = 97;
+const CANYON_Z0 = 92; // Stage 5 (forensic plan 2026-10-25): engage clamp
+// at the facade plane now that the mouth is a real carved opening.
 // Clamp stays on past the bore exit (CANYON_Z1 + margin): the camera trails
 // the avatar by ~9-15u, so while the avatar exits (z 173→178) the camera is
 // still INSIDE the bore — turning the clamp off at the bore edge pops the
@@ -221,7 +222,9 @@ function CameraTargetRig({
     const k = 1 - Math.exp(-5.5 * Math.min(delta, 1 / 30));
     controls.target.lerp(desired, k);
 
-    // Canyon/bore: closer follow + camera clamped under the bore ceiling.
+    // Stage 5: engage the camera clamp at the facade plane (facade slabs
+    // z 92..108.5) now that the mouth is a real carved opening rather than
+    // the old culling stack.
     const inCanyon = charPos.z > CANYON_Z0 && charPos.z < CANYON_Z1;
     const followDist = inCanyon ? CANYON_FOLLOW_DISTANCE : FOLLOW_DISTANCE;
 

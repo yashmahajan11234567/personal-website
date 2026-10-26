@@ -103,6 +103,32 @@ export function terrainColorAt(x: number, z: number, h: number, out: THREE.Color
   out.lerp(ROCKY, mountainBlend * 0.75);
   out.lerp(SAND_WARM, smoothstep(180, 235, z) * 0.55);
 
+  // VIDEO PASS 2026-10-24 — bore floor: inside the carved tunnel (z 100..170,
+  // within the bore radius of the path center) the floor is still meadow
+  // green, meeting the brown shell in a sharp line that read as a "hard seam /
+  // two-tone floor" in the user's gameplay video. Blend the floor toward warm
+  // sandstone with z-fades at both mouths so the interior reads as carved
+  // rock floor; the transition is gradual (10u) so there is no new seam.
+  // FORENSIC FIX 2026-10-25 (vis007/05+/08): the ramps were INVERTED —
+  // `(1 - smoothstep(96,106,z)) * smoothstep(174,164,z)` is 1 for z<96 (the
+  // open approach apron) and 0 for 106<z<164 (the actual bore) — it painted
+  // the apron sandstone and left the bore floor green. Corrected to ramp IN
+  // at the entrance and OUT at the exit.
+  {
+    const inBore = smoothstep(96, 106, z) * (1 - smoothstep(164, 174, z));
+    const lateral = 1 - smoothstep(7.2, 11, Math.abs(x - pathCenterX(z)));
+    const boreFloor = inBore * lateral;
+    if (boreFloor > 0.001) {
+      // Two-step blend: sandy walkway center, darker toward the walls so the
+      // springing line (shell base meets floor) has no bright floor edge.
+      TMP.set('#8F6F49');
+      out.lerp(TMP, boreFloor * 0.8);
+      const wallSide = smoothstep(2.5, 6.5, Math.abs(x - pathCenterX(z)));
+      TMP.set('#6E5238'); // match the shell tone family
+      out.lerp(TMP, boreFloor * wallSide * 0.72);
+    }
+  }
+
   // Macro color patches: two very-low-frequency HSL terms (wavelength ~40u)
   // so the meadow reads as patched, not uniform. Amplitudes raised 2026-10-20
   // (polish pass): 0.012/0.02 → 0.028/0.045 — at gameplay distance the old

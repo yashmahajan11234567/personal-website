@@ -117,7 +117,12 @@ export function buildMountainSurface(
     { f: -1.05, h: -0.02 },  // skirt seam left (≈ ground)
     { f: -0.95, h: 1.0 },    // core left edge
     { f: -0.55, h: 1.0 },    // core
-    { f: -0.2, h: 1.0 },     // core
+    { f: -0.2, h: 1.0 },     // flank shoulder column
+    { f: -0.12, h: 1.0 },    // VIS-008: carve-wall column (|dx| 3.6..10.6 at hw 30..88)
+    { f: -0.05, h: 1.0 },    // VIS-008: first in-carve column (|dx| 1.5..4.4)
+    { f: 0, h: 1.0 },        // VIS-008: centerline — the bore crown itself
+    { f: 0.05, h: 1.0 },     // VIS-008 mirror
+    { f: 0.12, h: 1.0 },     // VIS-008 mirror
     { f: 0.2, h: 1.0 },      // core
     { f: 0.55, h: 1.0 },     // core
     { f: 0.95, h: 1.0 },     // core right edge
@@ -125,7 +130,7 @@ export function buildMountainSurface(
     { f: 1.35, h: -0.18 },   // lower skirt right
     { f: 1.7, h: -0.55 },    // buried base right
   ];
-  const N = PROFILE.length; // 12 points, 11 stitched quads per row pair
+  const N = PROFILE.length; // 17 points, 16 stitched quads per row pair
 
   const zSteps = Math.max(2, Math.round((spec.zEnd - spec.zStart) / spec.zStep));
   for (let i = 0; i <= zSteps; i++) {
@@ -196,14 +201,20 @@ export function buildMountainSurface(
   for (let i = 0; i < rows.length - 1; i++) {
     const A = rows[i].pts;
     const B = rows[i + 1].pts;
+    // VIS-008: 17-column profile — the centerline column is index 8, so the
+    // crown/crossover quad is j=8 (was j=5 in the 12-column layout). Quads
+    // j 5..7 and 9..10 span the new carve-wall/roof columns: their faces
+    // point up or INTO the corridor depending on the local carve, so they
+    // get hintX=0 (lighting follows the true geometric normal) — the outer
+    // slope hints (-1/+1) would flip carve walls to face into the rock.
     for (let j = 0; j < N - 1; j++) {
       // Left slope (f < 0) faces -x; right slope faces +x; crest pair faces up.
       let hintX: number;
       if (j < 5) hintX = -1;
-      else if (j > 5) hintX = 1;
+      else if (j > 10) hintX = 1;
       else hintX = 0;
 
-      if (j < 5) {
+      if (j < 8) {
         // Left slope faces -x (outward). Vertex order must wind CCW when
         // viewed from the outside (-x side) so FrontSide culling keeps it
         // visible. The previous order (A[j+1] first) wound for +x and got

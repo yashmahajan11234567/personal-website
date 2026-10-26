@@ -1,0 +1,58 @@
+{
+  "samples": 1177,
+  "inMountain": 0,
+  "envelope": {
+    "maxLat": 3.4000000000000004,
+    "maxH": 4
+  },
+  "results": [
+    {
+      "name": "avatar at mid-bore",
+      "pass": true
+    },
+    {
+      "name": "phase 1 (azimuth sweeps): camera never inside mountain body",
+      "pass": true
+    },
+    {
+      "name": "phase 1 (azimuth sweeps): camera inside arch shell (tunnel span)",
+      "pass": true
+    },
+    {
+      "name": "phase 2 (polar tilts): camera never inside mountain body",
+      "pass": true
+    },
+    {
+      "name": "phase 2 (polar tilts): camera inside arch shell (tunnel span)",
+      "pass": true
+    },
+    {
+      "name": "phase 3 (circular agitation): camera never inside mountain body",
+      "pass": true
+    },
+    {
+      "name": "phase 3 (circular agitation): camera inside arch shell (tunnel span)",
+      "pass": true
+    },
+    {
+      "name": "ALL orbit samples: camera never inside mountain body",
+      "pass": true
+    },
+    {
+      "name": "orbit lateral stays under the 3.4 cap",
+      "pass": true
+    },
+    {
+      "name": "orbit height stays under the 4.0 cap",
+      "pass": true
+    },
+    {
+      "name": "post-agitation forward traversal reaches exit (z>=172)",
+      "pass": true
+    },
+    {
+      "name": "zero page/console errors",
+      "pass": true
+    }
+  ]
+}
