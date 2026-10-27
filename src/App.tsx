@@ -1,10 +1,11 @@
-import { Suspense, lazy, useCallback, useEffect } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { CinematicHero } from './components/Hero';
 import { WorldShell } from './components/WorldShell';
 import { destroyActiveTimeline } from './cinematic/timeline/activeTimeline';
 import { useGameStore } from './store/gameStore';
 import type { Path } from './store/gameStore';
 import './App.css';
+import { LoadingScreen } from './components/LoadingScreen';
 
 /*
  * Cloud World is code-split (audit 2026-10-16, K3). three.js + R3F weigh
@@ -45,6 +46,9 @@ function App() {
   const currentWorld = useGameStore((s) => s.currentWorld);
   const setCurrentWorld = useGameStore((s) => s.setCurrentWorld);
   const reset = useGameStore((s) => s.reset);
+  const isLoading = useGameStore((s) => s.isLoading);
+  const setLoading = useGameStore((s) => s.setLoading);
+  const [loadingProgress, setLoadingProgress] = useState(0);
 
   const applyHash = useCallback(
     (hash: string) => {
@@ -69,6 +73,87 @@ function App() {
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, [applyHash]);
+
+  useEffect(() => {
+    if (!isLoading) return;
+    if (typeof window === 'undefined') {
+      setLoading(false);
+      return;
+    }
+    const minTime = 5000;
+    const startedAt = performance.now();
+    const controller = new AbortController();
+    const tasks: Promise<unknown>[] = [];
+
+    const img = new Image();
+    img.src = '/assets/figure-anchor.webp';
+    tasks.push(new Promise((resolve) => {
+      if (img.complete) return resolve(null);
+      img.addEventListener('load', () => resolve(null), { once: true, signal: controller.signal });
+      img.addEventListener('error', () => resolve(null), { once: true, signal: controller.signal });
+    }));
+
+    if (document.fonts && document.fonts.ready) {
+      tasks.push(Promise.race([
+        document.fonts.ready.catch(() => null),
+        new Promise((resolve) => setTimeout(resolve, 1200)),
+      ]));
+    }
+
+    let ready = false;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      const elapsed = performance.now() - startedAt;
+      if (!ready) {
+        window.setTimeout(finish, 100);
+        return;
+      }
+      const remaining = Math.max(0, minTime - elapsed);
+      if (remaining > 0) {
+        window.setTimeout(finish, remaining);
+        return;
+      }
+      done = true;
+      setLoadingProgress(100);
+      window.setTimeout(() => setLoading(false), 150);
+    };
+
+    let p = 3;
+    setLoadingProgress(3);
+    const tick = () => {
+      if (done) return;
+      if (!ready) {
+        p = Math.min(92, p + Math.max(2, (92 - p) * 0.12 + Math.random() * 3));
+        setLoadingProgress(Math.round(p));
+        if (!done) requestAnimationFrame(tick);
+        return;
+      }
+      p = Math.min(100, p + Math.max(2, (100 - p) * 0.14 + Math.random() * 2));
+      setLoadingProgress(Math.round(p));
+      if (!done) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+
+    Promise.allSettled(tasks).then(() => {
+      if (done) return;
+      ready = true;
+      finish();
+    });
+
+    const timeout = window.setTimeout(() => {
+      if (done) return;
+      ready = true;
+      finish();
+    }, 8000);
+
+    finish();
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [isLoading, setLoading]);
 
   if (currentWorld !== 'hero') {
     destroyActiveTimeline();
@@ -99,7 +184,9 @@ function App() {
     <div className="app">
       <a href="#main" className="skip-link">Skip to main content</a>
       <main id="main">
-        {currentWorld === 'hero' && <CinematicHero onWorldSelected={handleWorldSelected} />}
+        {isLoading ? (
+          <LoadingScreen progress={loadingProgress} onComplete={() => {}} />
+        ) : currentWorld === 'hero' && <CinematicHero onWorldSelected={handleWorldSelected} />}
         {currentWorld === 'data-world' && (
           <WorldShell key="data-world" world="data" onExit={returnToHero} />
         )}

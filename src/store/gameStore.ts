@@ -17,6 +17,8 @@ export interface GameState {
   cinematicPhase: CinematicPhase;
   /** True while the world handoff is playing (Task 8). */
   isHandoff: boolean;
+  /** True while the initial loading screen is displayed. */
+  isLoading: boolean;
 
   setCurrentWorld: (world: World) => void;
   selectPath: (path: Path) => void;
@@ -25,6 +27,7 @@ export interface GameState {
   setFocusedBoard: (board: Path | null) => void;
   setCinematicPhase: (phase: CinematicPhase) => void;
   setHandoff: (active: boolean) => void;
+  setLoading: (loading: boolean) => void;
   reset: () => void;
 }
 
@@ -35,6 +38,7 @@ const initialState = {
   focusedBoard: null as Path | null,
   cinematicPhase: 'ignition' as CinematicPhase,
   isHandoff: false,
+  isLoading: true,
 };
 
 export const useGameStore = create<GameState>()(
@@ -48,6 +52,10 @@ export const useGameStore = create<GameState>()(
     setFocusedBoard: (board) => set({ focusedBoard: board }),
     setCinematicPhase: (phase) => set({ cinematicPhase: phase }),
     setHandoff: (active) => set({ isHandoff: active }),
-    reset: () => set(initialState),
+    setLoading: (loading) => set({ isLoading: loading }),
+    // Loading screen is shown once per page load; never re-enable it on reset
+    // (used when returning to hero from a world) or the loading screen would
+    // replay on every hero return.
+    reset: () => set({ ...initialState, isLoading: false }),
   }))
 );

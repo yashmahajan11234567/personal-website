@@ -1,0 +1,207 @@
+/* Loading screen — voxel rotation from reference video. */
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f6f6f6;
+  color: var(--color-text, #111);
+  font-family: var(--font-mono, 'IBM Plex Mono', monospace);
+  z-index: 10000;
+  text-align: center;
+}
+
+.loading-screen__bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(ellipse at center, #f9f9f9 0%, #f1f1f1 55%, #e9e9e9 100%);
+}
+
+.loading-screen__grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background-image: radial-gradient(#000 0.4px, transparent 0.4px);
+  background-size: 7px 7px;
+  opacity: 0.12;
+}
+
+.loading-screen__scanlines {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background-image: linear-gradient(rgba(0, 0, 0, 0.035) 50%, transparent 50%);
+  background-size: 100% 3px;
+  opacity: 0.4;
+}
+
+.loading-screen__voxel-wrap {
+  position: relative;
+  z-index: 4;
+  width: 560px;
+  height: 360px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2rem;
+  overflow: hidden;
+}
+
+/* Sprite animation: single decoded image, CSS steps moves background-position.
+   No React re-renders, no per-frame network fetches, no lazy-load flashes. */
+.loading-screen__voxel-sprite {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-image: url('/assets/voxel-loading/sprite.png');
+  background-position: 0 0;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  animation: loading-voxel-turn var(--loading-voxel-turn-ms, 2400ms) steps(16) infinite;
+}
+
+/* Freeze on first frame under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .loading-screen__voxel-sprite {
+    animation: none;
+    background-position: 0 0;
+  }
+}
+
+@keyframes loading-voxel-turn {
+  from { background-position: 0 0; }
+  to { background-position: 0 -8192px; }
+}
+
+.loading-screen__ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px dashed rgba(0, 0, 0, 0.28);
+  animation: loading-ring-spin 8s linear infinite;
+}
+
+.loading-screen__ring--outer {
+  width: 520px;
+  height: 520px;
+  left: 20px;
+}
+
+.loading-screen__ring--inner {
+  width: 430px;
+  height: 430px;
+  left: 65px;
+  animation-direction: reverse;
+  animation-duration: 6s;
+}
+
+@keyframes loading-ring-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loading-screen__heading {
+  margin: 0 0 1rem 0;
+  font-size: 0.9rem;
+  letter-spacing: 0.42ch;
+  text-transform: uppercase;
+  opacity: 0.9;
+  position: relative;
+  z-index: 4;
+}
+
+.loading-screen__segments {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  margin: 0 0 2rem 0;
+  position: relative;
+  z-index: 4;
+}
+
+.loading-screen__segment {
+  width: 22px;
+  height: 10px;
+  background: rgba(0, 0, 0, 0.16);
+  border: 1px solid rgba(0, 0, 0, 0.45);
+}
+
+.loading-screen__segment--filled {
+  background: #000;
+  border-color: #000;
+}
+
+.loading-screen__bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  width: 280px;
+  margin: 0 auto 0.5rem auto;
+  position: relative;
+  z-index: 4;
+}
+
+.loading-screen__bar {
+  flex: 1;
+  height: 14px;
+  border: 2px solid var(--color-text, #111);
+  overflow: hidden;
+  background: #fff;
+}
+
+.loading-screen__bar-fill {
+  height: 100%;
+  background: #000;
+  width: 0%;
+  transition: width 220ms ease;
+}
+
+.loading-screen__pct {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+}
+
+.loading-screen__status {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.26ch;
+  text-transform: uppercase;
+  opacity: 0.75;
+  position: relative;
+  z-index: 4;
+}
+
+.loading-screen__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-screen__ring { animation: none; }
+  .loading-screen__voxel-glow { animation: none; }
+  .loading-screen__voxel-frag { animation: none; display: none; }
+  .loading-screen__bar-fill { transition: none; }
+}
+
+@media (max-width: 640px) {
+  .loading-screen__voxel-wrap { width: 320px; height: 220px; }
+  .loading-screen__voxel-sprite { width: 260px; height: 146px; }
+  .loading-screen__ring--outer { width: 280px; height: 280px; }
+  .loading-screen__ring--inner { width: 230px; height: 230px; }
+  .loading-screen__bar-wrap { width: 230px; }
+  .loading-screen__heading { font-size: 0.8rem; }
+}
