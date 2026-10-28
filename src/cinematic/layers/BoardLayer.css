@@ -1,16 +1,3 @@
-/*
- * Board layer — the two information plates.
- *
- * These are graphic objects in the scene, NOT web cards: no rounded card
- * surface, no drop shadow, no card grid. A near-black plate with hairline
- * technical chrome, floating on the white ground.
- *
- * Placement is set inline from the measured rects in selectionGeometry.ts.
- * The plates are symmetric in size and vertical placement; what differs between
- * them is content — line counts, icon rows and type scale — and that asymmetry
- * is asserted by a test so it cannot be flattened by accident.
- */
-
 .cinematic-boards {
   position: absolute;
   inset: 0;
@@ -23,23 +10,6 @@
   display: flex;
 }
 
-/*
- * `.cinematic-plate` is the TIMING element only: it carries the rise
- * transform, which the timeline rewrites inline on every scroll frame, plus the
- * `--reveal` custom property the interior artwork reads (custom properties
- * inherit, so the interior still sees it through the scale wrapper).
- *
- * The plate's visible surface -- background, border, padding, the clip that
- * contains the interior artwork -- deliberately lives on the child
- * `__scale` wrapper instead, so that hovering scales the WHOLE plate as one
- * physical object. Keeping the surface here would leave a stationary
- * background with the artwork and type growing out of it.
- *
- * `overflow` is NOT set here: the rise is clipped by the hero's overflow (see
- * the apply() comment), and clipping here would shave the outer 2% off the
- * plate on hover, because the scaled wrapper would be cut off at the unscaled
- * box edge.
- */
 .cinematic-plate {
   --reveal: 0;
   position: relative;
@@ -48,346 +18,219 @@
   will-change: transform, opacity;
 }
 
-/*
- * Hover scale layer.
- *
- * This wrapper exists so the plate's scale can be transitioned independently of
- * the rise. `.cinematic-plate` has its transform rewritten inline on every
- * scroll frame, so a transition on it would be reset continuously and the
- * scale would never animate. The rise (translate3d) owns that element; the
- * hover scale owns this one.
- *
- * Everything inside scales together as one physical plate -- background,
- * border, artwork, wordmark and detail text alike -- because they are all
- * descendants of this element.
- *
- * The transform is left at its initial `none` rather than an explicit
- * `scale(1)`. `none` interpolates as the identity matrix, so the transition
- * still animates 1 -> 1.04, but the element is not promoted to its own
- * compositor layer at rest -- which would change how the interior artwork and
- * the wordmark are antialiased, and those are deliberately tuned for acuity.
- */
-.cinematic-plate__scale {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  padding: 14% 11% 11%;
-  box-sizing: border-box;
-  background: rgba(11, 11, 12, 0.85);
-  color: #f2f2f0;
-  /* Clips the interior artwork to the plate, as it always was. The clip moves
-   * WITH the scale, so on hover the artwork and its clip both grow together --
-   * which is correct, because the artwork is painted to fill the plate. */
-  overflow: hidden;
-  /* Hard edge, no radius: this is a plate, not a card. */
-  border-radius: 0;
-  box-shadow: none;
-  transform-origin: 50% 50%;
-  transition: transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-/* Hairline light border, drawn inside the plate. */
-.cinematic-plate__scale::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  pointer-events: none;
-}
-
-/*
- * Hover state.
- *
- * Scaling the surface wrapper grows the plate about its own centre, so the
- * plate's resting footprint -- the position the selection geometry and the
- * reference are pinned to -- does not move. Scaling the outer `.cinematic-plate`
- * instead would push the edges outward and shift where the resting composition
- * sits. The 1.04 target is the middle of the requested 1.03-1.06 band: enough
- * to read as "active / selectable", not enough to look like a zoom.
- */
-.cinematic-boards[data-hovered='data'] .cinematic-plate[data-plate='data']
-  .cinematic-plate__scale,
-.cinematic-boards[data-hovered='cloud'] .cinematic-plate[data-plate='cloud']
-  .cinematic-plate__scale {
-  transform: scale(1.04);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .cinematic-plate__scale {
-    transition: none;
-  }
-}
-
-.cinematic-plate__chrome {
+.cinematic-card {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  transform-origin: 50% 50%;
+  transition: transform 280ms ease;
+  pointer-events: auto;
+}
+
+.cinematic-boards[data-hovered='data'] .cinematic-plate[data-plate='data'] .cinematic-card,
+.cinematic-boards[data-hovered='cloud'] .cinematic-plate[data-plate='cloud'] .cinematic-card {
+  transform: scale(1.02);
+}
+
+.card-border {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  border: 6px solid #000000;
+  display: block;
+  box-sizing: border-box;
+}
+
+.card-corner {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background: #000000;
+}
+
+.card-corner--tl {
+  top: -6px;
+  left: -6px;
+}
+
+.card-corner--tr {
+  top: -6px;
+  right: -6px;
+}
+
+.card-corner--bl {
+  bottom: -6px;
+  left: -6px;
+}
+
+.card-corner--br {
+  bottom: -6px;
+  right: -6px;
+}
+
+.card-icons-row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  display: none;
   pointer-events: none;
 }
 
-.cinematic-plate__chrome .tick,
-.cinematic-plate__chrome .rule {
+.card-icons {
+  width: 100%;
+  height: 100%;
+  fill: #000000;
+  stroke: #000000;
+}
+
+.card-icons line,
+.card-icons polyline,
+.card-icons path {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.5);
-  stroke-width: 0.7;
-  vector-effect: non-scaling-stroke;
+  stroke-width: 2.5;
 }
 
-.cinematic-plate__chrome .glyph {
-  fill: rgba(255, 255, 255, 0.34);
-  /* Slow rotation on hover, driven by the board's own state. */
-  transform-box: fill-box;
-  transform-origin: center;
-  transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+.card-icons rect,
+.card-icons ellipse,
+.card-icons circle,
+.card-icons polygon {
+  fill: none;
+  stroke-width: 2.5;
 }
 
-.cinematic-plate__body {
+.card-icon-label {
+  font-family: "Courier New", monospace;
+  font-size: clamp(0.28rem, 0.5vw, 0.48rem);
+  letter-spacing: 0.08em;
+  fill: #000000;
+}
+
+.card-title {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  gap: 0.1em;
-  /*
-   * Archivo Black is bundled (see src/main.tsx). Before that it was simply
-   * unavailable, so both headlines silently fell through to Impact /
-   * Haettenschweiler -- thin-stroke faces whose counters close up at small
-   * sizes and read as mush. That was the actual source of the fuzziness.
-   *
-   * It is also a single-weight family that ships only a 400 face and is already
-   * black by design. Declaring 900 made the renderer SYNTHESISE a heavier
-   * weight by smearing the glyph outline, which reads as blur in its own right.
-   * The correct value is the face's real weight.
-   *
-   * Impact / Haettenschweiler are gone from the stack on purpose: they were only
-   * ever the accidental fallback, and 'Arial Black' is the next best match for
-   * the reference's heavy geometric grotesk.
-   */
-  font-family: "Archivo Black", "Arial Black", "Helvetica Neue", sans-serif;
-  /*
-   * 400 is the face's real weight. Archivo Black ships only a 400 face, and
-   * declaring 900 made Chrome SYNTHESISE a heavier weight by smearing the glyph
-   * outline -- a fuzzy double edge rather than a true stem.
-   *
-   * Measured over a real before/after A/B at 2x on both wordmarks: removing the
-   * synthetic bolding did NOT thicken the type, it THINNED it by a full pixel
-   * (median stroke 15px -> 14px on DATA, 16px -> 15px on DEVOPS). Impact is a
-   * thin-stemmed face, and the smear had been quietly compensating for that.
-   * Edge acuity improved (gradient 211 -> 214 / 215 -> 219) but the words got
-   * lighter, which is not what "crisper" should mean.
-   *
-   * `-webkit-text-stroke` adds the weight where it belongs -- symmetrically on
-   * every side of the outline -- instead of smearing it, so the stems thicken
-   * AND the edge stays a clean single step. This is what restores the visual
-   * mass while keeping the crispness gain.
-   */
-  font-weight: 400;
-  -webkit-text-stroke: 0.012em currentColor;
-  /*
-   * Sized from the reference's measured light-pixel distribution, not by eye.
-   * In the reference the wordmark block alone carries ~30% light across the
-   * plate's y 0.4-0.7 band, which requires the type to fill that band densely.
-   * The previous clamp was too small to register: measured at only 1.4-2.1%
-   * light against the reference's 23-38%.
-   *
-   * Reduced from `3.05vw` and opened up. The old size plus `-0.015em` tracking
-   * crammed "DATA ANALYST" and "DATA ENGINEER" into their plate width, so the
-   * words read as blocks rather than as words. Tracking is now POSITIVE, which
-   * is what gives the individual letters breathing room; the size comes down
-   * slightly to pay for it so the longest line still fits the plate.
-   *
-   * `vw`-based, so it scales with the viewport rather than being fixed -- the
-   * clamp bounds only keep it sane at the extremes.
-   */
-  font-size: clamp(1.05rem, 2.42vw, 2.8rem);
-  line-height: 1.06;
-  /*
-   * globals.css sets `-webkit-font-smoothing: antialiased` and
-   * `text-rendering: optimizeSpeed` app-wide. On this plate the first thins
-   * every stem against a near-black interior, and the second drops kerning --
-   * both make the wordmark read as soft rather than printed. Display type wants
-   * the platform defaults. Scoped to the wordmark only.
-   */
-  -webkit-font-smoothing: auto;
-  -moz-osx-font-smoothing: auto;
-  text-rendering: auto;
-  letter-spacing: 0.085em;
-  text-transform: uppercase;
-  /* The wordmark is the loudest thing on the plate. */
-  color: #ffffff;
-  /* Sits over the interior's recessed shelf, so keep it fully opaque. */
-  position: relative;
-  z-index: 1;
-}
-
-.cinematic-plate__line {
-  display: block;
-  /*
-   * A word may never be wider than the plate's content box. `nowrap` keeps each
-   * line intact -- "DATA ANALYST" wrapping to two lines would break the
-   * two-line composition the reference uses -- and the fit is verified to fit.
-   */
-  white-space: nowrap;
-  max-width: 100%;
-  /*
-   * The two lines have different natural widths ("DATA ANALYST" vs "DATA
-   * ENGINEER", "DEVOPS" vs "CLOUD"), and they were previously both flush to the
-   * container's left edge, so the block read as a ragged left-aligned pair.
-   *
-   * Centring each line on a SHARED centre -- rather than shifting the container
-   * by padding -- is the only way to move the words themselves right. Padding on
-   * the body moves the container, but because the lines are left-aligned inside
-   * it, the ink's left edge stays pinned to that same offset no matter how wide
-   * the padding. That was measured: the left inset sat at 56.8px before and after
-   * a 4%-of-plate padding change, while only the right inset moved.
-   */
-  text-align: center;
-}
-
-.cinematic-plate__status {
-  margin-top: 0.9em;
-  font-family:
-    ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
-  font-size: clamp(0.5rem, 0.72vw, 0.72rem);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.62);
-  padding-top: 0.7em;
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-/*
- * Cloud board is a single line, so it gets a touch more tracking than the Data
- * board's two-line block to hold visual weight -- but its LONGEST word
- * ("ENGINEER", 8 letters on one line) has to fit the same plate width, so its
- * size is set from that word rather than from the two-line average. Composition,
- * not symmetry-breaking for its own sake.
- */
-.cinematic-plate[data-plate="cloud"] .cinematic-plate__body {
-  font-size: clamp(1.12rem, 2.52vw, 2.95rem);
-  letter-spacing: 0.1em;
-}
-
-/*
- * The wordmark is nudged INWARD, toward the figure.
- *
- * Both plates used symmetric `11%` side padding, so DATA ANALYST / DATA
- * ENGINEER sat hard against the left plate edge (which faces the viewport edge)
- * while DEVOPS / CLOUD sat against the right plate edge -- the same
- * edge-anchored imbalance the headline had, one level down.
- *
- * So the padding is made asymmetric: the Data plate gains inset on its LEFT
- * side and the Cloud plate on its RIGHT, each by 2.5% of the plate width
- * (~10.5px at 1280). That moves both wordmarks toward the central figure
- * without touching the plate geometry, its interior artwork, or the status
- * line's own inset.
- *
- * Deliberately small: the reference's wordmarks are already well inside their
- * plates, so this is a nudge rather than a re-layout.
- */
-/*
- * These two rules used to target `.cinematic-plate` directly. The plate's
- * surface now lives on the `__scale` wrapper, so they target
- * `.cinematic-plate[data-plate="..."] .cinematic-plate__scale` instead --
- * otherwise the padding and justify-content would apply to the timing element
- * and have no effect on the visible surface.
- */
-.cinematic-plate[data-plate="data"] .cinematic-plate__scale {
-  padding-left: 13.5%;
-}
-
-/*
- * CLOUD WORDMARK -> ALIGNED WITH THE DATA WORDMARK.
- *
- * Re-centring the Cloud block on its own plate (a previous pass, answering a
- * request to move it "toward the visual centre of the right plate") left the two
- * plates DISAGREEING with each other, because only Cloud moved. Measured
- * vertical disagreement between the two wordmark block centres:
- *
- *   1920x1080  21.0%      1024x768   25.8%
- *   1440x900   21.8%      768x1024   15.7%
- *   1280x720   18.6%      390 mobile  0.0%  (both already centred)
- *
- * Since the plates are geometrically symmetric, that gap is directly visible as
- * one title sitting high and the other sitting low. The user asked for the two
- * to be aligned, so Cloud returns to the Data plate's own placement.
- *
- * WHY `flex-end` RATHER THAN A SHARED `center`
- *
- * With `justify-content: center` the block centre is fixed by the padding
- * asymmetry alone -- `(H - padT + padB) / 2` -- and so is independent of the
- * block's own height. That would make the two centres match EXACTLY, but it also
- * means moving the Data plate up by ~19% of plate height, which is a large
- * change to the plate the user did not ask to move.
- *
- * Restoring `flex-end` on Cloud instead aligns the two on their shared bottom
- * content edge. The residual is half the difference in block height, since Cloud
- * is set slightly larger (2.52vw vs 2.42vw, because its longest word "DEVOPS" is
- * 6 characters against Data's 8). Measured spans at 1280x720 are 0.2115 vs
- * 0.2223 of plate height, so the centres land 0.0054 -- about 1.7px -- apart.
- *
- * BOTH WORDMARK BLOCKS NUDGED RIGHT
- *
- * The plate's padding positions the wordmark CONTAINER, and with the lines
- * centred inside it (see .cinematic-plate__line) that container offset is what
- * moves the text. To move both blocks RIGHT by the same absolute distance
- * (~4% of plate width, about 17px at 1280), the two paddings must move in
- * OPPOSITE directions -- which an earlier attempt got wrong on the Data plate,
- * and which the regression test caught:
- *
- *     Data   padding-left  9.5% -> 13.5%   moves RIGHT ~17px
- *     Cloud  padding-right 9.5% ->  5.5%   moves RIGHT ~17px
- *
- * (Shrinking both from 13.5% to 9.5% instead pushed Data LEFT, because its left
- * padding is what holds it back from the frame edge.)
- *
- * This deliberately breaks the old mirrored-inset symmetry: Data ends up further
- * from the figure than Cloud is, because the request was for both titles to
- * travel right, and on the right-hand plate "right" is outward. The plates stay
- * geometrically identical and the two wordmarks stay aligned VERTICALLY, which
- * is the symmetry that was actually asked for earlier.
- */
-.cinematic-plate[data-plate="cloud"] .cinematic-plate__scale {
-  padding-right: 5.5%;
-  justify-content: flex-end;
-}
-
-/* Mobile: stacked plates below the figure get horizontal type. */
-.cinematic-boards[data-mode="mobile"] .cinematic-plate .cinematic-plate__scale {
-  padding: 8% 8%;
+  align-items: center;
   justify-content: center;
+  text-align: center;
+  font-family: "Arial Narrow", "Helvetica Condensed", Impact, "Arial Black", sans-serif;
+  font-weight: 900;
+  font-stretch: condensed;
+  font-size: clamp(1.9rem, 4.6vw, 4.6rem);
+  line-height: 0.78;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+  color: #000000;
+  margin: 0;
+  z-index: 3;
+  gap: 0.18em;
 }
 
-/*
- * The mobile plates stack BELOW the figure, so "inward" means toward the
- * stacked centre line rather than toward the figure, which no longer sits
- * between them. Even insets keep both wordmarks aligned on a shared axis.
- */
-.cinematic-boards[data-mode="mobile"]
-  .cinematic-plate[data-plate="data"]
-  .cinematic-plate__scale,
-.cinematic-boards[data-mode="mobile"]
-  .cinematic-plate[data-plate="cloud"]
-  .cinematic-plate__scale {
-  padding-left: 8%;
-  padding-right: 8%;
+.card-title-line {
+  display: block;
 }
 
-.cinematic-boards[data-mode="mobile"] .cinematic-plate__body,
-.cinematic-boards[data-mode="mobile"]
-  .cinematic-plate[data-plate="cloud"]
-  .cinematic-plate__body {
-  /*
-   * The mobile plate is 0.84 of the viewport WIDE rather than 0.33, so the
-   * words get proportionally more room; tracking is kept at the same positive
-   * value as the desktop treatment for consistency, not scaled up.
-   */
-  font-size: clamp(0.85rem, 3.75vw, 1.35rem);
-  letter-spacing: 0.09em;
+.card-footer {
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  bottom: 3%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: auto;
+  z-index: 3;
 }
+
+.card-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.card-footer-text {
+  font-family: "Courier New", monospace;
+  font-size: clamp(0.24rem, 0.42vw, 0.4rem);
+  letter-spacing: 0.1em;
+  color: #000000;
+}
+
+.card-footer-chart {
+  width: 24px;
+  height: 14px;
+  fill: #000000;
+  stroke: #000000;
+}
+
+.card-footer-dots {
+  width: 12px;
+  height: 12px;
+  fill: #000000;
+}
+
+.card-footer-right {
+  display: flex;
+  align-items: center;
+}
+
+.card-footer-square {
+  width: 12px;
+  height: 12px;
+  fill: #000000;
+}
+
+.cinematic-boards[data-hovered='data'] .cinematic-card[data-card='data'] .card-border {
+  border-color: #2563EB;
+}
+
+.cinematic-boards[data-hovered='data'] .cinematic-card[data-card='data'] .card-corner {
+  background: #2563EB;
+  border-color: #2563EB;
+}
+
+.cinematic-boards[data-hovered='data'] .cinematic-card[data-card='data'] .card-icons,
+.cinematic-boards[data-hovered='data'] .cinematic-card[data-card='data'] .card-icon-label,
+.cinematic-boards[data-hovered='data'] .cinematic-card[data-card='data'] .card-title,
+.cinematic-boards[data-hovered='data'] .cinematic-card[data-card='data'] .card-footer-text,
+.cinematic-boards[data-hovered='data'] .cinematic-card[data-card='data'] .card-footer-chart,
+.cinematic-boards[data-hovered='data'] .cinematic-card[data-card='data'] .card-footer-dots,
+.cinematic-boards[data-hovered='data'] .cinematic-card[data-card='data'] .card-footer-square,
+.cinematic-boards[data-hovered='data'] .cinematic-card[data-card='data'] .card-title {
+  color: #2563EB;
+  fill: #2563EB;
+  stroke: #2563EB;
+}
+
+.cinematic-boards[data-hovered='cloud'] .cinematic-card[data-card='cloud'] .card-border {
+  border-color: #FF9900;
+}
+
+.cinematic-boards[data-hovered='cloud'] .cinematic-card[data-card='cloud'] .card-corner {
+  background: #FF9900;
+  border-color: #FF9900;
+}
+
+.cinematic-boards[data-hovered='cloud'] .cinematic-card[data-card='cloud'] .card-icons,
+.cinematic-boards[data-hovered='cloud'] .cinematic-card[data-card='cloud'] .card-icon-label,
+.cinematic-boards[data-hovered='cloud'] .cinematic-card[data-card='cloud'] .card-footer-text,
+.cinematic-boards[data-hovered='cloud'] .cinematic-card[data-card='cloud'] .card-footer-chart,
+.cinematic-boards[data-hovered='cloud'] .cinematic-card[data-card='cloud'] .card-footer-dots,
+.cinematic-boards[data-hovered='cloud'] .cinematic-card[data-card='cloud'] .card-footer-square,
+.cinematic-boards[data-hovered='cloud'] .cinematic-card[data-card='cloud'] .card-title {
+  color: #FF9900;
+  fill: #FF9900;
+  stroke: #FF9900;
+}
+
+
 
 @media (prefers-reduced-motion: reduce) {
-  .cinematic-plate__chrome .glyph {
     transition: none;
   }
 }

@@ -22,7 +22,6 @@ import { beat } from '../timeline/beats';
 import { WORLD_BOARDS } from '../data/boardContent';
 import { boardRect, layoutMode } from '../selection/selectionGeometry';
 import type { Path } from '../../store/gameStore';
-import { PlateInterior } from './plateArtwork/PlateInterior';
 import './BoardLayer.css';
 
 /**
@@ -72,6 +71,17 @@ function useViewportWidth(): number {
     };
   }, []);
   return width;
+}
+
+function clampSpan(progress: number, a: number, b: number): number {
+  if (b <= a) return progress >= b ? 1 : 0;
+  if (progress <= a) return 0;
+  if (progress >= b) return 1;
+  return (progress - a) / (b - a);
+}
+
+function easeOutSine(t: number): number {
+  return Math.sin((t * Math.PI) / 2);
 }
 
 export interface BoardLayerProps {
@@ -176,17 +186,54 @@ export function BoardLayer({ settled = false, hoveredBoard = null }: BoardLayerP
               }}
               data-plate={path}
             >
-              <div className="cinematic-plate__scale" data-plate-scale={path}>
-                <PlateInterior path={path} />
-                <PlateChrome side={path} />
-                <div className="cinematic-plate__body">
-                  {content.lines.map((line) => (
-                    <span key={line} className="cinematic-plate__line">
-                      {line}
-                    </span>
-                  ))}
+              <div className={`cinematic-card cinematic-card--${path}`} data-card={path}>
+                <div className="card-border">
+                  <div className="card-corner card-corner--tl"></div>
+                  <div className="card-corner card-corner--tr"></div>
+                  <div className="card-corner card-corner--bl"></div>
+                  <div className="card-corner card-corner--br"></div>
+                  
+                  <div className="card-icons-row">
+                  </div>
+                  
+                  <div className="card-title">
+                    {content.lines.map((line) => (
+                      <div key={line} className="card-title-line">
+                        {line}
+                      </div>
+                    ))}
+                  </div>
+                  
+            <div className="card-footer">
+              <div className="card-footer-left">
+                <span className="card-footer-text">{path === 'data' ? 'SELECT' : 'STATUS: LIVE'}</span>
+                <svg className="card-footer-chart" viewBox="0 0 20 12" aria-hidden="true">
+                  <rect x="0" y="9" width="3" height="3" />
+                  <rect x="4" y="5" width="3" height="7" />
+                  <rect x="8" y="7" width="3" height="5" />
+                  <rect x="12" y="3" width="3" height="9" />
+                  <polyline points="1.5,9 5.5,5 9.5,7 13.5,3" fill="none" strokeWidth="1" />
+                </svg>
+                <svg className="card-footer-dots" viewBox="0 0 12 12" aria-hidden="true">
+                  <circle cx="2" cy="2" r="1" />
+                  <circle cx="6" cy="2" r="1" />
+                  <circle cx="10" cy="2" r="1" />
+                  <circle cx="2" cy="6" r="1" />
+                  <circle cx="6" cy="6" r="1" />
+                  <circle cx="10" cy="6" r="1" />
+                  <circle cx="2" cy="10" r="1" />
+                  <circle cx="6" cy="10" r="1" />
+                  <circle cx="10" cy="10" r="1" />
+                </svg>
+              </div>
+              <div className="card-footer-right">
+                <svg className="card-footer-square" viewBox="0 0 12 12" aria-hidden="true">
+                  <rect x="2" y="2" width="8" height="8" />
+                  <rect x="4" y="4" width="4" height="4" />
+                </svg>
+              </div>
+            </div>
                 </div>
-                <div className="cinematic-plate__status">{content.status}</div>
               </div>
             </div>
           </div>
@@ -194,62 +241,4 @@ export function BoardLayer({ settled = false, hoveredBoard = null }: BoardLayerP
       })}
     </div>
   );
-}
-
-/** Inline SVG chrome: corner ticks, header rule, and the world's glyph. */
-function PlateChrome({ side }: { side: Path }) {
-  return (
-    <svg
-      className="cinematic-plate__chrome"
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {/* corner ticks */}
-      <path className="tick" d="M2 12 L2 2 L12 2" />
-      <path className="tick" d="M88 2 L98 2 L98 12" />
-      <path className="tick" d="M98 88 L98 98 L88 98" />
-      <path className="tick" d="M12 98 L2 98 L2 88" />
-      {/* header rule */}
-      <line className="rule" x1="2" y1="17" x2="98" y2="17" />
-      {side === 'data' ? (
-        <g className="glyph glyph--data" transform="translate(80 4) scale(0.14)">
-          <rect x="0" y="60" width="30" height="80" />
-          <rect x="45" y="20" width="30" height="120" />
-          <rect x="90" y="90" width="30" height="50" />
-        </g>
-      ) : (
-        <g className="glyph glyph--cloud" transform="translate(78 2) scale(0.15)">
-          <path d="M20 90 a34 34 0 0 1 6-67 a44 44 0 0 1 84 8 a30 30 0 0 1 -6 59 z" />
-        </g>
-      )}
-    </svg>
-  );
-}
-
-function clampSpan(progress: number, a: number, b: number): number {
-  if (b <= a) return progress >= b ? 1 : 0;
-  if (progress <= a) return 0;
-  if (progress >= b) return 1;
-  return (progress - a) / (b - a);
-}
-
-/**
- * Rise easing, fitted numerically to the reference's measured y-travel.
- *
- * Reference plate top across the rise (frames 44-95, t 1.83s-3.96s):
- *   0.856, 0.778, 0.697, 0.617, 0.542, 0.472, 0.353, 0.272, 0.234, 0.225
- *
- * Normalising that to an eased fraction and least-squares fitting candidate
- * curves gave: easeOutSine RMSE 0.021 (best), easeOutQuad 0.023,
- * easeOutCubic 0.117, linear 0.154, easeOutExpo 0.271.
- *
- * So the reference rises at a near-constant rate with soft ends -- NOT the
- * front-loaded overshoot of easeOutBack, and not the heavy cubic deceleration
- * that was briefly in place. Worst-case error across the ten samples is 0.038
- * of the travel distance (under 2.5vh).
- */
-function easeOutSine(t: number): number {
-  return Math.sin((t * Math.PI) / 2);
 }
