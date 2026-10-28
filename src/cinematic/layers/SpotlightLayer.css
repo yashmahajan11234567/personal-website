@@ -1,0 +1,34 @@
+/*
+ * Spotlight layer — pixelated, mouse-following light field.
+ *
+ * Single canvas behind nothing (z-index 6.5, above the figure) so the light
+ * "paints" the avatar and fragments. pointer-events: none so the WorldBoards,
+ * figure hit areas, and ScrollTrigger all keep receiving pointer/scroll input.
+ */
+.cinematic-spotlight {
+  position: absolute;
+  inset: 0;
+  z-index: 6.5;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  /* Upscale the low-res logical canvas with chunky pixels, not blur. */
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  will-change: transform;
+  opacity: 1;
+  mix-blend-mode: normal;
+}
+
+/* Reduced motion and coarse/touch: static centre glow, no pointer loop. */
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-spotlight {
+    opacity: 0.35;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .cinematic-spotlight {
+    opacity: 0.25;
+  }
+}

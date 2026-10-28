@@ -1,0 +1,93 @@
+/*
+ * Fragment layer - voxel fragments, orbital lines, and technical grid.
+ *
+ * Three registers on the pale ground, all monochrome:
+ *   grid   - faint 64px technical squares (the plotted-paper substrate)
+ *   orbits - two thin dashed ellipses encircling the figure, slow rotation
+ *   voxels - charcoal squares with depth-scaled drift
+ */
+.cinematic-fragments {
+  position: absolute;
+  inset: 0;
+  z-index: 5.5;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* Technical grid: subtle 64px cells at very low opacity. */
+.cinematic-fragments__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.035) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 85% 75% at 50% 45%, black 22%, transparent 88%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 45%, black 22%, transparent 88%);
+}
+
+/* Orbital lines: thin dashed ellipses centred on the figure. */
+.cinematic-fragments__orbit {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  border: 1px dashed rgba(0, 0, 0, 0.14);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  animation: cinematic-orbit-spin 70s linear infinite;
+}
+
+.cinematic-fragments__orbit--outer {
+  width: 72vw;
+  height: 76vh;
+  max-width: 980px;
+  max-height: 680px;
+}
+
+.cinematic-fragments__orbit--inner {
+  width: 52vw;
+  height: 56vh;
+  max-width: 720px;
+  max-height: 500px;
+  animation-direction: reverse;
+  animation-duration: 55s;
+  border-style: dotted;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+@keyframes cinematic-orbit-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Voxel fragments: charcoal squares with depth-scaled drift. */
+.cinematic-fragment {
+  position: absolute;
+  background: #000;
+  border-radius: 1px;
+  animation: cinematic-fragment-drift infinite ease-in-out;
+}
+
+@keyframes cinematic-fragment-drift {
+  0% {
+    transform: translate(0, 0);
+  }
+  33% {
+    transform: translate(calc(18px * var(--frag-depth, 0.5)), calc(-26px * var(--frag-depth, 0.5)));
+  }
+  66% {
+    transform: translate(calc(-12px * var(--frag-depth, 0.5)), calc(14px * var(--frag-depth, 0.5)));
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-fragments__orbit {
+    animation: none;
+  }
+  .cinematic-fragment {
+    animation: none;
+  }
+}

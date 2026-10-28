@@ -22,10 +22,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useHeroTimeline } from './timeline/useHeroTimeline';
 import { progressBus } from './timeline/progressBus';
 import { GroundLayer } from './layers/GroundLayer';
-// AccentGlowLayer and EnvironmentLayer are intentionally NOT imported: hover
-// colour was removed from the cinematic. See the note at the mount site.
+import { HaloLayer } from './layers/HaloLayer';
+import { FragmentLayer } from './layers/FragmentLayer';
 import { BoardLayer } from './layers/BoardLayer';
 import { FigureLayer } from './layers/FigureLayer';
+import { SpotlightLayer } from './layers/SpotlightLayer';
 import { TypographyLayer } from './layers/TypographyLayer';
 import { GrainLayer } from './layers/GrainLayer';
 import { WorldBoard } from './selection/WorldBoard';
@@ -335,7 +336,10 @@ export function CinematicHero({ onWorldSelected }: CinematicHeroProps) {
        * only the two colour layers were pulled, not their state.
        */}
       <BoardLayer hoveredBoard={scaleTarget} />
+      <HaloLayer />
+      <FragmentLayer />
       <FigureLayer />
+      <SpotlightLayer disabled={reducedMotion} />
       <TypographyLayer />
 
       {/* Interactive controls, positioned over the plates. */}

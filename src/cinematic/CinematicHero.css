@@ -11,8 +11,8 @@
   height: 100vh;
   height: 100svh;
   overflow: hidden;
-  /* Monochrome stage; the page behind is never visible. */
-  background: #f4f4f2;
+  /* White background to match reference */
+  background: #ffffff;
   /* Prevent horizontal scrollbar from the glow washes, which extend past the
      viewport edge by design. */
   isolation: isolate;

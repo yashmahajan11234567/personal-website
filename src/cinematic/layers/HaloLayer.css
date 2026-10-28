@@ -1,0 +1,26 @@
+/*
+ * Halo layer - soft bright backlight behind the avatar.
+ *
+ * Sits between BoardLayer (z-index 2) and FigureLayer (z-index 6), so the halo
+ * paints behind the figure but in front of the plates. Pure monochrome: bright
+ * white core behind the figure's head/shoulders, fading gently to transparent.
+ * Softer, less banded, more cinematic than a hard concentric shape.
+ */
+.cinematic-halo {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background:
+    /* Soft core behind the figure's head and shoulders */
+    radial-gradient(
+      ellipse 58% 72% at 50% 36%,
+      rgba(255, 255, 255, 0.92) 0%,
+      rgba(255, 255, 255, 0.58) 22%,
+      rgba(255, 255, 255, 0.26) 38%,
+      rgba(255, 255, 255, 0.1) 54%,
+      transparent 76%
+    );
+  filter: blur(26px);
+  opacity: 0.9;
+}
