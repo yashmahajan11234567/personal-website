@@ -35,17 +35,17 @@ interface IslandSpec {
 }
 
 const ISLANDS: IslandSpec[] = [
-  { id: 'lighthouse', pos: [-28, 2, -6],  r: 10,  depth: 15, seed: 1.3, grass: '#5d8f3c', rock: '#5c4a38', modelHeight: 9,   flora: 'pine' },
-  { id: 'windmill',   pos: [2, 4, -22],   r: 8.5, depth: 12, seed: 4.1, grass: '#6d9a45', rock: '#6a5642', modelHeight: 10,  flora: 'meadow' },
-  { id: 'pagoda',     pos: [30, 0, -2],   r: 10,  depth: 14, seed: 7.7, grass: '#5b8c3e', rock: '#58463a', modelHeight: 9.5, flora: 'cherry' },
+  { id: 'lighthouse', pos: [-26, 1, -4],  r: 12,  depth: 16, seed: 1.3, grass: '#5d8f3c', rock: '#5c4a38', modelHeight: 14,   flora: 'pine' },
+  { id: 'windmill',   pos: [0, 3, -18],   r: 11, depth: 14, seed: 4.1, grass: '#6d9a45', rock: '#6a5642', modelHeight: 16,  flora: 'meadow' },
+  { id: 'pagoda',     pos: [28, 0, -2],   r: 12,  depth: 16, seed: 7.7, grass: '#5b8c3e', rock: '#58463a', modelHeight: 15, flora: 'cherry' },
 ];
 
 /* Selected pose: island framed LEFT of screen centre, HTML panel occupies right. */
 const POSES: Record<'overview' | DestId, { pos: [number, number, number]; target: [number, number, number]; fov: number }> = {
-  overview:   { pos: [0, 14, 48],   target: [2, 5, -10],   fov: 50 },
-  lighthouse: { pos: [-14, 9, 18],  target: [-20, 5, -6],  fov: 48 },
-  windmill:   { pos: [14, 12, -10], target: [8, 8, -24],   fov: 44 },
-  pagoda:     { pos: [44, 9, 16],   target: [38, 5, -4],   fov: 48 },
+  overview:   { pos: [0, 16, 52],   target: [0, 6, -8],   fov: 48 },
+  lighthouse: { pos: [-16, 12, 22], target: [-18, 10, -4], fov: 46 },
+  windmill:   { pos: [18, 14, -6],  target: [6, 12, -20],  fov: 42 },
+  pagoda:     { pos: [48, 12, 20], target: [36, 10, -2],  fov: 46 },
 };
 
 function prefersReducedMotion(): boolean {
@@ -103,10 +103,41 @@ function AtlasModel({ url, height, info, spin = false }: AtlasModelProps) {
     console.info(`[atlas] mounted ${info}: normalized to ${height.toFixed(1)}u (src ~${(1 / fitted.s).toFixed(2)}u)`);
   }, [fitted, info, height]);
 
-  useFrame((_, dt) => {
-    if (!fitted.spinName) return;
-    const node = fitted.clone.getObjectByName(fitted.spinName);
-    if (node) node.rotation.y += dt * 1.1;
+  useFrame((state, dt) => {
+    // Windmill blades
+    if (fitted.spinName) {
+      const node = fitted.clone.getObjectByName(fitted.spinName);
+      if (node) node.rotation.y += dt * 1.4;
+    }
+    // Pagoda - cherry blossom sway
+    if (info === 'pagoda') {
+      fitted.clone.traverse((o) => {
+        const n = o.name.toLowerCase();
+        if ((n.includes('cherry') || n.includes('blossom') || n.includes('petal') || n.includes('leaf')) && !o.userData._swayInit) {
+          o.userData._swayInit = true;
+          o.userData._baseRot = o.rotation.clone();
+        }
+        if (o.userData._swayInit) {
+          const t = state.clock.elapsedTime;
+          o.rotation.z = o.userData._baseRot.z + Math.sin(t * 0.8 + o.id * 0.01) * 0.02;
+          o.rotation.x = o.userData._baseRot.x + Math.cos(t * 0.6 + o.id * 0.02) * 0.015;
+        }
+      });
+    }
+    // Lighthouse - subtle water/wave if present
+    if (info === 'lighthouse') {
+      fitted.clone.traverse((o) => {
+        const n = o.name.toLowerCase();
+        if ((n.includes('water') || n.includes('wave') || n.includes('foam') || n.includes('river')) && !o.userData._waveInit) {
+          o.userData._waveInit = true;
+          o.userData._baseY = o.position.y;
+        }
+        if (o.userData._waveInit) {
+          const t = state.clock.elapsedTime;
+          o.position.y = o.userData._baseY + Math.sin(t * 1.2) * 0.01;
+        }
+      });
+    }
   });
 
   return (
