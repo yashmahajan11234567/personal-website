@@ -212,12 +212,28 @@ function makeIslandGeometry(spec: IslandSpec): THREE.BufferGeometry {
 
 
 function SkyDome() {
+  const tex = useMemo(() => {
+    const c = document.createElement('canvas');
+    c.width = 2;
+    c.height = 512;
+    const ctx = c.getContext('2d')!;
+    const g = ctx.createLinearGradient(0, 0, 0, 512);
+    g.addColorStop(0, '#1a4d7a'); // deep blue top
+    g.addColorStop(0.3, '#3a6ba8');
+    g.addColorStop(0.5, '#6ba3d6');
+    g.addColorStop(0.7, '#b8d4f0');
+    g.addColorStop(0.85, '#f0d9b8');
+    g.addColorStop(1, '#f5e6d0'); // warm horizon
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 2, 512);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }, []);
   return (
     <mesh scale={[-1, 1, 1]}>
-      <sphereGeometry args={[400, 32, 20]} />
-      <meshBasicMaterial side={THREE.BackSide} fog={false} depthWrite={false}>
-        <color attach="color" args={["#4a7ba8"]} />
-      </meshBasicMaterial>
+      <sphereGeometry args={[500, 32, 24]} />
+      <meshBasicMaterial map={tex} side={THREE.BackSide} fog={false} depthWrite={false} />
     </mesh>
   );
 }
@@ -315,12 +331,14 @@ function MountainRange({ position, scale, rotation = 0 }: { position: [number, n
 function FantasyMountains() {
   return (
     <group>
-      <MountainRange position={[-80, -20, -150]} scale={35} rotation={0.3} />
-      <MountainRange position={[60, -25, -180]} scale={42} rotation={-0.4} />
-      <MountainRange position={[0, -30, -220]} scale={50} rotation={0.1} />
-      <MountainRange position={[-120, -15, -120]} scale={28} rotation={0.6} />
-      <MountainRange position={[100, -18, -140]} scale={32} rotation={-0.5} />
-      <MountainRange position={[-40, -22, -200]} scale={38} rotation={0.2} />
+      <MountainRange position={[-100, -25, -200]} scale={60} rotation={0.3} />
+      <MountainRange position={[80, -30, -250]} scale={75} rotation={-0.4} />
+      <MountainRange position={[0, -35, -300]} scale={90} rotation={0.1} />
+      <MountainRange position={[-150, -20, -150]} scale={50} rotation={0.6} />
+      <MountainRange position={[130, -22, -180]} scale={55} rotation={-0.5} />
+      <MountainRange position={[-60, -28, -280]} scale={70} rotation={0.2} />
+      <MountainRange position={[150, -18, -220]} scale={48} rotation={-0.3} />
+      <MountainRange position={[-180, -15, -170]} scale={45} rotation={0.7} />
     </group>
   );
 }
