@@ -294,35 +294,41 @@ function CloudField() {
 
 /* ---------- Fantasy Mountain World ---------- */
 
-function MountainRange({ position, scale, rotation = 0 }: { position: [number, number, number]; scale: number; rotation?: number }) {
+function MountainRange({ position, scale, rotation = 0, hue = 0 }: { position: [number, number, number]; scale: number; rotation?: number; hue?: number }) {
   const geo = useMemo(() => {
-    const g = new THREE.ConeGeometry(1, 2, 8);
+    const g = new THREE.PlaneGeometry(4, 3, 32, 24);
+    g.rotateX(-Math.PI / 2);
     const p = g.attributes.position as THREE.BufferAttribute;
+    const seed = position[0] * 0.1 + position[2] * 0.1;
     for (let i = 0; i < p.count; i++) {
       const x = p.getX(i);
-      const y = p.getY(i);
       const z = p.getZ(i);
-      // Irregular
-      p.setX(i, x * (0.7 + Math.random() * 0.6));
-      p.setZ(i, z * (0.7 + Math.random() * 0.6));
-      if (y > 0) p.setY(i, y * (0.6 + Math.random() * 0.8));
+      const dist = Math.sqrt(x*x + z*z);
+      const noise1 = Math.sin(x * 0.5 + seed) * Math.cos(z * 0.3 + seed) * 0.6;
+      const noise2 = Math.sin(x * 1.2 + seed*2) * Math.cos(z * 0.8 + seed*1.5) * 0.4;
+      const noise3 = Math.sin((x+z) * 0.7) * 0.3;
+      let h = (noise1 + noise2 + noise3) * (1 - dist * 0.15);
+      if (dist < 0.3) h += (1 - dist/0.3) * 0.8; // peak
+      h = Math.max(0, h);
+      p.setY(i, h);
+      // irregular silhouette
+      p.setX(i, x * (0.8 + Math.sin(z * 0.4) * 0.2));
+      p.setZ(i, z * (0.8 + Math.cos(x * 0.3) * 0.2));
     }
     g.computeVertexNormals();
     return g;
-  }, []);
+  }, [position]);
+  const color = new THREE.Color().setHSL(0.58 + hue*0.02, 0.15, 0.25 + hue*0.05);
   return (
     <group position={position} scale={scale} rotation={[0, rotation, 0]}>
-      <mesh geometry={geo} position={[0, 1, 0]}>
-        <meshStandardMaterial color="#4a5d6b" roughness={0.95} flatShading />
+      <mesh geometry={geo} receiveShadow castShadow>
+        <meshStandardMaterial color={color} roughness={0.98} flatShading />
       </mesh>
-      <mesh geometry={geo} position={[2.5, 0.8, 1.2]} scale={[0.7, 0.6, 0.7]}>
-        <meshStandardMaterial color="#556472" roughness={0.95} flatShading />
+      <mesh geometry={geo} position={[1.5, 0.2, 0.8]} scale={[0.6, 0.7, 0.6]} rotation={[0, 0.5, 0]}>
+        <meshStandardMaterial color={color.clone().multiplyScalar(0.9)} roughness={0.98} flatShading />
       </mesh>
-      <mesh geometry={geo} position={[-2, 0.6, -1]} scale={[0.8, 0.7, 0.8]}>
-        <meshStandardMaterial color="#4f5f6d" roughness={0.95} flatShading />
-      </mesh>
-      <mesh geometry={geo} position={[1, 0.9, -2]} scale={[0.6, 0.65, 0.6]}>
-        <meshStandardMaterial color="#5a6b78" roughness={0.95} flatShading />
+      <mesh geometry={geo} position={[-1.2, 0.15, -0.6]} scale={[0.5, 0.6, 0.5]} rotation={[0, -0.3, 0]}>
+        <meshStandardMaterial color={color.clone().multiplyScalar(0.85)} roughness={0.98} flatShading />
       </mesh>
     </group>
   );
@@ -331,14 +337,14 @@ function MountainRange({ position, scale, rotation = 0 }: { position: [number, n
 function FantasyMountains() {
   return (
     <group>
-      <MountainRange position={[-100, -25, -200]} scale={60} rotation={0.3} />
-      <MountainRange position={[80, -30, -250]} scale={75} rotation={-0.4} />
-      <MountainRange position={[0, -35, -300]} scale={90} rotation={0.1} />
-      <MountainRange position={[-150, -20, -150]} scale={50} rotation={0.6} />
-      <MountainRange position={[130, -22, -180]} scale={55} rotation={-0.5} />
-      <MountainRange position={[-60, -28, -280]} scale={70} rotation={0.2} />
-      <MountainRange position={[150, -18, -220]} scale={48} rotation={-0.3} />
-      <MountainRange position={[-180, -15, -170]} scale={45} rotation={0.7} />
+      <MountainRange position={[-120, -28, -280]} scale={95} rotation={0.4} hue={0} />
+      <MountainRange position={[100, -32, -320]} scale={110} rotation={-0.3} hue={2} />
+      <MountainRange position={[0, -38, -380]} scale={130} rotation={0.15} hue={1} />
+      <MountainRange position={[-200, -25, -240]} scale={75} rotation={0.7} hue={3} />
+      <MountainRange position={[180, -26, -260]} scale={82} rotation={-0.6} hue={2} />
+      <MountainRange position={[-80, -30, -340]} scale={105} rotation={0.25} hue={1} />
+      <MountainRange position={[220, -22, -300]} scale={68} rotation={-0.4} hue={0} />
+      <MountainRange position={[-240, -20, -220]} scale={62} rotation={0.8} hue={3} />
     </group>
   );
 }
