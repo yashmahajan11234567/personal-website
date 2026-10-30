@@ -44,7 +44,7 @@ const ISLANDS: IslandSpec[] = [
 const POSES: Record<'overview' | DestId, { pos: [number, number, number]; target: [number, number, number]; fov: number }> = {
   overview:   { pos: [0, 16, 52],   target: [0, 6, -8],   fov: 48 },
   lighthouse: { pos: [-16, 12, 22], target: [-18, 10, -4], fov: 46 },
-  windmill:   { pos: [18, 14, -6],  target: [6, 12, -20],  fov: 42 },
+  windmill:   { pos: [24, 16, 2],   target: [4, 10, -18],   fov: 48 },
   pagoda:     { pos: [48, 12, 20], target: [36, 10, -2],  fov: 46 },
 };
 
@@ -305,11 +305,36 @@ function Island({
   const outer = useRef<THREE.Group>(null);
   const float = useRef<THREE.Group>(null);
   const modelGroup = useRef<THREE.Group>(null);
+  const origPos = useRef(new THREE.Vector3(...spec.pos));
+  const origRot = useRef(new THREE.Euler());
+  const didInit = useRef(false);
 
   useEffect(() => {
     registerRef(spec.id, outer.current);
     return () => registerRef(spec.id, null);
   });
+
+  useEffect(() => {
+    if (!outer.current) return;
+    if (!didInit.current) {
+      origPos.current.copy(outer.current.position);
+      origRot.current.copy(outer.current.rotation);
+      didInit.current = true;
+    }
+    const dur = prefersReducedMotion() ? 0 : 2.2;
+    if (selected) {
+      // Move to left and do full 360 rotation
+      gsap.killTweensOf(outer.current.position);
+      gsap.killTweensOf(outer.current.rotation);
+      gsap.to(outer.current.position, { x: spec.pos[0] - 8, y: spec.pos[1], z: spec.pos[2] + 4, duration: dur, ease: 'power2.inOut' });
+      gsap.to(outer.current.rotation, { y: Math.PI * 2, duration: dur, ease: 'power2.inOut' });
+    } else {
+      gsap.killTweensOf(outer.current.position);
+      gsap.killTweensOf(outer.current.rotation);
+      gsap.to(outer.current.position, { x: origPos.current.x, y: origPos.current.y, z: origPos.current.z, duration: dur * 0.8, ease: 'power2.inOut' });
+      gsap.to(outer.current.rotation, { y: origRot.current.y, duration: dur * 0.8, ease: 'power2.inOut' });
+    }
+  }, [selected, spec.pos]);
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
@@ -317,18 +342,12 @@ function Island({
       float.current.position.y = Math.sin(t * 0.3 + spec.seed) * 0.15;
       float.current.rotation.z = Math.sin(t * 0.2 + spec.seed) * 0.008;
     }
-    // Per-island animations (works for merged GLBs)
     if (modelGroup.current) {
-      if (spec.id === 'windmill') {
-        // Subtle rotation to suggest blades moving
-        modelGroup.current.rotation.y += 0.008;
-      } else if (spec.id === 'pagoda') {
-        // Gentle sway
-        modelGroup.current.rotation.z = Math.sin(t * 0.6 + spec.seed) * 0.012;
-        modelGroup.current.rotation.x = Math.cos(t * 0.4 + spec.seed) * 0.008;
+      if (spec.id === 'pagoda') {
+        modelGroup.current.rotation.z = Math.sin(t * 0.6 + spec.seed) * 0.01;
+        modelGroup.current.rotation.x = Math.cos(t * 0.4 + spec.seed) * 0.006;
       } else if (spec.id === 'lighthouse') {
-        // Gentle bob like waves
-        modelGroup.current.position.y = Math.sin(t * 0.9 + spec.seed) * 0.08;
+        modelGroup.current.position.y = Math.sin(t * 0.9 + spec.seed) * 0.06;
       }
     }
   });
@@ -339,11 +358,11 @@ function Island({
       position={spec.pos}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect(spec.id);
+        if (!selected) onSelect(spec.id);
       }}
       onPointerOver={(e) => {
         e.stopPropagation();
-        document.body.style.cursor = 'pointer';
+        if (!selected) document.body.style.cursor = 'pointer';
       }}
       onPointerOut={() => {
         document.body.style.cursor = 'default';
