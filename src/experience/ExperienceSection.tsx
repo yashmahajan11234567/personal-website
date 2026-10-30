@@ -304,6 +304,7 @@ function Island({
 }) {
   const outer = useRef<THREE.Group>(null);
   const float = useRef<THREE.Group>(null);
+  const modelGroup = useRef<THREE.Group>(null);
 
   useEffect(() => {
     registerRef(spec.id, outer.current);
@@ -311,9 +312,24 @@ function Island({
   });
 
   useFrame((state) => {
+    const t = state.clock.elapsedTime;
     if (float.current && !selected) {
-      float.current.position.y = Math.sin(state.clock.elapsedTime * 0.3 + spec.seed) * 0.12;
-      float.current.rotation.z = Math.sin(state.clock.elapsedTime * 0.2 + spec.seed) * 0.006;
+      float.current.position.y = Math.sin(t * 0.3 + spec.seed) * 0.15;
+      float.current.rotation.z = Math.sin(t * 0.2 + spec.seed) * 0.008;
+    }
+    // Per-island animations (works for merged GLBs)
+    if (modelGroup.current) {
+      if (spec.id === 'windmill') {
+        // Subtle rotation to suggest blades moving
+        modelGroup.current.rotation.y += 0.008;
+      } else if (spec.id === 'pagoda') {
+        // Gentle sway
+        modelGroup.current.rotation.z = Math.sin(t * 0.6 + spec.seed) * 0.012;
+        modelGroup.current.rotation.x = Math.cos(t * 0.4 + spec.seed) * 0.008;
+      } else if (spec.id === 'lighthouse') {
+        // Gentle bob like waves
+        modelGroup.current.position.y = Math.sin(t * 0.9 + spec.seed) * 0.08;
+      }
     }
   });
 
@@ -334,11 +350,10 @@ function Island({
       }}
     >
       <group ref={float}>
-        {/* Only diorama/landmark from GLB - no procedural bottom platform */}
-        <group position={[0, 0, 0]}>
+        <group ref={modelGroup} position={[0, 0, 0]}>
           <ModelBoundary>
             <Suspense fallback={null}>
-              <AtlasModel url={`/assets/atlas/${spec.id}.glb`} height={spec.modelHeight} info={spec.id} spin={spec.id === 'windmill'} />
+              <AtlasModel url={`/assets/atlas/${spec.id}.glb`} height={spec.modelHeight} info={spec.id} spin={false} />
             </Suspense>
           </ModelBoundary>
         </group>
