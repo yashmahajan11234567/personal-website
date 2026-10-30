@@ -209,29 +209,15 @@ function makeIslandGeometry(spec: IslandSpec): THREE.BufferGeometry {
 
 /* ---------- sky, clouds, lighting ---------- */
 
-function makeSkyTexture(): THREE.CanvasTexture {
-  const c = document.createElement('canvas');
-  c.width = 16;
-  c.height = 256;
-  const ctx = c.getContext('2d')!;
-  const g = ctx.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0, '#2c5aa0'); // zenith deep blue
-  g.addColorStop(0.45, '#7db8e8');
-  g.addColorStop(0.75, '#cfe6f5');
-  g.addColorStop(1, '#f2e2c8'); // warm horizon
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 16, 256);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
+
 
 function SkyDome() {
-  const tex = useMemo(() => makeSkyTexture(), []);
   return (
     <mesh scale={[-1, 1, 1]}>
-      <sphereGeometry args={[300, 32, 20]} />
-      <meshBasicMaterial map={tex} side={THREE.BackSide} fog={false} depthWrite={false} />
+      <sphereGeometry args={[400, 32, 20]} />
+      <meshBasicMaterial side={THREE.BackSide} fog={false} depthWrite={false}>
+        <color attach="color" args={["#4a7ba8"]} />
+      </meshBasicMaterial>
     </mesh>
   );
 }
@@ -288,6 +274,104 @@ function CloudField() {
     </group>
   );
 }
+
+
+/* ---------- Fantasy Mountain World ---------- */
+
+function MountainRange({ position, scale, rotation = 0 }: { position: [number, number, number]; scale: number; rotation?: number }) {
+  const geo = useMemo(() => {
+    const g = new THREE.ConeGeometry(1, 2, 8);
+    const p = g.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i);
+      const y = p.getY(i);
+      const z = p.getZ(i);
+      // Irregular
+      p.setX(i, x * (0.7 + Math.random() * 0.6));
+      p.setZ(i, z * (0.7 + Math.random() * 0.6));
+      if (y > 0) p.setY(i, y * (0.6 + Math.random() * 0.8));
+    }
+    g.computeVertexNormals();
+    return g;
+  }, []);
+  return (
+    <group position={position} scale={scale} rotation={[0, rotation, 0]}>
+      <mesh geometry={geo} position={[0, 1, 0]}>
+        <meshStandardMaterial color="#4a5d6b" roughness={0.95} flatShading />
+      </mesh>
+      <mesh geometry={geo} position={[2.5, 0.8, 1.2]} scale={[0.7, 0.6, 0.7]}>
+        <meshStandardMaterial color="#556472" roughness={0.95} flatShading />
+      </mesh>
+      <mesh geometry={geo} position={[-2, 0.6, -1]} scale={[0.8, 0.7, 0.8]}>
+        <meshStandardMaterial color="#4f5f6d" roughness={0.95} flatShading />
+      </mesh>
+      <mesh geometry={geo} position={[1, 0.9, -2]} scale={[0.6, 0.65, 0.6]}>
+        <meshStandardMaterial color="#5a6b78" roughness={0.95} flatShading />
+      </mesh>
+    </group>
+  );
+}
+
+function FantasyMountains() {
+  return (
+    <group>
+      <MountainRange position={[-80, -20, -150]} scale={35} rotation={0.3} />
+      <MountainRange position={[60, -25, -180]} scale={42} rotation={-0.4} />
+      <MountainRange position={[0, -30, -220]} scale={50} rotation={0.1} />
+      <MountainRange position={[-120, -15, -120]} scale={28} rotation={0.6} />
+      <MountainRange position={[100, -18, -140]} scale={32} rotation={-0.5} />
+      <MountainRange position={[-40, -22, -200]} scale={38} rotation={0.2} />
+    </group>
+  );
+}
+
+function FluffyCloud({ position, scale }: { position: [number, number, number]; scale: number }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame((_, dt) => {
+    if (ref.current) {
+      ref.current.position.x += dt * 0.3;
+      if (ref.current.position.x > 150) ref.current.position.x = -150;
+    }
+  });
+  return (
+    <group ref={ref} position={position} scale={scale}>
+      <mesh position={[0,0,0]}>
+        <sphereGeometry args={[2, 16, 16]} />
+        <meshStandardMaterial color="#ffffff" transparent opacity={0.9} roughness={1} />
+      </mesh>
+      <mesh position={[2.5,0.3,0.2]} scale={0.8}>
+        <sphereGeometry args={[2, 16, 16]} />
+        <meshStandardMaterial color="#f8fbff" transparent opacity={0.85} roughness={1} />
+      </mesh>
+      <mesh position={[-2.2,0.2,-0.3]} scale={0.75}>
+        <sphereGeometry args={[2, 16, 16]} />
+        <meshStandardMaterial color="#f8fbff" transparent opacity={0.85} roughness={1} />
+      </mesh>
+      <mesh position={[1,0.8,0.5]} scale={0.6}>
+        <sphereGeometry args={[2, 16, 16]} />
+        <meshStandardMaterial color="#ffffff" transparent opacity={0.8} roughness={1} />
+      </mesh>
+      <mesh position={[-0.5,-0.3,0.3]} scale={0.9}>
+        <sphereGeometry args={[2, 16, 16]} />
+        <meshStandardMaterial color="#f0f7ff" transparent opacity={0.75} roughness={1} />
+      </mesh>
+    </group>
+  );
+}
+
+function CinematicClouds() {
+  return (
+    <group>
+      <FluffyCloud position={[-60, 35, -100]} scale={3.5} />
+      <FluffyCloud position={[40, 42, -120]} scale={4.5} />
+      <FluffyCloud position={[80, 28, -80]} scale={3} />
+      <FluffyCloud position={[-30, 48, -150]} scale={5} />
+      <FluffyCloud position={[10, 25, -60]} scale={2.8} />
+      <FluffyCloud position={[-90, 32, -90]} scale={3.2} />
+    </group>
+  );
+}
+
 
 /* ---------- island assembly ---------- */
 
@@ -417,12 +501,12 @@ function Scene({
   return (
     <>
       <SkyDome />
-      <ambientLight intensity={0.55} />
-      <hemisphereLight args={['#cfe8ff', '#8fa87a', 0.85]} />
+      <ambientLight intensity={0.6} />
+      <hemisphereLight args={['#b8d4f0', '#8fa87a', 1.0]} />
       <directionalLight
-        position={[70, 90, 50]}
-        intensity={2.2}
-        color="#fff2dc"
+        position={[100, 120, 80]}
+        intensity={2.6}
+        color="#fff4e6"
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -432,9 +516,11 @@ function Scene({
         shadow-camera-bottom={-70}
         shadow-camera-far={260}
       />
+      <FantasyMountains />
       {ISLANDS.map((spec) => (
         <Island key={spec.id} spec={spec} selected={selected === spec.id} onSelect={onSelect} registerRef={registerRef} />
       ))}
+      <CinematicClouds />
       <CloudField />
     </>
   );
@@ -580,7 +666,7 @@ export function ExperienceSection() {
           dpr={[1, 2]}
           gl={{ alpha: false, antialias: true }}
         >
-          <fog attach="fog" args={['#cfe6f5', 90, 260]} />
+          <fog attach="fog" args={['#b8d4f0', 80, 320]} />
           <CameraRig selected={selected} />
           <Suspense fallback={null}>
             <Scene selected={selected} onSelect={setSelected} registerRef={registerRef} />
