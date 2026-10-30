@@ -1,0 +1,397 @@
+/* ============================================================
+   Experience — Atlas of Drifting Isles
+   ============================================================ */
+
+.experience-section {
+  width: 100%;
+  background: linear-gradient(to bottom, #1e3c72 0%, #2a5298 20%, #87CEEB 40%, #B0E0E6 70%, #F0F8FF 90%, #f5f5f5 100%);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ---------- header ---------- */
+
+.experience-header-container {
+  padding: 4rem 2rem 1.5rem 2rem;
+}
+
+.experience-header {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.experience-divider {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(30, 50, 70, 0.55), transparent);
+}
+
+.experience-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #16324a;
+  font-family: 'Bebas Neue', 'Arial Black', sans-serif;
+  white-space: nowrap;
+  margin: 0;
+}
+
+/* ---------- 3D stage ---------- */
+
+.atlas-environment {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 150px);
+  min-height: 620px;
+}
+
+.atlas-environment canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+  background: linear-gradient(to bottom, #87CEEB 0%, #B0E0E6 100%);
+}
+
+/* ---------- HUD ---------- */
+
+.atlas-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.atlas-hint {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  color: #24507a;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.atlas-attribution {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.9rem;
+  margin: 0;
+  font-size: 0.68rem;
+  color: rgba(35, 60, 85, 0.75);
+}
+
+.atlas-attribution a {
+  color: rgba(35, 80, 130, 0.9);
+  text-decoration: underline;
+}
+
+/* ---------- destination labels (overview) ---------- */
+
+.dest-labels {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 9%;
+  display: flex;
+  justify-content: space-evenly;
+  gap: 1rem;
+  padding: 0 4vw;
+}
+
+.dest-label {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.6rem 1.3rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 6px 22px rgba(30, 60, 100, 0.18);
+  cursor: pointer;
+  font: inherit;
+  transition: box-shadow 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+}
+
+.dest-label strong {
+  font-size: 1rem;
+  color: #16324a;
+  letter-spacing: 0.03em;
+}
+
+.dest-label span {
+  font-size: 0.78rem;
+  color: #4a6a8a;
+}
+
+.dest-label:hover,
+.dest-label.is-hot {
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(30, 60, 100, 0.3);
+  border-color: #9cc8ee;
+}
+
+.dest-label:focus-visible {
+  outline: 3px solid #1d72c2;
+  outline-offset: 3px;
+}
+
+/* ---------- selected state controls ---------- */
+
+.back-btn {
+  pointer-events: auto;
+  position: absolute;
+  top: 1rem;
+  left: 1.2rem;
+  padding: 0.55rem 1.15rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.88);
+  color: #16324a;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(30, 60, 100, 0.2);
+  transition: background 0.2s ease;
+}
+
+.back-btn:hover {
+  background: #ffffff;
+}
+
+.back-btn:focus-visible {
+  outline: 3px solid #1d72c2;
+  outline-offset: 3px;
+}
+
+.dest-nav {
+  pointer-events: auto;
+  position: absolute;
+  left: 1.2rem;
+  bottom: 1.2rem;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.dest-nav button {
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.82);
+  color: #16324a;
+  font-weight: 600;
+  font-size: 0.82rem;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.2s ease;
+}
+
+.dest-nav button:hover {
+  background: #ffffff;
+}
+
+.dest-nav button:focus-visible {
+  outline: 3px solid #1d72c2;
+  outline-offset: 3px;
+}
+
+/* ---------- destination panel ---------- */
+
+.dest-panel-wrap {
+  pointer-events: auto;
+  position: absolute;
+  top: 50%;
+  right: 4vw;
+  transform: translateY(-50%);
+  width: min(400px, 36vw);
+  max-height: 75%;
+  overflow-y: auto;
+  z-index: 20;
+  animation: panelIn 0.5s ease both;
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateY(calc(-50% + 18px));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-50%);
+  }
+}
+
+.dest-panel {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 16px 50px rgba(20, 45, 80, 0.25);
+  padding: 1.8rem 2rem 1.6rem 2rem;
+  color: #1a2f42;
+  border-top: 4px solid var(--accent, #1d72c2);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dest-panel .dest-kicker {
+  margin: 0 0 0.35rem 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent, #1d72c2);
+}
+
+.dest-panel h3 {
+  margin: 0 0 0.4rem 0;
+  font-size: 1.65rem;
+  color: #14293d;
+  font-family: 'Bebas Neue', 'Arial Black', sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.dest-panel .dest-role {
+  margin: 0 0 0.15rem 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.dest-panel .dest-dates {
+  margin: 0 0 0.9rem 0;
+  font-size: 0.85rem;
+  color: #55708a;
+}
+
+.dest-panel section {
+  margin-top: 0.85rem;
+}
+
+.dest-panel section h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: #4a6a8a;
+}
+
+.dest-panel section p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #33506b;
+}
+
+.accent-lighthouse {
+  --accent: #1d72c2;
+}
+
+.accent-windmill {
+  --accent: #e07818;
+}
+
+.accent-pagoda {
+  --accent: #8459c9;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 900px) {
+  .experience-header-container {
+    padding: 2.2rem 1rem 1rem 1rem;
+  }
+
+  .experience-title {
+    font-size: 1.9rem;
+  }
+
+  .atlas-environment {
+    height: 72vh;
+    min-height: 480px;
+  }
+
+  .dest-labels {
+    bottom: 3.5%;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 8vw;
+  }
+
+  .dest-label {
+    flex-direction: row;
+    gap: 0.55rem;
+    padding: 0.45rem 1rem;
+  }
+
+  .dest-label strong {
+    font-size: 0.9rem;
+  }
+
+  .dest-label span {
+    font-size: 0.72rem;
+  }
+
+  .dest-panel-wrap {
+    top: auto;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    transform: none;
+    width: auto;
+    max-height: 52%;
+    border-radius: 18px 18px 0 0;
+    animation: panelInMobile 0.5s ease both;
+  }
+
+  @keyframes panelInMobile {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .dest-panel {
+    border-radius: 18px 18px 0 0;
+    padding: 1.2rem 1.3rem 1.1rem 1.3rem;
+  }
+
+  .dest-panel h3 {
+    font-size: 1.35rem;
+  }
+
+  .dest-nav {
+    bottom: auto;
+    top: 4.2rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dest-label,
+  .back-btn,
+  .dest-nav button {
+    transition: none;
+  }
+
+  .dest-panel-wrap {
+    animation: none;
+  }
+}
