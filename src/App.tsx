@@ -19,6 +19,17 @@ const CloudWorld3D = lazy(() =>
   import('./cloud-world-3d').then((m) => ({ default: m.CloudWorld3D })),
 );
 
+/*
+ * The Experience section is code-split like Cloud World: three.js + R3F weigh
+ * ~1.4 MB minified and the hero must not pay for them. `lazy()` keeps the
+ * whole stack in a chunk that loads only when the section mounts in the page
+ * flow (after the hero). While it loads, the Suspense fallback paints the
+ * sunset gradient so there is no white flash.
+ */
+const ExperienceSection = lazy(() =>
+  import('./experience/ExperienceSection').then((m) => ({ default: m.ExperienceSection })),
+);
+
 const HASH_WORLDS = {
   '#/data-world': 'data-world',
   '#/cloud-world': 'cloud-world',
@@ -186,7 +197,16 @@ function App() {
       <main id="main">
         {isLoading ? (
           <LoadingScreen progress={loadingProgress} onComplete={() => {}} />
-        ) : currentWorld === 'hero' && <CinematicHero onWorldSelected={handleWorldSelected} />}
+        ) : currentWorld === 'hero' && (
+          <>
+            <CinematicHero onWorldSelected={handleWorldSelected} />
+            {/* Experience lives in the normal page flow after the hero.
+                Hash-world routing and Cloud World are untouched. */}
+            <Suspense fallback={<div className="experience-loading" aria-hidden="true" />}>
+              <ExperienceSection />
+            </Suspense>
+          </>
+        )}
         {currentWorld === 'data-world' && (
           <WorldShell key="data-world" world="data" onExit={returnToHero} />
         )}
@@ -196,11 +216,6 @@ function App() {
           >
             <CloudWorld3D key="cloud-world" onExit={returnToHero} />
           </Suspense>
-        )}
-        {currentWorld === 'experience' && (
-          <div className="placeholder-world">
-            <h1>Experience Section — Phase 5</h1>
-          </div>
         )}
       </main>
     </div>
