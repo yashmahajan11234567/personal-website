@@ -11,21 +11,24 @@ function prefersReducedMotion(): boolean {
 
 /**
  * GSAP-driven camera rig. Tweens camera.position + a lookAt target vector +
- * fov between the overview pose and the selected island's pose. Other islands
- * are never touched — they simply fall outside the frustum.
+ * fov between the overview pose and the selected island's bounding-box-derived
+ * pose. Unselected islands are hidden by IslandGroup itself, so they can never
+ * appear in the frustum, between camera and island, or during transitions.
  */
 export function CameraRig({ selected }: { selected: DestId | null }) {
   const { camera } = useThree();
+  const size = useThree((s) => s.size);
   const target = useRef(new THREE.Vector3(...OVERVIEW_POSE.target));
   const cam = camera as THREE.PerspectiveCamera;
 
   useEffect(() => {
     const dur = prefersReducedMotion() ? 0 : TRANSITION_DURATION;
-    const pose = selected ? selectedPose(selected) : OVERVIEW_POSE;
+    const aspect = size.width / Math.max(size.height, 1);
+    const pose = selected ? selectedPose(selected, aspect) : OVERVIEW_POSE;
     // Portrait screens have a narrow horizontal FOV: pull the camera nearly
     // frontal so the selected island stays inside the frame (still left-biased).
     let pos = pose.pos;
-    if (selected && cam.aspect < 0.9) {
+    if (selected && aspect < 0.9) {
       pos = [
         pose.target[0] + (pose.pos[0] - pose.target[0]) * 0.08,
         pose.pos[1] * 0.85,
@@ -39,6 +42,9 @@ export function CameraRig({ selected }: { selected: DestId | null }) {
       z: pos[2],
       duration: dur,
       ease: 'power2.inOut',
+      onComplete: () => {
+        (window as unknown as { __camSettled?: string }).__camSettled = selected ?? 'overview';
+      },
     });
     gsap.killTweensOf(target.current);
     gsap.to(target.current, {
@@ -55,10 +61,20 @@ export function CameraRig({ selected }: { selected: DestId | null }) {
       ease: 'power2.inOut',
       onUpdate: () => cam.updateProjectionMatrix(),
     });
-  }, [selected, camera, cam]);
+  }, [selected, camera, cam, size]);
 
   useFrame(() => {
     camera.lookAt(target.current);
+    // Left-side placement for the selected island via projection offset:
+    // shifts the render window right, so the island lands left-of-centre
+    // without changing the fitted camera distance (panel owns the right).
+    const aspect = size.width / Math.max(size.height, 1);
+    if (selected) {
+      const frac = aspect < 0.9 ? 0.04 : 0.11;
+      cam.setViewOffset(size.width, size.height, size.width * frac, 0, size.width, size.height);
+    } else {
+      cam.clearViewOffset();
+    }
   });
 
   return null;

@@ -11,7 +11,7 @@ import { IslandGroup } from './components/IslandGroup';
 import { useTransitionController } from './hooks/useTransitionController';
 import { useExperienceStore } from './store/experienceStore';
 import { CameraRig } from './scene/CameraRig';
-import { FantasySkyWorld } from './environment/FantasySkyWorld';
+import { MagentaTwilightWorld } from './environment/MagentaTwilightWorld';
 import './experience.css';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -23,7 +23,7 @@ export function ExperienceSection() {
 
   useTransitionController();
 
-  const { selectedIsland, selectIsland, navigate, goBack } = useExperienceStore();
+  const { selectedIsland, isTransitioning, selectIsland, navigate, goBack } = useExperienceStore();
 
   const handleSelect = (id: 'lighthouse' | 'windmill' | 'pagoda') => {
     setSelected(id);
@@ -31,33 +31,39 @@ export function ExperienceSection() {
   };
 
   const handleNavigate = (direction: 'next' | 'prev') => {
-    navigate(direction);
+    if (!selectedIsland || isTransitioning) return; // no conflicting navigation mid-transition
+    const i = DEST_ORDER.indexOf(selectedIsland);
+    const dir = direction === 'next' ? 1 : -1;
+    const nextId = DEST_ORDER[(i + dir + DEST_ORDER.length) % DEST_ORDER.length];
+    navigate(direction); // store: circular order + transition lock
+    setSelected(nextId); // local: drives camera, panel and island visibility together
   };
 
   const handleBack = () => {
+    if (isTransitioning) return;
     setSelected(null);
     goBack();
-  };
-
-  const step = (dir: 1 | -1) => {
-    if (!selectedIsland) return;
-    const i = DEST_ORDER.indexOf(selectedIsland);
-    const nextId = DEST_ORDER[(i + dir + DEST_ORDER.length) % DEST_ORDER.length];
-    setSelected(nextId);
-    selectIsland(nextId);
   };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && selectedIsland) {
-        setSelected(null);
-        goBack();
-      } else if (e.key === 'ArrowRight' && selectedIsland) step(1);
-      else if (e.key === 'ArrowLeft' && selectedIsland) step(-1);
+        handleBack();
+      } else if (e.key === 'ArrowRight' && selectedIsland) handleNavigate('next');
+      else if (e.key === 'ArrowLeft' && selectedIsland) handleNavigate('prev');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedIsland]);
+  });
+
+  /* QA/debug handle: current selection + which islands are rendered visible. */
+  useEffect(() => {
+    const w = window as unknown as { __expState?: unknown };
+    w.__expState = {
+      selected,
+      visible: DEST_ORDER.filter((id) => selected === null || selected === id),
+    };
+  }, [selected]);
 
   /* Scrubbed, reversible cinematic hand-off into the next section. */
   useEffect(() => {
@@ -104,7 +110,7 @@ export function ExperienceSection() {
           dpr={[1, 1.75]}
           gl={{ alpha: false, antialias: true }}
         >
-          <FantasySkyWorld />
+          <MagentaTwilightWorld />
           <CameraRig selected={selected} />
           <Suspense fallback={null}>
             {DEST_ORDER.map((id) => (
@@ -112,6 +118,7 @@ export function ExperienceSection() {
                 key={id}
                 id={id}
                 selected={selected === id}
+                hidden={selected !== null && selected !== id}
                 onSelect={handleSelect}
               />
             ))}

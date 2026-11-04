@@ -33,7 +33,7 @@ export const DESTINATIONS: readonly DestinationContent[] = [
   {
     id: 'lighthouse',
     landmark: 'Lighthouse',
-    accent: '#5ea8ff',
+    accent: '#8ab8ff',
     title: 'Bluestock Fintech',
     role: 'Data Analyst Intern',
     dates: '20 June 2026 – 20 September 2026',
@@ -63,7 +63,7 @@ export const DESTINATIONS: readonly DestinationContent[] = [
   {
     id: 'windmill',
     landmark: 'Windmill',
-    accent: '#f5a623',
+    accent: '#ffb27a',
     title: 'Agratas Fintech',
     sections: [
       {
@@ -80,7 +80,7 @@ export const DESTINATIONS: readonly DestinationContent[] = [
   {
     id: 'pagoda',
     landmark: 'Pagoda',
-    accent: '#ff7d9c',
+    accent: '#ff7ad9',
     title: 'Career Growth',
     sections: [
       {

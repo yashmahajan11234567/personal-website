@@ -1,12 +1,17 @@
 import type { DestId } from '../experience.data';
+import { getModelBounds } from './modelBounds';
 
 /**
- * Camera poses. ONE shared selected pose per destination is derived from the
- * island's world position: the camera sits to the island's front-right so the
- * island lands on the LEFT of frame (the HTML panel owns the right half).
- * The other islands stay in the scene, outside the frustum — framing only.
+ * Camera poses.
  *
- * Overview: side-by-side row — lighthouse left, windmill centre (slightly back), pagoda right.
+ * Overview: approved triangle — lighthouse centre-back, windmill left-front,
+ * pagoda right-front.
+ *
+ * Selected: ONE pose per destination derived from the island's measured
+ * bounding box (modelBounds) so the complete island — top structures down to
+ * the bottom tip — stays in frame even while the user drag-rotates it. The
+ * look-at target is biased to the island's right so the island lands
+ * left-of-centre; the HTML panel owns the right side.
  */
 export interface Pose {
   pos: [number, number, number];
@@ -20,83 +25,58 @@ export const OVERVIEW_POSE: Pose = {
   fov: 55,
 };
 
-/* Island anchor positions in world space (must match Island.tsx placement).
- * Side-by-side row: lighthouse left, windmill centre (slightly back), pagoda right.
- * Equal horizontal spacing ~50 units. Windmill pushed back ~12 units for depth. */
+/* Island anchor positions in world space (must match IslandGroup placement).
+ * Approved triangle: lighthouse centre-back, windmill left-front, pagoda right-front. */
 export const ISLAND_POS: Record<DestId, [number, number, number]> = {
-  lighthouse: [-50, 0, 0],
-  windmill: [0, 0, 12],
-  pagoda: [50, 0, 0],
+  lighthouse: [0, 0, -14],
+  windmill: [-44, 0, 10],
+  pagoda: [44, 0, 10],
 };
 
+export const SELECTED_FOV = 45;
+
 /**
- * Selected pose for an island: camera offset from the island so that the
- * island appears left-of-centre. Offset direction is chosen per island so the
- * camera looks inward across the scene.
- * 
- * Camera positioning based on island bounding box (MODEL_HEIGHT = 42):
- * - Island vertical center is at ~21 units (half of 42)
- * - Camera should target the island's upper third (~30-35) to show landmark and top
- * - Camera distance ~45-55 units for proper framing (2.5-3x island height)
- * - Camera height ~20-25 units for elevated three-quarter view
- * - Camera offset horizontally to position island on left third of screen
- * 
- * Per-island tuning based on landmark characteristics:
- * - Lighthouse: tall tower (~40+ units), needs more distance, target upper tower
- * - Windmill: blades at top, medium distance, target blade hub
- * - Pagoda: tiered roof (~35 units), close distance, target roof peak
+ * Selected-island camera pose computed from the model's bounding box.
+ *
+ * - Vertical fit:  dV = (sizeY / 2) / tan(fovV / 2)
+ * - Rotation-swept width (drag-rotate about Y grows the footprint to the
+ *   diagonal): dH = (sqrt(sizeX^2 + sizeZ^2) / 2) / (tan(fovV/2) * aspect)
+ * - distance = max(dV, dH) * 1.12 + 4  (margin so nothing crops)
+ * - camera sits front-right of the island at ~sizeY * 0.55 height
+ * - target is the island's vertical centre, shifted +x by 0.22 of the frame
+ *   half-width so the island renders left-of-centre (panel owns the right)
  */
-export function selectedPose(id: DestId): Pose {
+export function selectedPose(id: DestId, aspect = 16 / 9): Pose {
   const [ix, iy, iz] = ISLAND_POS[id];
-  
-  // Per-island camera tuning - calculated for MODEL_HEIGHT = 42
-  // distance = 2.5-3x island height (42) = 105-126, but adjusted for viewport
-  // effective distance = 45-55 from island center
-  // target = island center + vertical offset to show upper portion
-  // height = camera elevation for three-quarter view
-  // fov = narrower for detail, wider for context
-  
-  const configs: Record<DestId, { 
-    distance: number; 
-    height: number; 
-    fov: number; 
-    targetOffset: number; 
-    horizontalOffset: number;
-  }> = {
-    lighthouse: { 
-      distance: 52,   // ~2.5x island height - tall tower needs breathing room
-      height: 22,     // elevated view to see tower top
-      fov: 42,        // narrower FOV for tall landmark
-      targetOffset: 30, // target at y=30 (upper third of 42)
-      horizontalOffset: 0.85, // camera to front-right
-    },
-    windmill: { 
-      distance: 48,   // medium distance
-      height: 20,     // see blade rotation clearly
-      fov: 45,        // wider for blade sweep
-      targetOffset: 28, // target blade hub area
-      horizontalOffset: 0.9,
-    },
-    pagoda: { 
-      distance: 45,   // closer for tiered detail
-      height: 22,     // elevated for tiered roof
-      fov: 42,        // focused framing
-      targetOffset: 32, // target roof peak
-      horizontalOffset: 0.85,
-    },
-  };
-  
-  const cfg = configs[id];
-  const { distance, height, fov, targetOffset, horizontalOffset } = cfg;
-  
-  // Camera sits to the island's front-RIGHT (positive x for right side)
-  // pos: [ix + distance * horizontalOffset, iy + height, iz + distance * 0.35]
-  // target: [ix, iy + targetOffset, iz] - look at landmark focal point
-  return {
-    pos: [ix + distance * horizontalOffset, iy + height, iz + distance * 0.35],
-    target: [ix, iy + targetOffset, iz],
-    fov,
-  };
+  const b = getModelBounds(id);
+  const sizeY = b ? b.size[1] : 32;
+  const fov = SELECTED_FOV;
+  const tanV = Math.tan(((fov / 2) * Math.PI) / 180);
+  const effAspect = Math.max(aspect, 1); // portrait is overridden frontal in CameraRig
+  // Conservative 3D fit: every box corner (including the near-bottom corner and
+  // the rotation-swept diagonal) lies on a sphere of radius r3 about the
+  // centre, so require asin(r3 / d) <= half-angle in the tighter axis.
+  const r3 = b ? Math.hypot(b.size[0], b.size[1], b.size[2]) / 2 : 24;
+  const halfV = ((fov / 2) * Math.PI) / 180;
+  const halfH = Math.atan(tanV * effAspect);
+  const half = Math.min(halfV, halfH);
+  const d = (r3 / Math.sin(half)) * 1.05 + 2;
+
+  const dirX = 0.55;
+  const dirZ = 0.72;
+  const len = Math.hypot(dirX, dirZ);
+  // near-level camera (half island height) keeps the vertical fit symmetric
+  const pos: [number, number, number] = [
+    ix + (dirX / len) * d,
+    iy + sizeY * 0.52,
+    iz + (dirZ / len) * d,
+  ];
+
+  // aim at the island's bounding-box centre; the left-of-centre placement is
+  // applied as a projection view-offset in CameraRig (does not distort fit)
+  const target: [number, number, number] = [ix, iy + sizeY * 0.5, iz];
+
+  return { pos, target, fov };
 }
 
 export const TRANSITION_DURATION = 1.7;
