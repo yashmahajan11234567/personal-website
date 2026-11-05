@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import { TRANSITION_DURATION } from '../scene/poses';
+import { DEST_ORDER } from '../experience.data';
 
 export type ExperienceMode = 'overview' | 'entering' | 'destination' | 'switching' | 'exiting';
 export interface ExperienceState {
@@ -17,7 +18,9 @@ export interface ExperienceState {
   setTransitioning: (isTransitioning: boolean) => void;
 }
 
-const ORDER: readonly ('lighthouse' | 'windmill' | 'pagoda')[] = ['lighthouse', 'windmill', 'pagoda'];
+/* Selector order lives in experience.data (DEST_ORDER: windmill, lighthouse,
+ * pagoda) so the store, the component and the tests can never drift apart. */
+const ORDER: readonly ('lighthouse' | 'windmill' | 'pagoda')[] = DEST_ORDER;
 
 const initialState = {
   mode: 'overview' as ExperienceMode,

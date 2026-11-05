@@ -3,59 +3,129 @@ import { CertificateBlock } from './CertificateViewer';
 
 interface DestinationPanelProps {
   dest: DestinationContent;
-  onPrev: () => void;
-  onNext: () => void;
 }
 
 /**
- * Right-side info card for the selected destination. Each destination gets a
- * distinct accent (set inline from the verified content) so the three cards
- * have separate visual identities rather than one generic template.
+ * Right-side info card for the selected destination. One consistent
+ * information architecture across all three islands:
+ * header (title / role / dates) -> overview -> highlights -> skills ->
+ * pathways (pagoda) -> projects -> certificate. Accent comes from the
+ * verified content so each card keeps its own identity.
  */
-export function DestinationPanel({ dest, onPrev, onNext }: DestinationPanelProps) {
+export function DestinationPanel({ dest }: DestinationPanelProps) {
   return (
     <div className="dest-panel" style={{ ['--accent' as string]: dest.accent }}>
       <header className="dest-panel-header">
-        <div className="dest-panel-header-content">
-          <p className="dest-kicker">{dest.landmark}</p>
-          <h3>{dest.title}</h3>
-          {dest.role && <p className="dest-role">{dest.role}</p>}
-          {dest.dates && <p className="dest-dates">{dest.dates}</p>}
-        </div>
-        <nav className="dest-panel-nav" aria-label="Destination navigation">
-          <button type="button" onClick={onPrev} aria-label="Previous destination">Prev</button>
-          <button type="button" onClick={onNext} aria-label="Next destination">Next</button>
-        </nav>
+        <p className="dest-kicker">{dest.landmark}</p>
+        <h3>{dest.title}</h3>
+        {dest.role && <p className="dest-role">{dest.role}</p>}
+        {dest.dates && <p className="dest-dates">{dest.dates}</p>}
       </header>
 
-      {dest.sections.map((s) => (
-        <section key={s.heading}>
-          <h4>{s.heading}</h4>
-          {s.body && <p>{s.body}</p>}
-          {s.bullets && (
-            <ul>
-              {s.bullets.map((b) => (
-                <li key={b}>{b}</li>
-              ))}
-            </ul>
-          )}
-        </section>
-      ))}
-
-      {dest.github && (
+      {dest.overview && (
         <section>
-          <h4>Project</h4>
-          <p>
-            <a href={dest.github} target="_blank" rel="noopener noreferrer">
-              {dest.github.replace('https://github.com/', '')}
-            </a>
-          </p>
+          <h4>Overview</h4>
+          <p>{dest.overview}</p>
+        </section>
+      )}
+
+      {dest.highlights && dest.highlights.length > 0 && (
+        <section>
+          <h4>Highlights</h4>
+          <ul className="highlight-list">
+            {dest.highlights.map((h) =>
+              typeof h === 'string' ? (
+                <li key={h}>{h}</li>
+              ) : (
+                <li key={h.label}>
+                  <strong>{h.label}</strong>
+                  <span>{h.text}</span>
+                </li>
+              ),
+            )}
+          </ul>
+        </section>
+      )}
+
+      {dest.pathways && dest.pathways.length > 0 && (
+        <section>
+          <h4>Career Paths</h4>
+          <ul className="pathway-list">
+            {dest.pathways.map((p) => (
+              <li key={p.name}>
+                <strong>{p.name}</strong>
+                <span>{p.desc}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {dest.skills && dest.skills.length > 0 && (
+        <section>
+          <h4>Skills &amp; Technologies</h4>
+          <div className="skill-groups">
+            {dest.skills.map((g) => (
+              <div className="skill-group" key={g.label}>
+                <p className="skill-group-label">{g.label}</p>
+                <div className="skill-tags">
+                  {g.items.map((item) => (
+                    <span className="skill-tag" key={item}>
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {dest.projects && dest.projects.length > 0 && (
+        <section>
+          <h4>Featured Projects</h4>
+          <div className="project-list">
+            {dest.projects.map((p) => (
+              <article className="project-card" key={p.url}>
+                <div className="project-card-head">
+                  <p className="project-name">{p.name}</p>
+                  <a
+                    className="project-link"
+                    href={p.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Open ${p.name} on GitHub (new tab)`}
+                  >
+                    GitHub ↗
+                  </a>
+                </div>
+                <p className="project-desc">{p.desc}</p>
+                <div className="skill-tags">
+                  {p.stack.map((t) => (
+                    <span className="skill-tag" key={t}>
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
         </section>
       )}
 
       {dest.certificate && (
         <section>
-          <h4>Certificate</h4>
+          <h4>Certificate &amp; Recognition</h4>
+          {dest.certificate.details && (
+            <ul className="cert-details">
+              {dest.certificate.details.map((d) => (
+                <li key={d.label}>
+                  <span className="cert-details-label">{d.label}</span>
+                  <span>{d.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <CertificateBlock cert={dest.certificate} />
         </section>
       )}

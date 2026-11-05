@@ -153,31 +153,30 @@ export function ExperienceSection() {
                 Back to Islands
               </button>
 
-              <div className="dest-nav-side">
+              <nav className="dest-selector" aria-label="Destination selector">
                 <button
                   type="button"
-                  className="nav-arrow"
+                  className="sel-btn"
                   aria-label="Previous destination"
                   onClick={() => handleNavigate('prev')}
                 >
-                  ‹
+                  <span aria-hidden="true">‹</span> Previous
                 </button>
+                <span className="sel-current" aria-live="polite">
+                  {DESTINATIONS.find((d) => d.id === selected)?.landmark}
+                </span>
                 <button
                   type="button"
-                  className="nav-arrow"
+                  className="sel-btn"
                   aria-label="Next destination"
                   onClick={() => handleNavigate('next')}
                 >
-                  ›
+                  Next <span aria-hidden="true">›</span>
                 </button>
-              </div>
+              </nav>
 
               <aside ref={panelRef} className="dest-panel-wrap" aria-live="polite">
-                <DestinationPanel
-                  dest={DESTINATIONS.find((d) => d.id === selected)!}
-                  onPrev={() => handleNavigate('prev')}
-                  onNext={() => handleNavigate('next')}
-                />
+                <DestinationPanel dest={DESTINATIONS.find((d) => d.id === selected)!} />
               </aside>
             </>
           )}
