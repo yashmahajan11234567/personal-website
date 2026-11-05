@@ -20,6 +20,7 @@ interface QAHook {
   fps: number; calls: number; mode: string; x: number; y: number; bx: number; by: number; cam: { x: number; y: number };
   errors: string[]; hotspots: any[]; docks: any[];
   lastWorld: { x: number; y: number } | null;
+  gotoHotspot(id: string): void;
 }
 
 export class IsoScene extends Phaser.Scene {
@@ -41,7 +42,7 @@ export class IsoScene extends Phaser.Scene {
   private nearHotspot: Hotspot | null = null;
   private waterfx!: Phaser.GameObjects.Image;
   private followTarget: { x: number; y: number } = { x: 0, y: 0 };
-  private qa: QAHook = { fps: 0, calls: 0, mode: 'foot', x: 0, y: 0, bx: 0, by: 0, cam: { x: 0, y: 0 }, errors: [], hotspots: [], docks: [], lastWorld: null };
+  private qa: QAHook = { fps: 0, calls: 0, mode: 'foot', x: 0, y: 0, bx: 0, by: 0, cam: { x: 0, y: 0 }, errors: [], hotspots: [], docks: [], lastWorld: null, gotoHotspot: (_id: string) => { } };
   private panelOpenGetter: () => boolean = () => false;
   private hotspotSprites = new Map<string, Phaser.GameObjects.Image>();
 
@@ -54,6 +55,7 @@ export class IsoScene extends Phaser.Scene {
   }
 
   qaHook(): QAHook {
+    this.qa.gotoHotspot = (id: string) => { const h = this.map.hotspots.find(x => x.id === id); if (h && this.mode === 'foot') { this.px = h.x; this.py = h.y; this.placeActors(); } };
     return this.qa;
   }
 

@@ -66,8 +66,7 @@ export const IsoShell: React.FC<IsoShellProps> = ({ onExit }) => {
   useEffect(() => {
     const off = bus.on((e: IsoEvent) => {
       if (e.kind === 'activate') {
-        console.log('[SHELL] activate', JSON.stringify(e));
-        if (e.skills && e.skills.length > 1) setPanel({ kind: 'station', id: e.id, skills: e.skills });
+        if (e.skills && e.skills.length > 0) setPanel({ kind: 'station', id: e.id, skills: e.skills });
         else if (e.contentId) {
           const kind = e.contentId.startsWith('cloud-') ? 'skill' : 'project';
           setPanel({ kind, id: e.contentId });
