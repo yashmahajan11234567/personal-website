@@ -15,13 +15,14 @@ import { LoadingScreen } from './components/LoadingScreen';
  * loads, the Suspense fallback paints the app background (no flash of a
  * wrong color behind the unmounting hero).
  */
-const CloudWorld3D = lazy(() =>
-  import('./cloud-world-3d').then((m) => ({ default: m.CloudWorld3D })),
-);
+const CloudWorld3D = lazy(() => import('./cloud-world-3d').then((m) => ({ default: m.CloudWorld3D })));
+const CloudWorldIso = lazy(() => import('./cloud-world-iso').then((m) => ({ default: m.IsoShell })));
+;
 
 const HASH_WORLDS = {
   '#/data-world': 'data-world',
   '#/cloud-world': 'cloud-world',
+  '#/cloud-world-iso': 'cloud-world-iso',
 } as const;
 
 type HashWorld = (typeof HASH_WORLDS)[keyof typeof HASH_WORLDS];
@@ -195,6 +196,13 @@ function App() {
             fallback={<div className="cloud-world-loading" aria-hidden="true" />}
           >
             <CloudWorld3D key="cloud-world" onExit={returnToHero} />
+          </Suspense>
+        )}
+        {currentWorld === 'cloud-world-iso' && (
+          <Suspense
+            fallback={<div className="cloud-world-loading" aria-hidden="true" />}
+          >
+            <CloudWorldIso key="cloud-world-iso" onExit={returnToHero} />
           </Suspense>
         )}
         {currentWorld === 'experience' && (
