@@ -1,0 +1,167 @@
+/* Cloud World 2.5D shell + HUD + info card */
+.cw25d-shell {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: #0b1220;
+  z-index: 5;
+}
+.cw25d-shell canvas {
+  display: block;
+  touch-action: none;
+}
+
+.cw25d-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  color: #eaf2ff;
+}
+.cw25d-title {
+  position: absolute;
+  top: 18px;
+  left: 24px;
+  text-shadow: 0 2px 12px rgba(4, 12, 30, 0.7);
+}
+.cw25d-title h1 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.22em;
+  color: #ffffff;
+}
+.cw25d-title p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: #9ec1ff;
+  text-transform: uppercase;
+}
+.cw25d-back {
+  position: absolute;
+  top: 18px;
+  right: 24px;
+  pointer-events: auto;
+  font: inherit;
+  font-size: 13px;
+  padding: 9px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(158, 193, 255, 0.5);
+  background: rgba(13, 20, 38, 0.85);
+  color: #dce9ff;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.cw25d-back:hover { background: rgba(36, 150, 237, 0.35); }
+.cw25d-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  font-size: 12px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(13, 20, 38, 0.75);
+  border: 1px solid rgba(125, 165, 255, 0.3);
+  color: #b9d2f5;
+  white-space: nowrap;
+}
+.cw25d-tooltip {
+  position: absolute;
+  bottom: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 12px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  background: rgba(255, 233, 168, 0.95);
+  color: #4a3a12;
+  pointer-events: none;
+}
+
+.cw25d-card {
+  position: absolute;
+  top: 50%;
+  right: 28px;
+  transform: translateY(-50%);
+  width: min(430px, calc(100vw - 56px));
+  max-height: 82vh;
+  overflow-y: auto;
+  z-index: 40;
+  background: rgba(13, 20, 38, 0.94);
+  border: 1px solid rgba(125, 165, 255, 0.35);
+  border-radius: 16px;
+  padding: 22px 24px;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  color: #dce9ff;
+  box-shadow: 0 18px 60px rgba(2, 8, 24, 0.65);
+  backdrop-filter: blur(6px);
+  animation: cw25d-in 180ms ease-out;
+}
+@keyframes cw25d-in {
+  from { opacity: 0; transform: translateY(-50%) translateX(14px); }
+  to { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+.cw25d-card header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cw25d-card h2 {
+  margin: 0;
+  font-size: 19px;
+  color: #9ec1ff;
+}
+.cw25d-card header button {
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(125, 165, 255, 0.4);
+  background: transparent;
+  color: #9ec1ff;
+  cursor: pointer;
+}
+.cw25d-card header button:hover { background: rgba(125, 165, 255, 0.15); }
+.cw25d-card-body p {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #c6d8f2;
+}
+.cw25d-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+.cw25d-chip {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 165, 255, 0.45);
+  background: rgba(36, 150, 237, 0.16);
+  color: #a9c9f5;
+}
+
+@media (max-width: 640px) {
+  .cw25d-card {
+    top: auto;
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    transform: none;
+    max-height: 46vh;
+  }
+  @keyframes cw25d-in {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .cw25d-hint { display: none; }
+}

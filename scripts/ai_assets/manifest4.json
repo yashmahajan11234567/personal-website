@@ -1,0 +1,19 @@
+{
+  "style": "flat cartoon game texture, cel-shaded, bold simple shapes, vibrant pastel colors, fills the ENTIRE frame edge to edge with no border, no background, no sky, no objects unless the asset is a texture",
+  "neg": "ugly, blurry, lowres, deformed, watermark, text, letters, numbers, signature, cropped, photo, realistic, 3d render, dark moody, gradients vignette, multiple objects, collage, grid, black background, white background, magenta",
+  "assets": [
+    {"name": "tex_grass", "w": 1024, "h": 1024, "tile": true, "prompt": "seamless cartoon grass texture filling the ENTIRE frame, flat bright green with simple blade tufts and clover, uniform, tileable edge to edge"},
+    {"name": "tex_sand", "w": 1024, "h": 1024, "tile": true, "prompt": "seamless cartoon sand texture filling the ENTIRE frame, flat warm pale yellow with tiny dots and small shells, uniform, tileable"},
+    {"name": "tex_wood", "w": 1024, "h": 1024, "tile": true, "prompt": "seamless cartoon wooden dock planks filling the ENTIRE frame, horizontal weathered brown planks with dark gaps and nail dots, uniform, tileable"},
+    {"name": "tex_water", "w": 1024, "h": 1024, "tile": true, "prompt": "seamless cartoon water surface texture filling the ENTIRE frame, top-down turquoise aqua blue with lighter wavy ripple streaks and small white foam flecks, uniform, tileable"},
+    {"name": "tex_stone", "w": 512, "h": 512, "tile": true, "prompt": "seamless cartoon cobblestone path texture filling the ENTIRE frame, flat gray rounded stones with darker gaps, uniform, tileable"},
+    {"name": "tex_roof", "w": 512, "h": 512, "tile": true, "prompt": "seamless cartoon roof tile texture filling the ENTIRE frame, flat terracotta red-orange overlapping curved tiles in rows, uniform, tileable"},
+    {"name": "tex_metal", "w": 512, "h": 512, "tile": true, "prompt": "seamless corrugated metal wall texture filling the ENTIRE frame, flat light gray vertical ridges with subtle darker grooves, uniform, tileable"},
+    {"name": "tex_wall_house", "w": 1024, "h": 1024, "prompt": "flat cartoon house FRONT FACADE filling the entire frame like a texture: cream white plaster wall, brown timber frame border, one wooden door bottom center, two windows with blue shutters, small round attic window, flower boxes, cheerful, flat colors, no sky, no ground"},
+    {"name": "tex_whale", "w": 1024, "h": 512, "prompt": "flat cartoon docker whale SKIN side view filling the entire frame: deep docker blue top half, white belly bottom half with a curved dividing line, one big friendly eye with white highlight, smiling mouth line, subtle lighter blue stripes, flat colors, no water, no boat parts"},
+    {"name": "tex_container", "w": 1024, "h": 512, "prompt": "flat cartoon shipping container SIDE filling the entire frame: docker blue corrugated vertical ridges, white bold rectangle logo area top left, white corner castings, flat colors, no background"},
+    {"name": "tex_canopy", "w": 512, "h": 512, "tile": true, "prompt": "seamless cartoon tree foliage texture filling the ENTIRE frame, flat leafy green clusters with darker green shadow blobs and lighter highlights, uniform, tileable"},
+    {"name": "tex_rock", "w": 512, "h": 512, "tile": true, "prompt": "seamless cartoon rock surface texture filling the ENTIRE frame, flat gray stone with darker cracks and green moss patches, uniform, tileable"},
+    {"name": "tex_sign", "w": 512, "h": 384, "prompt": "one wooden sign board on a solid flat light gray background RGB(230,230,230): horizontal weathered brown plank board with two posts, blank plank face for text, centered with margin, ONE object only"}
+  ]
+}

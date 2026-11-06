@@ -1,0 +1,17 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ headless: true });
+const p = await (await b.newContext({ viewport: { width: 390, height: 844 } })).newPage();
+const errs = [];
+p.on('pageerror', e => errs.push(String(e).slice(0, 120)));
+await p.goto('http://localhost:5174/#/cloud-world-25d', { waitUntil: 'domcontentloaded' });
+await p.reload({ waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => window.__cw25d, { timeout: 30000 });
+await new Promise(r => setTimeout(r, 6000));
+console.log('MOBILE', await p.evaluate(() => JSON.stringify({ fps: __cw25d.fps, mode: __cw25d.mode, scrollH: document.scrollingElement.scrollHeight, errors: __cw25d.errors.length })));
+await p.screenshot({ path: 'qa-iso/cw-mobile.png' });
+await p.evaluate(() => __cw25d.key('d'));
+await new Promise(r => setTimeout(r, 2000));
+await p.evaluate(() => __cw25d.key('d', false));
+console.log('MOBILE-MOVE', await p.evaluate(() => JSON.stringify({ pos: __cw25d.pos, fps: __cw25d.fps })));
+console.log('pageerrors:', errs.length, errs.slice(0,3));
+await b.close();

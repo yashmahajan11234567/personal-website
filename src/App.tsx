@@ -17,12 +17,16 @@ import { LoadingScreen } from './components/LoadingScreen';
  */
 const CloudWorld3D = lazy(() => import('./cloud-world-3d').then((m) => ({ default: m.CloudWorld3D })));
 const CloudWorldIso = lazy(() => import('./cloud-world-iso').then((m) => ({ default: m.IsoShell })));
-;
+const CloudWorld25D = lazy(() => import('./cloud-world-25d').then((m) => ({ default: m.CloudWorld25D })));
+const ExperienceSection = lazy(() =>
+  import('./experience/ExperienceSection').then((m) => ({ default: m.ExperienceSection })),
+);
 
 const HASH_WORLDS = {
   '#/data-world': 'data-world',
   '#/cloud-world': 'cloud-world',
   '#/cloud-world-iso': 'cloud-world-iso',
+  '#/cloud-world-25d': 'cloud-world-25d',
 } as const;
 
 type HashWorld = (typeof HASH_WORLDS)[keyof typeof HASH_WORLDS];
@@ -74,6 +78,36 @@ function App() {
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, [applyHash]);
+
+  /*
+   * Scroll isolation for world routes (regression fix, ART_DIRECTION_REVISION).
+   * The hero branch renders the Experience section in the normal document flow,
+   * so any world route must lock document scroll while mounted — otherwise wheel
+   * input can scroll the document and expose the sections beneath the game.
+   * The previous overflow values are restored verbatim on return to the hero.
+   */
+  useEffect(() => {
+    if (currentWorld === 'hero') return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      y: window.scrollY,
+    };
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
+    return () => {
+      html.style.overflow = prev.htmlOverflow;
+      body.style.overflow = prev.bodyOverflow;
+      // Restore after the hero branch has remounted and regained its height,
+      // otherwise scrollTo clamps to 0 while the document is still short.
+      const restore = () => window.scrollTo(0, prev.y);
+      requestAnimationFrame(() => requestAnimationFrame(restore));
+      window.setTimeout(restore, 120);
+    };
+  }, [currentWorld]);
 
   useEffect(() => {
     if (!isLoading) return;
@@ -185,9 +219,19 @@ function App() {
     <div className="app">
       <a href="#main" className="skip-link">Skip to main content</a>
       <main id="main">
-        {isLoading ? (
+        {isLoading && currentWorld === 'hero' ? (
           <LoadingScreen progress={loadingProgress} onComplete={() => {}} />
-        ) : currentWorld === 'hero' && <CinematicHero onWorldSelected={handleWorldSelected} />}
+        ) : currentWorld === 'hero' && (
+          <>
+            <CinematicHero onWorldSelected={handleWorldSelected} />
+            {/* Experience lives in the normal page flow after the hero.
+                World routes unmount this whole branch; scroll is locked while
+                a world is mounted (see the isolation effect above). */}
+            <Suspense fallback={<div className="experience-loading" aria-hidden="true" />}>
+              <ExperienceSection />
+            </Suspense>
+          </>
+        )}
         {currentWorld === 'data-world' && (
           <WorldShell key="data-world" world="data" onExit={returnToHero} />
         )}
@@ -203,6 +247,13 @@ function App() {
             fallback={<div className="cloud-world-loading" aria-hidden="true" />}
           >
             <CloudWorldIso key="cloud-world-iso" onExit={returnToHero} />
+          </Suspense>
+        )}
+        {currentWorld === 'cloud-world-25d' && (
+          <Suspense
+            fallback={<div className="cloud-world-loading" aria-hidden="true" />}
+          >
+            <CloudWorld25D key="cloud-world-25d" onExit={returnToHero} />
           </Suspense>
         )}
         {currentWorld === 'experience' && (
