@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const OUT = '/Users/yashsiphone/CLOUD_WORLD_DOCKSIDE/PHASE_4_PROTOTYPE/shots/';
+const b = await chromium.launch({ headless: true });
+const p = await (await b.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+const errs = [];
+p.on('pageerror', e => errs.push(String(e).slice(0, 140)));
+await p.goto('http://localhost:5174/#/cloud-world-25d', { waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => window.__cw25d, { timeout: 30000 });
+await p.evaluate(() => __cw25d.forceHigh());
+await new Promise(r => setTimeout(r, 6000));
+await p.evaluate(() => { __cw25d.zoom(0.4); __cw25d.teleport(27.5, 0); __cw25d.key("a"); });
+await new Promise(r => setTimeout(r, 500));
+await p.screenshot({ path: OUT + 'p4-4-walking.png' });
+console.log('WALK', await p.evaluate(() => JSON.stringify({ mode: __cw25d.mode, pos: __cw25d.pos })), 'errors:', errs.length);
+await b.close();

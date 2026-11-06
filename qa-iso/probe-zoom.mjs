@@ -1,0 +1,13 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ headless: true });
+const p = await (await b.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+p.on('pageerror', e => console.log('PAGEERR', String(e).slice(0, 160)));
+await p.goto('http://localhost:5174/#/cloud-world-25d', { waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => window.__cw25d, { timeout: 30000 });
+await new Promise(r => setTimeout(r, 5000));
+console.log('hooks:', await p.evaluate(() => Object.keys(window.__cw25d).join(',')));
+await p.evaluate(() => { window.__cw25d.forceHigh(); window.__cw25d.zoom(0.3); });
+await new Promise(r => setTimeout(r, 2500));
+await p.screenshot({ path: 'qa-iso/probe-zoom.png' });
+console.log('done');
+await b.close();

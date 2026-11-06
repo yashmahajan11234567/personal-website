@@ -70,8 +70,8 @@ function CloudPuff({ position, scale, speed, seed }: { position: [number, number
 export function Clouds() {
   const puffs = useMemo(() =>
     Array.from({ length: 7 }, (_, i) => ({
-      position: [(-60 + i * 24 + (i % 3) * 7) as number, 9 + (i % 4) * 2, -12 + (i % 5) * 7] as [number, number, number],
-      scale: 2.2 + (i % 3) * 0.9,
+      position: [(-70 + i * 22 + (i % 3) * 8) as number, 13 + (i % 3) * 2, -26 - (i % 4) * 8] as [number, number, number],
+      scale: 1.9 + (i % 3) * 0.7,
       speed: 0.02 + (i % 3) * 0.012,
       seed: i * 2.3,
     })), []);
@@ -87,15 +87,15 @@ export function DistantRidge() {
   const cones = useMemo(() =>
     Array.from({ length: 12 }, (_, i) => {
       const a = (i / 12) * Math.PI * 2 + 0.2;
-      const r = 105 + (i % 3) * 14;
-      return { pos: [Math.cos(a) * r, 0, Math.sin(a) * r] as [number, number, number], h: 16 + ((i * 7) % 5) * 5, r: 16 + ((i * 5) % 4) * 5 };
+      const r = 135 + (i % 3) * 18;
+      return { pos: [Math.cos(a) * r, 0, Math.sin(a) * r] as [number, number, number], h: 10 + ((i * 7) % 5) * 4, r: 20 + ((i * 5) % 4) * 6 };
     }), []);
   return (
     <group>
       {cones.map((c, i) => (
-        <mesh key={i} position={[c.pos[0], c.h / 2 - 2, c.pos[2]]}>
+        <mesh key={i} position={[c.pos[0], c.h / 2 - 4, c.pos[2]]}>
           <coneGeometry args={[c.r, c.h, 5]} />
-          <meshStandardMaterial color="#9db8d6" roughness={1} flatShading />
+          <meshStandardMaterial color="#b9cade" roughness={1} flatShading />
         </mesh>
       ))}
     </group>
@@ -289,6 +289,176 @@ export function SignBoard({ id, text, sub, x, z, onHover, onClick }: { id: strin
   );
 }
 
+/* ---------- lighthouse on the rocky point (harbour focal landmark) ---------- */
+export function Lighthouse() {
+  const x = 15.5, z = 15.5, y = terrainHeight(x, z);
+  const beamRef = useRef<THREE.Mesh>(null);
+  const lampRef = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (beamRef.current) beamRef.current.rotation.y = clock.elapsedTime * 0.7;
+    if (lampRef.current) {
+      const m = lampRef.current.material as THREE.MeshStandardMaterial;
+      m.emissiveIntensity = 1.8 + Math.sin(clock.elapsedTime * 3) * 0.5;
+    }
+  });
+  const bands = [0, 1, 2, 3, 4];
+  return (
+    <group position={[x, y, z]}>
+      {/* rock base */}
+      <mesh position={[0, 0.25, 0]} castShadow>
+        <dodecahedronGeometry args={[2.6, 0]} />
+        <meshStandardMaterial color="#8a7a5f" roughness={1} flatShading />
+      </mesh>
+      {/* striped tapered tower */}
+      {bands.map((i) => (
+        <mesh key={i} position={[0, 0.9 + i * 1.05, 0]} castShadow>
+          <cylinderGeometry args={[1.05 - i * 0.12, 1.2 - i * 0.12, 1.05, 12]} />
+          <meshStandardMaterial color={i % 2 === 0 ? '#f6f2e8' : '#e0483e'} roughness={0.75} flatShading />
+        </mesh>
+      ))}
+      {/* gallery + lamp room */}
+      <mesh position={[0, 6.25, 0]} castShadow>
+        <cylinderGeometry args={[1.35, 1.35, 0.22, 12]} />
+        <meshStandardMaterial color="#33415c" roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 6.95, 0]} castShadow>
+        <cylinderGeometry args={[0.62, 0.62, 1.1, 10]} />
+        <meshStandardMaterial color="#bfe3f5" roughness={0.2} metalness={0.3} transparent opacity={0.85} />
+      </mesh>
+      <mesh ref={lampRef} position={[0, 6.95, 0]}>
+        <sphereGeometry args={[0.42, 12, 10]} />
+        <meshStandardMaterial color="#fff3c4" emissive="#ffca5f" emissiveIntensity={2} />
+      </mesh>
+      <mesh position={[0, 7.75, 0]} castShadow>
+        <coneGeometry args={[0.85, 0.9, 10]} />
+        <meshStandardMaterial color="#e0483e" roughness={0.7} flatShading />
+      </mesh>
+      {/* rotating light beam */}
+      <mesh ref={beamRef} position={[0, 6.95, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <coneGeometry args={[1.6, 22, 12, 1, true]} />
+        <meshBasicMaterial color="#fff3c4" transparent opacity={0.07} side={THREE.DoubleSide} depthWrite={false} fog={false} />
+      </mesh>
+    </group>
+  );
+}
+
+/* ---------- small harbour structures: storage shed + crates + barrels ---------- */
+export function HarbourStructures() {
+  const wood = useTex('tex_wood');
+  const wall = useTex('tex_wall_house');
+  const roof = useTex('tex_roof');
+  return (
+    <group>
+      {/* shed near dock approach */}
+      <group position={[25.8, terrainHeight(25.8, -4.6), -4.6]} rotation={[0, -Math.PI / 5, 0]}>
+        <mesh position={[0, 1.1, 0]} castShadow receiveShadow>
+          <boxGeometry args={[3.2, 2.2, 2.6]} />
+          <meshStandardMaterial map={wall} roughness={0.9} />
+        </mesh>
+        {[-1, 1].map((s) => (
+          <mesh key={s} position={[s * 0.8, 2.5, 0]} rotation={[0, 0, -s * 0.62]} castShadow>
+            <boxGeometry args={[1.75, 0.14, 3.0]} />
+            <meshStandardMaterial map={roof} roughness={0.85} />
+          </mesh>
+        ))}
+        <mesh position={[0.9, 1.1, 1.31]}>
+          <boxGeometry args={[0.8, 1.6, 0.06]} />
+          <meshStandardMaterial color="#6b4a2a" roughness={1} />
+        </mesh>
+      </group>
+      {/* crates + barrels stacked by the dock */}
+      {[[23.2, 4.6], [24.1, 5.2], [23.6, 4.2]].map(([x, z], i) => (
+        <mesh key={`c${i}`} position={[x, terrainHeight(x, z) + 0.4 + (i === 2 ? 0.8 : 0), z]} castShadow rotation={[0, i * 0.7, 0]}>
+          <boxGeometry args={[0.8, 0.8, 0.8]} />
+          <meshStandardMaterial map={wood} roughness={1} />
+        </mesh>
+      ))}
+      {[26.5, -2.8].map((x, i) => (
+        <mesh key={`b${i}`} position={[x, terrainHeight(x, -2.8) + 0.55, -2.8]} castShadow>
+          <cylinderGeometry args={[0.42, 0.42, 1.1, 10]} />
+          <meshStandardMaterial color={i ? '#33415c' : '#a5533a'} roughness={0.8} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/* ---------- scattered bushes / grass tufts / flowers (deterministic) ---------- */
+function mulberry32(a: number) {
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+export function Scatter() {
+  const canopy = useTex('tex_canopy');
+  const items = useMemo(() => {
+    const rng = mulberry32(20261106);
+    const out: { x: number; z: number; kind: number; s: number }[] = [];
+    let guard = 0;
+    while (out.length < 70 && guard++ < 600) {
+      const a = rng() * Math.PI * 2, r = Math.sqrt(rng()) * (ISLAND_R - 2.5);
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      if (x > 19.5 && Math.abs(z) < 5.5) continue;                       // dock lane
+      if (Math.hypot(x - 13, z + 9) < 6.5) continue;                      // house
+      if (Math.hypot(x - 21.5, z) < 5.5) continue;                        // plaza
+      if (Math.hypot(x - 15.5, z - 15.5) < 4.5) continue;                  // lighthouse
+      if (Math.hypot(x - 25.8, z + 4.6) < 4) continue;                    // shed
+      if (Math.hypot(x - 14, z - 3) < 3) continue;                        // spawn
+      if (Math.hypot(x - 24.6, z - 2.6) < 2.5) continue;                  // sign
+      out.push({ x, z, kind: rng() < 0.55 ? 0 : rng() < 0.7 ? 1 : 2, s: 0.7 + rng() * 0.7 });
+    }
+    return out;
+  }, []);
+  return (
+    <group>
+      {items.map((it, i) => {
+        const y = terrainHeight(it.x, it.z);
+        if (it.kind === 0) { // bush
+          return (
+            <mesh key={i} position={[it.x, y + 0.22 * it.s, it.z]} scale={it.s} castShadow>
+              <icosahedronGeometry args={[0.55, 1]} />
+              <meshStandardMaterial map={canopy} color="#5f9e4a" roughness={1} flatShading />
+            </mesh>
+          );
+        }
+        if (it.kind === 1) { // grass tuft
+          return (
+            <group key={i} position={[it.x, y, it.z]} scale={it.s} rotation={[0, i, 0]}>
+              {[-0.14, 0, 0.14].map((dx, j) => (
+                <mesh key={j} position={[dx, 0.22, 0]} rotation={[0.25 * (j - 1), 0, 0.2 * (j - 1)]}>
+                  <coneGeometry args={[0.07, 0.5, 5]} />
+                  <meshStandardMaterial color="#7cb85e" roughness={1} flatShading />
+                </mesh>
+              ))}
+            </group>
+          );
+        }
+        // flowers
+        const petal = ['#ff8fb3', '#ffd166', '#c792ea', '#ffffff'][i % 4];
+        return (
+          <group key={i} position={[it.x, y, it.z]} scale={it.s}>
+            <mesh position={[0, 0.18, 0]}>
+              <cylinderGeometry args={[0.02, 0.03, 0.36, 5]} />
+              <meshStandardMaterial color="#4e8a3f" roughness={1} />
+            </mesh>
+            <mesh position={[0, 0.4, 0]}>
+              <sphereGeometry args={[0.09, 8, 6]} />
+              <meshStandardMaterial color={petal} roughness={0.6} flatShading />
+            </mesh>
+            <mesh position={[0, 0.4, 0]} scale={[1, 0.35, 1]}>
+              <sphereGeometry args={[0.11, 8, 6]} />
+              <meshStandardMaterial color="#ffb703" roughness={0.6} flatShading />
+            </mesh>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 /* ---------- vegetation & rocks ---------- */
 const TREE_SPOTS: [number, number][] = [
   [-14, 6], [-17, -2], [-12, -13], [-4, -16], [4, -15], [12, -12], [16, -4],
@@ -397,7 +567,10 @@ export function Environment(props: { onHover: (id: string | null) => void; onCli
       <Dock />
       <WelcomeHouse {...props} />
       <SignBoard id="sign_tutorial" text="RIVER EXPEDITION" sub="WASD move · SHIFT run · E board" x={24.6} z={2.6} {...props} />
+      <Lighthouse />
+      <HarbourStructures />
       <Vegetation />
+      <Scatter />
       <Buoys />
     </group>
   );

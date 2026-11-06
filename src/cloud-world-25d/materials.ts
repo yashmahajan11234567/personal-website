@@ -48,14 +48,14 @@ const FALLBACKS: Record<string, () => THREE.Texture> = {
     }
   }, 3),
   tex_water: () => canvasTex(512, (ctx, s) => {
-    ctx.fillStyle = '#2ea8cf'; ctx.fillRect(0, 0, s, s);
-    for (let i = 0; i < 260; i++) {
-      ctx.strokeStyle = `rgba(255,255,255,${0.05 + Math.random() * 0.12})`;
-      ctx.lineWidth = 1 + Math.random() * 2;
-      const y = Math.random() * s, len = 20 + Math.random() * 90, x = Math.random() * s;
-      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + len / 2, y + (Math.random() - 0.5) * 8, x + len, y); ctx.stroke();
+    ctx.fillStyle = '#35aecf'; ctx.fillRect(0, 0, s, s);
+    for (let i = 0; i < 160; i++) {
+      ctx.strokeStyle = `rgba(255,255,255,${0.04 + Math.random() * 0.08})`;
+      ctx.lineWidth = 1 + Math.random() * 1.5;
+      const y = Math.random() * s, len = 30 + Math.random() * 110, x = Math.random() * s;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x + len / 2, y + (Math.random() - 0.5) * 6, x + len, y); ctx.stroke();
     }
-  }, 14),
+  }, 4),
   tex_stone: () => canvasTex(256, (ctx, s) => {
     ctx.fillStyle = '#8d9299'; ctx.fillRect(0, 0, s, s);
     const n = 7;
@@ -145,10 +145,11 @@ export function useTex(name: string): THREE.Texture {
         if (cancelled) { t.dispose(); return; }
         t.colorSpace = THREE.SRGBColorSpace;
         t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        t.anisotropy = 4;
+        t.anisotropy = 8;
         // keep the fallback's repeat for tiles
         const fb = cache.get(name);
         if (fb) t.repeat.copy(fb.repeat);
+        if (name === 'tex_water') t.repeat.set(5, 5);
         cache.set(name, t);
         setTex(t);
       },

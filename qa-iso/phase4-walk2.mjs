@@ -1,0 +1,20 @@
+import { chromium } from 'playwright';
+const OUT = '/Users/yashsiphone/CLOUD_WORLD_DOCKSIDE/PHASE_4_PROTOTYPE/shots/';
+const b = await chromium.launch({ headless: true });
+const p = await (await b.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+const errs = [];
+p.on('pageerror', e => errs.push(String(e).slice(0, 140)));
+await p.goto('http://localhost:5174/#/cloud-world-25d', { waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => window.__cw25d, { timeout: 30000 });
+await p.evaluate(() => __cw25d.forceHigh());
+await new Promise(r => setTimeout(r, 6000));
+// walk along the dock (-x), screenshot at two phases to catch a stride
+const p0 = await p.evaluate(() => { __cw25d.zoom(0.28); __cw25d.teleport(29.0, 0.4); __cw25d.key('a'); return JSON.stringify(__cw25d.pos); });
+await new Promise(r => setTimeout(r, 350));
+await p.screenshot({ path: OUT + 'p4-4-walking.png' });
+const p1 = await p.evaluate(() => JSON.stringify(__cw25d.pos));
+await new Promise(r => setTimeout(r, 250));
+await p.screenshot({ path: OUT + 'p4-4b-walking-stride.png' });
+const p2 = await p.evaluate(() => JSON.stringify(__cw25d.pos));
+console.log('WALK', p0, '->', p1, '->', p2, 'errors:', errs.length);
+await b.close();

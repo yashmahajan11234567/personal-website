@@ -9,8 +9,13 @@ import * as THREE from 'three';
 import { Environment, WORLD_FOG } from './environment';
 import { WhaleBoat } from './boat';
 import { Character, pilot } from './character';
+import { walkable, terrainHeight } from './world25d';
 import { PORTFOLIO } from '../content';
 import './cw25d.css';
+
+/** QA-only: when true, QualityController never degrades (for screenshots on real GPUs/headless). */
+export const qualityOverride = { high: false };
+let glHandle: { gl: import('three').WebGLRenderer; scene: import('three').Scene } | null = null;
 
 function Lights() {
   return (
@@ -33,6 +38,9 @@ function Lights() {
   );
 }
 
+/** QA-only camera zoom factor (1 = default framing). */
+export const camZoom = { f: 1 };
+
 /** 2.5D follow camera: fixed offset, smooth lerp, looks at the pilot/boat. */
 function CameraRig() {
   const { camera } = useThree();
@@ -45,10 +53,12 @@ function CameraRig() {
   useFrame((_, dt) => {
     const focus = pilot.mode === 'boat' ? pilot.boatPos : pilot.pos;
     target.current.set(focus.x, (pilot.mode === 'boat' ? 1 : pilot.pos.y) + 0.8, focus.z);
-    const want = new THREE.Vector3(target.current.x + 3, target.current.y + 15, target.current.z + 34);
+    const zf = camZoom.f;
+    const want = new THREE.Vector3(target.current.x + 3 * zf, target.current.y + 15 * zf, target.current.z + 34 * zf);
     camPos.current.lerp(want, 1 - Math.exp(-4.5 * dt));
     camera.position.copy(camPos.current);
     camera.lookAt(target.current);
+    (window as unknown as Record<string, unknown>).__campos = [camera.position.x, camera.position.y, camera.position.z, zf];
   });
   return null;
 }
@@ -72,6 +82,7 @@ function QualityController({ fpsRef }: { fpsRef: React.MutableRefObject<{ frames
   const lowStreak = useRef(0);
   const degraded = useRef(false);
   useFrame(() => {
+    if (qualityOverride.high) return;
     if (degraded.current) return;
     if (fpsRef.current.fps > 0 && fpsRef.current.fps < 28) {
       lowStreak.current += 1;
@@ -89,6 +100,42 @@ function QualityController({ fpsRef }: { fpsRef: React.MutableRefObject<{ frames
     }
   });
   return null;
+}
+
+/** Floating "E — board" prompt above the boat when the pilot is near the dock end. */
+function BoardPrompt() {
+  const ref = useRef<THREE.Mesh>(null);
+  const tex = useMemo(() => {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 128;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = 'rgba(20,32,48,0.82)';
+    ctx.beginPath(); ctx.roundRect(8, 20, 240, 88, 18); ctx.fill();
+    ctx.strokeStyle = '#ffe9a8'; ctx.lineWidth = 5; ctx.stroke();
+    ctx.fillStyle = '#ffe9a8'; ctx.font = 'bold 40px "Trebuchet MS", sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('E — board', 128, 62);
+    ctx.fillStyle = '#ffffff'; ctx.font = '26px "Trebuchet MS", sans-serif';
+    ctx.fillText('the Docker whale', 128, 96);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }, []);
+  useFrame(({ clock }) => {
+    const m = ref.current;
+    if (!m) return;
+    const near = pilot.mode === 'walk' && Math.hypot(pilot.pos.x - pilot.boatPos.x, pilot.pos.z - pilot.boatPos.z) < 7;
+    m.visible = near;
+    if (near) {
+      m.position.set(pilot.boatPos.x, 3.4 + Math.sin(clock.elapsedTime * 2.4) * 0.15, pilot.boatPos.z);
+      (m.material as THREE.MeshBasicMaterial).opacity = 0.92;
+    }
+  });
+  return (
+    <mesh ref={ref} visible={false}>
+      <planeGeometry args={[2.6, 1.3]} />
+      <meshBasicMaterial map={tex} transparent depthWrite={false} />
+    </mesh>
+  );
 }
 
 interface CardState { id: string; kind: string; label: string }
@@ -190,6 +237,19 @@ export function CloudWorld25D({ onExit }: { onExit: () => void }) {
       key: (k: string, down = true) => window.dispatchEvent(new KeyboardEvent(down ? 'keydown' : 'keyup', { key: k })),
       clickHotspot: openHotspot,
       closeCard: () => setCard(null),
+      zoom: (f: number) => { camZoom.f = f; },
+      forceHigh: () => {
+        qualityOverride.high = true;
+        const h = glHandle;
+        if (h) {
+          h.gl.setPixelRatio(1.75);
+          h.gl.shadowMap.enabled = true;
+          h.scene.traverse((o) => {
+            const m = (o as import('three').Mesh).material as import('three').Material | undefined;
+            if (m) m.needsUpdate = true;
+          });
+        }
+      },
     };
     window.addEventListener('error', (e) => errors.current.push(String(e.message).slice(0, 140)));
     return () => { w.__cw25d = undefined; };
@@ -202,7 +262,8 @@ export function CloudWorld25D({ onExit }: { onExit: () => void }) {
         dpr={[1, 1.75]}
         gl={{ antialias: true, alpha: false }}
         camera={{ position: [17, 16, 37], fov: 40, near: 0.5, far: 700 }}
-        onCreated={({ gl }) => {
+        onCreated={({ gl, scene }) => {
+          glHandle = { gl, scene };
           gl.setClearColor(WORLD_FOG.color);
           const loop = () => {
             fpsRef.current.frames++;
@@ -226,6 +287,7 @@ export function CloudWorld25D({ onExit }: { onExit: () => void }) {
           <Environment onHover={setHovered} onClick={openHotspot} hovered={hovered} />
           <WhaleBoat groupRef={boatRef} />
           <BoatDriver groupRef={boatRef} />
+          <BoardPrompt />
           <Character groupRef={charRef} />
         </Suspense>
       </Canvas>
@@ -248,15 +310,7 @@ export function CloudWorld25D({ onExit }: { onExit: () => void }) {
 }
 
 function walkableSafe(x: number, z: number): number | null {
-  const r = Math.hypot(x, z);
-  if (r <= 24.4) return Math.max(0.2, terrainH(x, z));
-  return null;
-}
-function terrainH(x: number, z: number): number {
-  // local copy to avoid circular import in the hook path
-  const r = Math.hypot(x, z);
-  if (r <= 24) return 1.3 + 0.32 * Math.sin(x * 0.55 + 1.7) * Math.cos(z * 0.5 - 0.6) + 0.18 * Math.sin(x * 1.3 + z * 1.1);
-  return 0.15;
+  return walkable(x, z) !== null ? terrainHeight(x, z) : null;
 }
 
 export default CloudWorld25D;

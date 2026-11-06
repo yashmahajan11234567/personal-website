@@ -151,7 +151,13 @@ export function Character({ groupRef }: { groupRef: React.MutableRefObject<THREE
       if (armR.current) armR.current.rotation.x *= 0.8;
       if (legL.current) legL.current.rotation.x *= 0.8;
       if (legR.current) legR.current.rotation.x *= 0.8;
-      if (body.current && pilot.mode === 'walk') body.current.position.y = 1.05;
+      // idle: gentle breathing bob + slow arm sway
+      if (body.current && pilot.mode === 'walk') {
+        const t = performance.now() / 1000;
+        body.current.position.y = 1.05 + Math.sin(t * 2.1) * 0.025;
+        if (armL.current) armL.current.rotation.x = Math.sin(t * 2.1) * 0.06;
+        if (armR.current) armR.current.rotation.x = -Math.sin(t * 2.1) * 0.06;
+      }
     }
   });
 
