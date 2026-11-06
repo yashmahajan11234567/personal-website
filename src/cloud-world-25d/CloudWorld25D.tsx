@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { Environment, WORLD_FOG } from './environment';
 import { WhaleBoat } from './boat';
 import { Character, pilot } from './character';
-import { walkable, terrainHeight } from './world25d';
+import { walkable } from './world25d';
 import { PORTFOLIO } from '../content';
 import './cw25d.css';
 
@@ -310,7 +310,7 @@ export function CloudWorld25D({ onExit }: { onExit: () => void }) {
 }
 
 function walkableSafe(x: number, z: number): number | null {
-  return walkable(x, z) !== null ? terrainHeight(x, z) : null;
+  return walkable(x, z); // returns terrain height on island, DOCK.y on the dock deck
 }
 
 export default CloudWorld25D;
