@@ -1,0 +1,14 @@
+{
+  "style": "single 2D side profile of ONE whale-shaped cargo boat, full body visible left-to-right, nothing else in the frame, no other boats, no stages, no grid, no collage, no parts, flat colors with bold dark outlines, cel shading, on a solid flat light gray background RGB(230,230,230)",
+  "neg": "ugly, blurry, lowres, deformed, distorted, watermark, text, letters, signature, cropped, out of frame, extra limbs, mutation, jpeg artifacts, photo, 3d render, realistic, dark moody, pink, magenta, purple, orange hull, multiple objects, multiple boats, sprite sheet, grid, collage, assembly stages, parts, black background, white background",
+  "assets": [
+    {"name": "boat_h0_f0", "w": 768, "h": 384, "prompt": "ONE whale cargo boat side view facing RIGHT: blue lower whale hull, white top, friendly eye and smile at the right head, tail fin raised at the left end, pectoral fin below, small white steering cabin on deck, stack of BLUE shipping containers on the back, blue and white ONLY"},
+    {"name": "boat_h0_f1", "w": 768, "h": 384, "prompt": "ONE whale cargo boat side view facing RIGHT, animation frame 2 with bow slightly raised and white splash at the bow, blue lower hull white top, blue containers on back, blue and white ONLY"},
+    {"name": "boat_h1_f0", "w": 768, "h": 384, "prompt": "ONE whale cargo boat side view facing LEFT: blue lower hull, white top, eye at the left head, tail fin at the right end, white cabin, BLUE containers on back, blue and white ONLY"},
+    {"name": "boat_h1_f1", "w": 768, "h": 384, "prompt": "ONE whale cargo boat facing LEFT, animation frame 2, bow raised, splash, blue and white ONLY"},
+    {"name": "boat_h2_f0", "w": 640, "h": 512, "prompt": "ONE whale cargo boat three-quarter FRONT view coming toward the viewer: whale head with both eyes at front center, blue and white hull, blue containers on the back, pectoral fins, white wake, blue and white ONLY"},
+    {"name": "boat_h2_f1", "w": 640, "h": 512, "prompt": "ONE whale cargo boat front three-quarter view, animation frame 2, white splash at bow, blue and white ONLY"},
+    {"name": "boat_h3_f0", "w": 640, "h": 512, "prompt": "ONE whale cargo boat three-quarter BACK view moving away: whale tail fluke at back center, blue and white hull, blue containers on deck, trailing white wake, blue and white ONLY"},
+    {"name": "boat_h3_f1", "w": 640, "h": 512, "prompt": "ONE whale cargo boat back view, animation frame 2, larger trailing wake, blue and white ONLY"}
+  ]
+}

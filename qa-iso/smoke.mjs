@@ -125,7 +125,7 @@ await page.mouse.click(spA.x, spA.y);
 await new Promise((r) => setTimeout(r, 800));
 const panelA = await page.evaluate(() => { const el = document.querySelector('.iso-panel'); return el ? el.textContent : null; });
 check('docker panel opens', panelA && panelA.length > 20, panelA ? panelA.slice(0, 80) : null);
-if (panelA) check('panel mentions docker', /docker/.test(panelA));
+if (panelA) check('panel mentions docker', /docker/i.test(panelA));
 await page.keyboard.press('Escape');
 await new Promise((r) => setTimeout(r, 600));
 await page.keyboard.press('Escape');

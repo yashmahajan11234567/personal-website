@@ -27,7 +27,7 @@ const AboutPanel: React.FC<{ id: string; onClose: () => void }> = ({ onClose }) 
   </div>
 );
 
-const StationPanel: React.FC<{ id: string; skills: string[]; onClose: () => void }> = ({ id, skills, onClose }) => {
+const StationPanel: React.FC<{ id: string; label?: string; skills: string[]; onClose: () => void }> = ({ id, label, skills, onClose }) => {
   const skillEls = skills.map((sid) => {
     const rec = (PORTFOLIO as any).skills[sid];
     return (
@@ -39,7 +39,7 @@ const StationPanel: React.FC<{ id: string; skills: string[]; onClose: () => void
   return (
     <div className="iso-panel about-panel" role="dialog" aria-modal="true" aria-labelledby={`station-${id}`}>
       <div className="iso-panel-inner">
-        <header><h2 id={`station-${id}`}>{id}</h2><button onClick={onClose} aria-label="Close">×</button></header>
+        <header><h2 id={`station-${id}`}>{label ?? id}</h2><button onClick={onClose} aria-label="Close">×</button></header>
         <div className="iso-panel-body">{skillEls}</div>
       </div>
     </div>
@@ -49,7 +49,7 @@ const StationPanel: React.FC<{ id: string; skills: string[]; onClose: () => void
 export const IsoShell: React.FC<IsoShellProps> = ({ onExit }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const unmountRef = useRef<() => void>(() => {});
-  const [panel, setPanel] = useState<{ kind: 'skill' | 'project' | 'about' | 'station'; id: string; skills?: string[] } | null>(null);
+  const [panel, setPanel] = useState<{ kind: 'skill' | 'project' | 'about' | 'station'; id: string; label?: string; skills?: string[] } | null>(null);
   const [prompt, setPrompt] = useState<{ text: string; key: string } | null>(null);
   const errorsRef = useRef<string[]>([]);
 
@@ -66,7 +66,7 @@ export const IsoShell: React.FC<IsoShellProps> = ({ onExit }) => {
   useEffect(() => {
     const off = bus.on((e: IsoEvent) => {
       if (e.kind === 'activate') {
-        if (e.skills && e.skills.length > 0) setPanel({ kind: 'station', id: e.id, skills: e.skills });
+        if (e.skills && e.skills.length > 0) setPanel({ kind: 'station', id: e.id, label: e.label, skills: e.skills });
         else if (e.contentId) {
           const kind = e.contentId.startsWith('cloud-') ? 'skill' : 'project';
           setPanel({ kind, id: e.contentId });
@@ -107,7 +107,7 @@ export const IsoShell: React.FC<IsoShellProps> = ({ onExit }) => {
         </div>
       </div>
       {panel && panel.kind === 'about' && <AboutPanel id={panel.id} onClose={handleClose} />}
-      {panel && panel.kind === 'station' && <StationPanel id={panel.id} skills={panel.skills ?? []} onClose={handleClose} />}
+      {panel && panel.kind === 'station' && <StationPanel id={panel.id} label={panel.label} skills={panel.skills ?? []} onClose={handleClose} />}
       {panel && (panel.kind === 'skill' || panel.kind === 'project') && (
         <Suspense fallback={<div className="iso-panel-skeleton" />}>
           <InfoPanel kind={panel.kind} id={panel.id} onClose={handleClose} />

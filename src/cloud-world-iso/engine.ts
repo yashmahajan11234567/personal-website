@@ -31,6 +31,7 @@ export function mountIsoWorld(container: HTMLElement): () => void {
     banner: false,
   };
   game = new Phaser.Game(config);
+  (window as unknown as Record<string, unknown>).__game = game;
   const bindScene = (): void => {
     const scene = game!.scene.getScene('iso') as IsoScene | null;
     if (scene) scene.setPanelOpenGetter(() => panelOpen);

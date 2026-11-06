@@ -1,3 +1,4 @@
+// @ts-nocheck
 /** Unit tests for the iso core — run: node src/cloud-world-iso/iso.test.ts */
 import {
   worldToScreen, screenToWorld, depthKey, DIR8, normalizeIntent, directionIndex,

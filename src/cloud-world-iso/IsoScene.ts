@@ -68,6 +68,8 @@ export class IsoScene extends Phaser.Scene {
     this.load.atlas('boat', `${ASSET}/boat.png`, `${ASSET}/boat.json`);
     this.load.image('ground', `${ASSET}/ground.png`);
     this.load.image('waterfx', `${ASSET}/waterfx.png`);
+    this.load.image('backdrop', `${ASSET}/backdrop.png`);
+    this.load.json('groundmeta', `${ASSET}/ground.json`);
   }
 
   create(): void {
@@ -75,9 +77,21 @@ export class IsoScene extends Phaser.Scene {
     this.grid = new WalkGrid(this.map.w, this.map.h, CELL_LAND);
     this.map.cells.forEach((c, i) => { this.grid.cells[i] = c; });
 
-    // ground + animated foam
-    this.add.image(0, 0, 'ground').setOrigin(0, 0).setDepth(-1000);
-    this.waterfx = this.add.image(0, 0, 'waterfx').setOrigin(0, 0).setDepth(-999).setAlpha(0.5);
+    // fixed screen-space coastal backdrop (sky/sea/hills) behind everything, slight parallax
+    const bd = this.add.image(0, 0, 'backdrop').setOrigin(0, 0).setDepth(-2000).setScrollFactor(0.25);
+    const fitBd = () => {
+      const w = this.scale.width, h = this.scale.height;
+      bd.setDisplaySize(w * 2.5, h * 2.5);
+      bd.setPosition(-w * 0.75, -h * 0.75);
+    };
+    fitBd();
+    this.scale.on('resize', fitBd);
+
+    // ground + animated foam (anchored via ground.json so map cell (0,0) == worldToScreen(0,0))
+    const gm = this.cache.json.get('groundmeta') as { x: number; y: number } | null;
+    const gx = gm ? gm.x : 0, gy = gm ? gm.y : 0;
+    this.add.image(gx, gy, 'ground').setOrigin(0, 0).setDepth(-1000);
+    this.waterfx = this.add.image(gx, gy, 'waterfx').setOrigin(0, 0).setDepth(-999).setAlpha(0.5);
 
     this.buildAnims();
 
