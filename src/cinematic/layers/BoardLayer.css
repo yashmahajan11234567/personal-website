@@ -231,6 +231,11 @@
 
 
 @media (prefers-reduced-motion: reduce) {
-    transition: none;
+  .cinematic-boards,
+  .cinematic-board,
+  .cinematic-card,
+  .cinematic-card * {
+    transition: none !important;
+    animation: none !important;
   }
 }

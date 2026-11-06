@@ -383,8 +383,8 @@
  * scroll container in standards mode is the html element; locking only body lets
  * the document scroll in every current browser.
  */
-html:has(.world-canvas),
-body:has(.world-canvas) {
+html.game-world-active,
+body.game-world-active {
   overflow: hidden;
   overscroll-behavior: none;
 }

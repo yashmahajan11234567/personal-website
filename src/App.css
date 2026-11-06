@@ -15,6 +15,16 @@
   background: var(--color-bg, #f5f5f5);
 }
 
+/*
+ * Suspense fallback while the Experience chunk (three.js + R3F) loads in the
+ * page flow after the hero. Paints the section's sunset gradient so the
+ * handoff from the hero shows no white flash.
+ */
+.experience-loading {
+  min-height: 100vh;
+  background: linear-gradient(to bottom, #101d4a 0%, #233a78 25%, #46619e 45%, #b595a0 65%, #eec39a 85%, #f7dfc4 100%);
+}
+
 .placeholder-world {
   min-height: 100vh;
   display: flex;

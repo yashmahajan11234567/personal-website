@@ -1,633 +1,71 @@
-import { Suspense, useEffect, useMemo, useRef, useState, Component } from 'react';
-import type { ReactNode } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useGLTF } from '@react-three/drei';
-import * as THREE from 'three';
+import { useEffect, useRef, useState } from 'react';
+import { Suspense } from 'react';
+import { Canvas } from '@react-three/fiber';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import type { DestId } from './experience.data';
+import { DESTINATIONS, DEST_ORDER } from './experience.data';
+import { OVERVIEW_POSE } from './scene/poses';
+import { DestinationPanel } from './ui/DestinationPanel';
+import { IslandGroup } from './components/IslandGroup';
+import { useTransitionController } from './hooks/useTransitionController';
+import { useExperienceStore } from './store/experienceStore';
+import { CameraRig } from './scene/CameraRig';
+import { MagentaTwilightWorld } from './environment/MagentaTwilightWorld';
 import './experience.css';
 
 gsap.registerPlugin(ScrollTrigger);
 
-/*
- * Atlas of Drifting Isles — final architecture.
- *
- * Exactly THREE islands, each ONE unified closed mesh (displaced cylinder:
- * organic silhouette, integrated rocky underside, vertex-colored grass->rock
- * blend). Landmarks are the original Atlas GLBs (blendi-remade/dioramas,
- * CC BY 4.0), auto-fitted by measured bounding box and grounded on terrain.
- * Distinct identities: Lighthouse = coastal cliffs, Windmill = rolling hills,
- * Pagoda = Japanese garden with cherry blossoms.
- */
-
-type DestId = 'lighthouse' | 'windmill' | 'pagoda';
-
-interface IslandSpec {
-  id: DestId;
-  pos: [number, number, number];
-  r: number;
-  depth: number;
-  seed: number;
-  grass: string;
-  rock: string;
-  modelHeight: number;
-  flora: 'pine' | 'meadow' | 'cherry';
-}
-
-const ISLANDS: IslandSpec[] = [
-  { id: 'lighthouse', pos: [-26, 1, -4],  r: 12,  depth: 16, seed: 1.3, grass: '#5d8f3c', rock: '#5c4a38', modelHeight: 14,   flora: 'pine' },
-  { id: 'windmill',   pos: [0, 3, -18],   r: 11, depth: 14, seed: 4.1, grass: '#6d9a45', rock: '#6a5642', modelHeight: 16,  flora: 'meadow' },
-  { id: 'pagoda',     pos: [28, 0, -2],   r: 12,  depth: 16, seed: 7.7, grass: '#5b8c3e', rock: '#58463a', modelHeight: 15, flora: 'cherry' },
-];
-
-/* Selected pose: island framed LEFT of screen centre, HTML panel occupies right. */
-const POSES: Record<'overview' | DestId, { pos: [number, number, number]; target: [number, number, number]; fov: number }> = {
-  overview:   { pos: [0, 16, 52],   target: [0, 6, -8],   fov: 48 },
-  lighthouse: { pos: [-16, 12, 22], target: [-18, 10, -4], fov: 46 },
-  windmill:   { pos: [24, 16, 2],   target: [4, 10, -18],   fov: 48 },
-  pagoda:     { pos: [48, 12, 20], target: [36, 10, -2],  fov: 46 },
-};
-
-function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
-
-
-/* RNG removed */
-
-
-class ModelBoundary extends Component<{ children: ReactNode }, { err: boolean }> {
-  state = { err: false };
-  static getDerivedStateFromError() {
-    return { err: true };
-  }
-  componentDidCatch(e: unknown) {
-    console.error('[atlas] model failed to mount:', e);
-  }
-  render() {
-    return this.state.err ? null : this.props.children;
-  }
-}
-
-interface AtlasModelProps {
-  url: string;
-  height: number;
-  info: string;
-  spin?: boolean;
-}
-
-function findSpinNode(root: THREE.Object3D): string {
-  let found = '';
-  root.traverse((o) => {
-    if (!found && /blade|rotor|wing|propeller|fan/i.test(o.name)) found = o.name;
-  });
-  return found;
-}
-
-function AtlasModel({ url, height, info, spin = false }: AtlasModelProps) {
-  const { scene } = useGLTF(url) as unknown as { scene: THREE.Group };
-  const fitted = useMemo(() => {
-    const clone = scene.clone(true);
-    const box = new THREE.Box3().setFromObject(clone);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const s = size.y > 0.0001 ? height / size.y : 1;
-    const spinName = spin ? findSpinNode(clone) : '';
-    return { clone, s, off: new THREE.Vector3(-center.x, -box.min.y, -center.z), spinName };
-  }, [scene, height, spin]);
-
-  useEffect(() => {
-    const w = window as unknown as { __atlasModels?: Record<string, { target: string; srcHeight: string }> };
-    w.__atlasModels = w.__atlasModels || {};
-    w.__atlasModels[info] = { target: height.toFixed(1), srcHeight: (1 / fitted.s).toFixed(2) };
-    console.info(`[atlas] mounted ${info}: normalized to ${height.toFixed(1)}u (src ~${(1 / fitted.s).toFixed(2)}u)`);
-  }, [fitted, info, height]);
-
-  useFrame((state, dt) => {
-    // Windmill blades
-    if (fitted.spinName) {
-      const node = fitted.clone.getObjectByName(fitted.spinName);
-      if (node) node.rotation.y += dt * 1.4;
-    }
-    // Pagoda - cherry blossom sway
-    if (info === 'pagoda') {
-      fitted.clone.traverse((o) => {
-        const n = o.name.toLowerCase();
-        if ((n.includes('cherry') || n.includes('blossom') || n.includes('petal') || n.includes('leaf')) && !o.userData._swayInit) {
-          o.userData._swayInit = true;
-          o.userData._baseRot = o.rotation.clone();
-        }
-        if (o.userData._swayInit) {
-          const t = state.clock.elapsedTime;
-          o.rotation.z = o.userData._baseRot.z + Math.sin(t * 0.8 + o.id * 0.01) * 0.02;
-          o.rotation.x = o.userData._baseRot.x + Math.cos(t * 0.6 + o.id * 0.02) * 0.015;
-        }
-      });
-    }
-    // Lighthouse - subtle water/wave if present
-    if (info === 'lighthouse') {
-      fitted.clone.traverse((o) => {
-        const n = o.name.toLowerCase();
-        if ((n.includes('water') || n.includes('wave') || n.includes('foam') || n.includes('river')) && !o.userData._waveInit) {
-          o.userData._waveInit = true;
-          o.userData._baseY = o.position.y;
-        }
-        if (o.userData._waveInit) {
-          const t = state.clock.elapsedTime;
-          o.position.y = o.userData._baseY + Math.sin(t * 1.2) * 0.01;
-        }
-      });
-    }
-  });
-
-  return (
-    <group scale={fitted.s}>
-      <group position={fitted.off}>
-        <primitive object={fitted.clone} />
-      </group>
-    </group>
-  );
-}
-
-/* ---------- unified island terrain: ONE closed organic mesh ---------- */
-/* REMOVED - only showing diorama GLB
-function makeIslandGeometry(spec: IslandSpec): THREE.BufferGeometry {
-  const { r, depth, seed, grass, rock } = spec;
-  const geo = new THREE.CylinderGeometry(r, r * 0.12, depth, 28, 10);
-  geo.translate(0, -depth / 2, 0); // top surface sits at y = 0
-
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const colors = new Float32Array(pos.count * 3);
-  const grassC = new THREE.Color(grass);
-  const rockC = new THREE.Color(rock);
-  const tmp = new THREE.Color();
-
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i);
-    const y = pos.getY(i);
-    const z = pos.getZ(i);
-    const ang = Math.atan2(z, x);
-    const t = Math.min(1, Math.max(0, y / -depth)); // 0 top -> 1 bottom tip
-
-    // Organic horizontal silhouette: layered angular wobble, strongest near top.
-    const wob =
-      1 +
-      0.16 * Math.sin(ang * 3 + seed) +
-      0.11 * Math.sin(ang * 5 - seed * 1.7) +
-      0.07 * Math.sin(ang * 8 + seed * 2.3);
-    const taper = 1 - t * 0.22 * (0.5 + 0.5 * Math.sin(ang * 2 + seed)); // asymmetric taper
-    const s = Math.max(0.25, wob * taper);
-    pos.setX(i, x * s);
-    pos.setZ(i, z * s);
-
-    // Bumpy grass surface on the top cap.
-    if (y > -0.001) {
-      const bump =
-        0.32 * Math.sin(x * 0.5 + seed) * Math.cos(z * 0.45 - seed) +
-        0.18 * Math.sin(x * 1.1 - seed) * Math.cos(z * 0.9 + seed * 2);
-      pos.setY(i, bump);
-    }
-
-    // Vertex colour: grass cap blending into rock cliffs.
-    const topness = Math.max(0, 1 - t * 5);
-    tmp.copy(rockC).lerp(grassC, topness);
-    const v = 0.92 + 0.08 * Math.sin(ang * 7 + y * 2);
-    colors[i * 3] = tmp.r * v;
-    colors[i * 3 + 1] = tmp.g * v;
-    colors[i * 3 + 2] = tmp.b * v;
-  }
-
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geo.computeVertexNormals();
-  return geo;
-}
-
-
-/* ---------- flora ---------- */
-/* REMOVED */
-
-
-/* ---------- sky, clouds, lighting ---------- */
-
-
-
-function SkyDome() {
-  const tex = useMemo(() => {
-    const c = document.createElement('canvas');
-    c.width = 2;
-    c.height = 512;
-    const ctx = c.getContext('2d')!;
-    const g = ctx.createLinearGradient(0, 0, 0, 512);
-    g.addColorStop(0, '#1a4d7a'); // deep blue top
-    g.addColorStop(0.3, '#3a6ba8');
-    g.addColorStop(0.5, '#6ba3d6');
-    g.addColorStop(0.7, '#b8d4f0');
-    g.addColorStop(0.85, '#f0d9b8');
-    g.addColorStop(1, '#f5e6d0'); // warm horizon
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 2, 512);
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  }, []);
-  return (
-    <mesh scale={[-1, 1, 1]}>
-      <sphereGeometry args={[500, 32, 24]} />
-      <meshBasicMaterial map={tex} side={THREE.BackSide} fog={false} depthWrite={false} />
-    </mesh>
-  );
-}
-
-function CloudPuff({ position, scale, speed, seed }: { position: [number, number, number]; scale: number; speed: number; seed: number }) {
-  const ref = useRef<THREE.Group>(null);
-  const puffs = useMemo(
-    () =>
-      [0, 1, 2].map((i) => {
-        const g = new THREE.IcosahedronGeometry(1, 1);
-        const p = g.attributes.position as THREE.BufferAttribute;
-        for (let v = 0; v < p.count; v++) {
-          p.setXYZ(
-            v,
-            p.getX(v) * (1 + 0.22 * Math.sin(v * 1.7 + seed + i)),
-            p.getY(v) * (0.62 + 0.18 * Math.cos(v * 2.1 + seed)),
-            p.getZ(v) * (1 + 0.22 * Math.cos(v * 1.3 + seed * 1.3)),
-          );
-        }
-        g.computeVertexNormals();
-        return g;
-      }),
-    [seed],
-  );
-  useFrame((_, dt) => {
-    if (!ref.current) return;
-    ref.current.position.x += dt * speed;
-    if (ref.current.position.x > 110) ref.current.position.x = -110;
-  });
-  return (
-    <group ref={ref} position={position} scale={scale}>
-      <mesh geometry={puffs[0]}>
-        <meshStandardMaterial color="#ffffff" roughness={1} transparent opacity={0.95} flatShading />
-      </mesh>
-      <mesh geometry={puffs[1]} position={[1.5, -0.18, 0.25]} scale={0.75}>
-        <meshStandardMaterial color="#f4faff" roughness={1} transparent opacity={0.92} flatShading />
-      </mesh>
-      <mesh geometry={puffs[2]} position={[-1.35, -0.12, -0.2]} scale={0.8}>
-        <meshStandardMaterial color="#f4faff" roughness={1} transparent opacity={0.92} flatShading />
-      </mesh>
-    </group>
-  );
-}
-
-function CloudField() {
-  return (
-    <group>
-      <CloudPuff position={[-55, 26, -70]} scale={4.2} speed={0.5} seed={2} />
-      <CloudPuff position={[35, 32, -95]} scale={5.2} speed={0.35} seed={5} />
-      <CloudPuff position={[62, 20, -50]} scale={3.4} speed={0.6} seed={8} />
-      <CloudPuff position={[-20, 36, -110]} scale={4.8} speed={0.3} seed={12} />
-      <CloudPuff position={[-85, 16, -40]} scale={3} speed={0.45} seed={17} />
-      <CloudPuff position={[15, 14, -35]} scale={2.4} speed={0.55} seed={21} />
-    </group>
-  );
-}
-
-
-/* ---------- Fantasy Mountain World ---------- */
-
-function MountainRange({ position, scale, rotation = 0, hue = 0 }: { position: [number, number, number]; scale: number; rotation?: number; hue?: number }) {
-  const geo = useMemo(() => {
-    const g = new THREE.PlaneGeometry(4, 3, 32, 24);
-    g.rotateX(-Math.PI / 2);
-    const p = g.attributes.position as THREE.BufferAttribute;
-    const seed = position[0] * 0.1 + position[2] * 0.1;
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i);
-      const z = p.getZ(i);
-      const dist = Math.sqrt(x*x + z*z);
-      const noise1 = Math.sin(x * 0.5 + seed) * Math.cos(z * 0.3 + seed) * 0.6;
-      const noise2 = Math.sin(x * 1.2 + seed*2) * Math.cos(z * 0.8 + seed*1.5) * 0.4;
-      const noise3 = Math.sin((x+z) * 0.7) * 0.3;
-      let h = (noise1 + noise2 + noise3) * (1 - dist * 0.15);
-      if (dist < 0.3) h += (1 - dist/0.3) * 0.8; // peak
-      h = Math.max(0, h);
-      p.setY(i, h);
-      // irregular silhouette
-      p.setX(i, x * (0.8 + Math.sin(z * 0.4) * 0.2));
-      p.setZ(i, z * (0.8 + Math.cos(x * 0.3) * 0.2));
-    }
-    g.computeVertexNormals();
-    return g;
-  }, [position]);
-  const color = new THREE.Color().setHSL(0.58 + hue*0.02, 0.15, 0.25 + hue*0.05);
-  return (
-    <group position={position} scale={scale} rotation={[0, rotation, 0]}>
-      <mesh geometry={geo} receiveShadow castShadow>
-        <meshStandardMaterial color={color} roughness={0.98} flatShading />
-      </mesh>
-      <mesh geometry={geo} position={[1.5, 0.2, 0.8]} scale={[0.6, 0.7, 0.6]} rotation={[0, 0.5, 0]}>
-        <meshStandardMaterial color={color.clone().multiplyScalar(0.9)} roughness={0.98} flatShading />
-      </mesh>
-      <mesh geometry={geo} position={[-1.2, 0.15, -0.6]} scale={[0.5, 0.6, 0.5]} rotation={[0, -0.3, 0]}>
-        <meshStandardMaterial color={color.clone().multiplyScalar(0.85)} roughness={0.98} flatShading />
-      </mesh>
-    </group>
-  );
-}
-
-function FantasyMountains() {
-  return (
-    <group>
-      <MountainRange position={[-120, -28, -280]} scale={95} rotation={0.4} hue={0} />
-      <MountainRange position={[100, -32, -320]} scale={110} rotation={-0.3} hue={2} />
-      <MountainRange position={[0, -38, -380]} scale={130} rotation={0.15} hue={1} />
-      <MountainRange position={[-200, -25, -240]} scale={75} rotation={0.7} hue={3} />
-      <MountainRange position={[180, -26, -260]} scale={82} rotation={-0.6} hue={2} />
-      <MountainRange position={[-80, -30, -340]} scale={105} rotation={0.25} hue={1} />
-      <MountainRange position={[220, -22, -300]} scale={68} rotation={-0.4} hue={0} />
-      <MountainRange position={[-240, -20, -220]} scale={62} rotation={0.8} hue={3} />
-    </group>
-  );
-}
-
-function FluffyCloud({ position, scale }: { position: [number, number, number]; scale: number }) {
-  const ref = useRef<THREE.Group>(null);
-  useFrame((_, dt) => {
-    if (ref.current) {
-      ref.current.position.x += dt * 0.3;
-      if (ref.current.position.x > 150) ref.current.position.x = -150;
-    }
-  });
-  return (
-    <group ref={ref} position={position} scale={scale}>
-      <mesh position={[0,0,0]}>
-        <sphereGeometry args={[2, 16, 16]} />
-        <meshStandardMaterial color="#ffffff" transparent opacity={0.9} roughness={1} />
-      </mesh>
-      <mesh position={[2.5,0.3,0.2]} scale={0.8}>
-        <sphereGeometry args={[2, 16, 16]} />
-        <meshStandardMaterial color="#f8fbff" transparent opacity={0.85} roughness={1} />
-      </mesh>
-      <mesh position={[-2.2,0.2,-0.3]} scale={0.75}>
-        <sphereGeometry args={[2, 16, 16]} />
-        <meshStandardMaterial color="#f8fbff" transparent opacity={0.85} roughness={1} />
-      </mesh>
-      <mesh position={[1,0.8,0.5]} scale={0.6}>
-        <sphereGeometry args={[2, 16, 16]} />
-        <meshStandardMaterial color="#ffffff" transparent opacity={0.8} roughness={1} />
-      </mesh>
-      <mesh position={[-0.5,-0.3,0.3]} scale={0.9}>
-        <sphereGeometry args={[2, 16, 16]} />
-        <meshStandardMaterial color="#f0f7ff" transparent opacity={0.75} roughness={1} />
-      </mesh>
-    </group>
-  );
-}
-
-function CinematicClouds() {
-  return (
-    <group>
-      <FluffyCloud position={[-60, 35, -100]} scale={3.5} />
-      <FluffyCloud position={[40, 42, -120]} scale={4.5} />
-      <FluffyCloud position={[80, 28, -80]} scale={3} />
-      <FluffyCloud position={[-30, 48, -150]} scale={5} />
-      <FluffyCloud position={[10, 25, -60]} scale={2.8} />
-      <FluffyCloud position={[-90, 32, -90]} scale={3.2} />
-    </group>
-  );
-}
-
-
-/* ---------- island assembly ---------- */
-
-function Island({
-  spec,
-  selected,
-  onSelect,
-  registerRef,
-}: {
-  spec: IslandSpec;
-  selected: boolean;
-  onSelect: (id: DestId) => void;
-  registerRef: (id: DestId, g: THREE.Group | null) => void;
-}) {
-  const outer = useRef<THREE.Group>(null);
-  const float = useRef<THREE.Group>(null);
-  const modelGroup = useRef<THREE.Group>(null);
-  const origPos = useRef(new THREE.Vector3(...spec.pos));
-  const origRot = useRef(new THREE.Euler());
-  const didInit = useRef(false);
-
-  useEffect(() => {
-    registerRef(spec.id, outer.current);
-    return () => registerRef(spec.id, null);
-  });
-
-  useEffect(() => {
-    if (!outer.current) return;
-    if (!didInit.current) {
-      origPos.current.copy(outer.current.position);
-      origRot.current.copy(outer.current.rotation);
-      didInit.current = true;
-    }
-    const dur = prefersReducedMotion() ? 0 : 2.2;
-    if (selected) {
-      // Move to left and do full 360 rotation
-      gsap.killTweensOf(outer.current.position);
-      gsap.killTweensOf(outer.current.rotation);
-      gsap.to(outer.current.position, { x: spec.pos[0] - 8, y: spec.pos[1], z: spec.pos[2] + 4, duration: dur, ease: 'power2.inOut' });
-      gsap.to(outer.current.rotation, { y: Math.PI * 2, duration: dur, ease: 'power2.inOut' });
-    } else {
-      gsap.killTweensOf(outer.current.position);
-      gsap.killTweensOf(outer.current.rotation);
-      gsap.to(outer.current.position, { x: origPos.current.x, y: origPos.current.y, z: origPos.current.z, duration: dur * 0.8, ease: 'power2.inOut' });
-      gsap.to(outer.current.rotation, { y: origRot.current.y, duration: dur * 0.8, ease: 'power2.inOut' });
-    }
-  }, [selected, spec.pos]);
-
-  useFrame((state) => {
-    const t = state.clock.elapsedTime;
-    if (float.current && !selected) {
-      float.current.position.y = Math.sin(t * 0.3 + spec.seed) * 0.15;
-      float.current.rotation.z = Math.sin(t * 0.2 + spec.seed) * 0.008;
-    }
-    if (modelGroup.current) {
-      if (spec.id === 'pagoda') {
-        modelGroup.current.rotation.z = Math.sin(t * 0.6 + spec.seed) * 0.01;
-        modelGroup.current.rotation.x = Math.cos(t * 0.4 + spec.seed) * 0.006;
-      } else if (spec.id === 'lighthouse') {
-        modelGroup.current.position.y = Math.sin(t * 0.9 + spec.seed) * 0.06;
-      }
-    }
-  });
-
-  return (
-    <group
-      ref={outer}
-      position={spec.pos}
-      onClick={(e) => {
-        e.stopPropagation();
-        if (!selected) onSelect(spec.id);
-      }}
-      onPointerOver={(e) => {
-        e.stopPropagation();
-        if (!selected) document.body.style.cursor = 'pointer';
-      }}
-      onPointerOut={() => {
-        document.body.style.cursor = 'default';
-      }}
-    >
-      <group ref={float}>
-        <group ref={modelGroup} position={[0, 0, 0]}>
-          <ModelBoundary>
-            <Suspense fallback={null}>
-              <AtlasModel url={`/assets/atlas/${spec.id}.glb`} height={spec.modelHeight} info={spec.id} spin={false} />
-            </Suspense>
-          </ModelBoundary>
-        </group>
-      </group>
-    </group>
-  );
-}
-
-/* ---------- camera ---------- */
-
-function CameraRig({ selected }: { selected: DestId | null }) {
-  const { camera } = useThree();
-  const target = useRef(new THREE.Vector3(...POSES.overview.target));
-
-  useEffect(() => {
-    const dur = prefersReducedMotion() ? 0 : 1.8;
-    const pose = POSES[selected ?? 'overview'];
-    gsap.killTweensOf(camera.position);
-    gsap.to(camera.position, { x: pose.pos[0], y: pose.pos[1], z: pose.pos[2], duration: dur, ease: 'power2.inOut' });
-    gsap.killTweensOf(target.current);
-    gsap.to(target.current, { x: pose.target[0], y: pose.target[1], z: pose.target[2], duration: dur, ease: 'power2.inOut' });
-    const cam = camera as THREE.PerspectiveCamera;
-    gsap.killTweensOf(cam);
-    gsap.to(cam, { fov: pose.fov, duration: dur, ease: 'power2.inOut', onUpdate: () => cam.updateProjectionMatrix() });
-  }, [selected, camera]);
-
-  useFrame(() => {
-    camera.lookAt(target.current);
-  });
-  return null;
-}
-
-function Scene({
-  selected,
-  onSelect,
-  registerRef,
-}: {
-  selected: DestId | null;
-  onSelect: (id: DestId) => void;
-  registerRef: (id: DestId, g: THREE.Group | null) => void;
-}) {
-  return (
-    <>
-      <SkyDome />
-      <ambientLight intensity={0.6} />
-      <hemisphereLight args={['#b8d4f0', '#8fa87a', 1.0]} />
-      <directionalLight
-        position={[100, 120, 80]}
-        intensity={2.6}
-        color="#fff4e6"
-        castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
-        shadow-camera-left={-90}
-        shadow-camera-right={90}
-        shadow-camera-top={90}
-        shadow-camera-bottom={-70}
-        shadow-camera-far={260}
-      />
-      <FantasyMountains />
-      {ISLANDS.map((spec) => (
-        <Island key={spec.id} spec={spec} selected={selected === spec.id} onSelect={onSelect} registerRef={registerRef} />
-      ))}
-      <CinematicClouds />
-      <CloudField />
-    </>
-  );
-}
-
-/* ---------- HTML panels ---------- */
-
-function DestPanel({ id }: { id: DestId }) {
-  if (id === 'lighthouse') {
-    return (
-      <div className="dest-panel accent-lighthouse">
-        <p className="dest-kicker">Lighthouse</p>
-        <h3>Bluestock Fintech</h3>
-        <p className="dest-role">Data Analytics Intern</p>
-        <p className="dest-dates">20 June 2026 - 20 September 2026</p>
-        <section><h4>Experience</h4><p>TODO: Description, responsibilities and achievements to be added.</p></section>
-        <section><h4>Skills</h4><p>TODO: Skills to be added.</p></section>
-        <section><h4>Certificate</h4><p>TODO: Certificate pending.</p></section>
-        <section><h4>Project</h4><p>TODO: GitHub link will be added once the repository URL is verified.</p></section>
-      </div>
-    );
-  }
-  if (id === 'windmill') {
-    return (
-      <div className="dest-panel accent-windmill">
-        <p className="dest-kicker">Windmill</p>
-        <h3>Agratas Fintech</h3>
-        <p className="dest-role">TODO: Official internship title (pending)</p>
-        <p className="dest-dates">TODO: Dates (pending)</p>
-        <section><h4>Experience</h4><p>TODO: Finance internship - learning and documentation responsibilities to be added.</p></section>
-        <section><h4>Certificate</h4><p>TODO: Certificate pending.</p></section>
-      </div>
-    );
-  }
-  return (
-    <div className="dest-panel accent-pagoda">
-      <p className="dest-kicker">Pagoda</p>
-      <h3>Career Growth</h3>
-      <section><h4>Direction</h4><p>An ongoing transition into data-focused engineering: Data Analytics, Data Engineering, Cloud infrastructure and DevOps.</p></section>
-      <section><h4>Next</h4><p>TODO: Certifications and milestones to be added.</p></section>
-    </div>
-  );
-}
-
-/* ---------- main ---------- */
-
 export function ExperienceSection() {
   const [selected, setSelected] = useState<DestId | null>(null);
-  const islandRefs = useRef<Partial<Record<DestId, THREE.Group | null>>>({});
   const sectionRef = useRef<HTMLElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
 
-  const registerRef = (id: DestId, g: THREE.Group | null) => {
-    islandRefs.current[id] = g;
+  useTransitionController();
+
+  const { selectedIsland, isTransitioning, selectIsland, navigate, goBack } = useExperienceStore();
+
+  const handleSelect = (id: 'lighthouse' | 'windmill' | 'pagoda') => {
+    setSelected(id);
+    selectIsland(id);
+  };
+
+  const handleNavigate = (direction: 'next' | 'prev') => {
+    if (!selectedIsland || isTransitioning) return; // no conflicting navigation mid-transition
+    const i = DEST_ORDER.indexOf(selectedIsland);
+    const dir = direction === 'next' ? 1 : -1;
+    const nextId = DEST_ORDER[(i + dir + DEST_ORDER.length) % DEST_ORDER.length];
+    navigate(direction); // store: circular order + transition lock
+    setSelected(nextId); // local: drives camera, panel and island visibility together
+  };
+
+  const handleBack = () => {
+    if (isTransitioning) return;
+    setSelected(null);
+    goBack();
   };
 
   useEffect(() => {
-    const dur = prefersReducedMotion() ? 0 : 1.5;
-    for (const spec of ISLANDS) {
-      const g = islandRefs.current[spec.id];
-      if (!g) continue;
-      gsap.killTweensOf(g.scale);
-      if (selected === null) {
-        gsap.to(g.scale, { x: 1, y: 1, z: 1, duration: dur, ease: 'power2.inOut' });
-      } else if (selected !== spec.id) {
-        gsap.to(g.scale, { x: 0.38, y: 0.38, z: 0.38, duration: dur, ease: 'power2.inOut' });
-      } else {
-        gsap.to(g.scale, { x: 1.04, y: 1.04, z: 1.04, duration: dur, ease: 'power2.inOut' });
-      }
-    }
-  }, [selected]);
-
-  useEffect(() => {
-    const order: DestId[] = ['lighthouse', 'windmill', 'pagoda'];
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selected) setSelected(null);
-      else if (e.key === 'ArrowRight' && selected) setSelected(order[(order.indexOf(selected) + 1) % order.length]);
-      else if (e.key === 'ArrowLeft' && selected) setSelected(order[(order.indexOf(selected) + order.length - 1) % order.length]);
+      if (e.key === 'Escape' && selectedIsland) {
+        handleBack();
+      } else if (e.key === 'ArrowRight' && selectedIsland) handleNavigate('next');
+      else if (e.key === 'ArrowLeft' && selectedIsland) handleNavigate('prev');
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  });
+
+  /* QA/debug handle: current selection + which islands are rendered visible. */
+  useEffect(() => {
+    const w = window as unknown as { __expState?: unknown };
+    w.__expState = {
+      selected,
+      visible: DEST_ORDER.filter((id) => selected === null || selected === id),
+    };
   }, [selected]);
 
-  /* Cinematic hand-off into the next section (scrubbed, reversible). */
+  /* Scrubbed, reversible cinematic hand-off into the next section. */
   useEffect(() => {
     const section = sectionRef.current;
     if (!section) return;
@@ -655,26 +93,8 @@ export function ExperienceSection() {
     return () => ctx.revert();
   }, []);
 
-  useEffect(() => {
-    return () => {
-      for (const spec of ISLANDS) {
-        const g = islandRefs.current[spec.id];
-        if (g) gsap.killTweensOf(g.scale);
-      }
-    };
-  }, []);
-
-  const step = (dir: 1 | -1) => {
-    const order: DestId[] = ['lighthouse', 'windmill', 'pagoda'];
-    if (!selected) return;
-    setSelected(order[(order.indexOf(selected) + dir + order.length) % order.length]);
-  };
-
-  const label = (id: DestId) => (id === 'lighthouse' ? 'Lighthouse' : id === 'windmill' ? 'Windmill' : 'Pagoda');
-  const sub = (id: DestId) => (id === 'lighthouse' ? 'Bluestock Fintech' : id === 'windmill' ? 'Agratas Fintech' : 'Career Growth');
-
   return (
-    <section ref={sectionRef} className="experience-section" id="experience">
+    <section ref={sectionRef} className="experience-section" id="experience" aria-label="Experience">
       <div className="experience-header-container">
         <div className="experience-header">
           <div className="experience-divider" />
@@ -685,27 +105,43 @@ export function ExperienceSection() {
 
       <div className="atlas-environment">
         <Canvas
-          camera={{ position: POSES.overview.pos, fov: POSES.overview.fov, near: 0.5, far: 700 }}
+          camera={{ position: OVERVIEW_POSE.pos, fov: OVERVIEW_POSE.fov, near: 0.5, far: 6500 }}
           shadows
-          dpr={[1, 2]}
+          dpr={[1, 1.75]}
           gl={{ alpha: false, antialias: true }}
         >
-          <fog attach="fog" args={['#b8d4f0', 80, 320]} />
+          <MagentaTwilightWorld />
           <CameraRig selected={selected} />
           <Suspense fallback={null}>
-            <Scene selected={selected} onSelect={setSelected} registerRef={registerRef} />
+            {DEST_ORDER.map((id) => (
+              <IslandGroup
+                key={id}
+                id={id}
+                selected={selected === id}
+                hidden={selected !== null && selected !== id}
+                onSelect={handleSelect}
+              />
+            ))}
           </Suspense>
         </Canvas>
 
         <div className="atlas-hud">
-          <p className="atlas-hint">Atlas of Drifting Isles - choose a destination</p>
+          <p className="atlas-hint">
+            {selected ? 'Drag the island to rotate it' : 'Atlas of Drifting Isles — choose a destination'}
+          </p>
 
           {!selected && (
             <div className="dest-labels" role="group" aria-label="Destinations">
-              {ISLANDS.map((spec) => (
-                <button key={spec.id} type="button" data-dest={spec.id} className="dest-label" onClick={() => setSelected(spec.id)}>
-                  <strong>{label(spec.id)}</strong>
-                  <span>{sub(spec.id)}</span>
+              {DESTINATIONS.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  data-dest={d.id}
+                  className="dest-label"
+                  onClick={() => handleSelect(d.id)}
+                >
+                  <strong>{d.landmark}</strong>
+                  <span>{d.title}</span>
                 </button>
               ))}
             </div>
@@ -713,19 +149,34 @@ export function ExperienceSection() {
 
           {selected && (
             <>
-              <button type="button" className="back-btn" onClick={() => setSelected(null)}>
+              <button type="button" className="back-btn" onClick={handleBack}>
                 Back to Islands
               </button>
-              <div className="dest-nav">
-                <button type="button" onClick={() => step(-1)} aria-label="Previous destination">
-                  Prev
+
+              <nav className="dest-selector" aria-label="Destination selector">
+                <button
+                  type="button"
+                  className="sel-btn"
+                  aria-label="Previous destination"
+                  onClick={() => handleNavigate('prev')}
+                >
+                  <span aria-hidden="true">‹</span> Previous
                 </button>
-                <button type="button" onClick={() => step(1)} aria-label="Next destination">
-                  Next
+                <span className="sel-current" aria-live="polite">
+                  {DESTINATIONS.find((d) => d.id === selected)?.landmark}
+                </span>
+                <button
+                  type="button"
+                  className="sel-btn"
+                  aria-label="Next destination"
+                  onClick={() => handleNavigate('next')}
+                >
+                  Next <span aria-hidden="true">›</span>
                 </button>
-              </div>
-              <aside key={selected} aria-live="polite" className="dest-panel-wrap">
-                <DestPanel id={selected} />
+              </nav>
+
+              <aside ref={panelRef} className="dest-panel-wrap" aria-live="polite">
+                <DestinationPanel dest={DESTINATIONS.find((d) => d.id === selected)!} />
               </aside>
             </>
           )}
@@ -745,9 +196,5 @@ export function ExperienceSection() {
     </section>
   );
 }
-
-useGLTF.preload('/assets/atlas/lighthouse.glb');
-useGLTF.preload('/assets/atlas/windmill.glb');
-useGLTF.preload('/assets/atlas/pagoda.glb');
 
 export default ExperienceSection;

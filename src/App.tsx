@@ -15,12 +15,22 @@ import { LoadingScreen } from './components/LoadingScreen';
  * loads, the Suspense fallback paints the app background (no flash of a
  * wrong color behind the unmounting hero).
  */
-const CloudWorld3D = lazy(() => import('./cloud-world-3d').then((m) => ({ default: m.CloudWorld3D })));
-const CloudWorldIso = lazy(() => import('./cloud-world-iso').then((m) => ({ default: m.IsoShell })));
-const CloudWorld25D = lazy(() => import('./cloud-world-25d').then((m) => ({ default: m.CloudWorld25D })));
+const CloudWorld3D = lazy(() =>
+  import('./cloud-world-3d').then((m) => ({ default: m.CloudWorld3D })),
+);
+
+/*
+ * The Experience section is code-split like Cloud World: three.js + R3F weigh
+ * ~1.4 MB minified and the hero must not pay for them. `lazy()` keeps the
+ * whole stack in a chunk that loads only when the section mounts in the page
+ * flow (after the hero). While it loads, the Suspense fallback paints the
+ * sunset gradient so there is no white flash.
+ */
 const ExperienceSection = lazy(() =>
   import('./experience/ExperienceSection').then((m) => ({ default: m.ExperienceSection })),
 );
+const CloudWorldIso = lazy(() => import('./cloud-world-iso').then((m) => ({ default: m.IsoShell })));
+const CloudWorld25D = lazy(() => import('./cloud-world-25d').then((m) => ({ default: m.CloudWorld25D })));
 
 const HASH_WORLDS = {
   '#/data-world': 'data-world',
@@ -80,11 +90,11 @@ function App() {
   }, [applyHash]);
 
   /*
-   * Scroll isolation for world routes (regression fix, ART_DIRECTION_REVISION).
-   * The hero branch renders the Experience section in the normal document flow,
-   * so any world route must lock document scroll while mounted — otherwise wheel
-   * input can scroll the document and expose the sections beneath the game.
-   * The previous overflow values are restored verbatim on return to the hero.
+   * Scroll isolation for world routes (regression fix). The hero branch renders
+   * the Experience section in the normal document flow, so any world route must
+   * lock document scroll while mounted — otherwise wheel input can scroll the
+   * document and expose the sections beneath the game. Previous inline overflow
+   * values and scroll Y are restored on exit (deferred past the hero remount).
    */
   useEffect(() => {
     if (currentWorld === 'hero') return;
@@ -101,8 +111,6 @@ function App() {
     return () => {
       html.style.overflow = prev.htmlOverflow;
       body.style.overflow = prev.bodyOverflow;
-      // Restore after the hero branch has remounted and regained its height,
-      // otherwise scrollTo clamps to 0 while the document is still short.
       const restore = () => window.scrollTo(0, prev.y);
       requestAnimationFrame(() => requestAnimationFrame(restore));
       window.setTimeout(restore, 120);
@@ -225,8 +233,7 @@ function App() {
           <>
             <CinematicHero onWorldSelected={handleWorldSelected} />
             {/* Experience lives in the normal page flow after the hero.
-                World routes unmount this whole branch; scroll is locked while
-                a world is mounted (see the isolation effect above). */}
+                Hash-world routing and Cloud World are untouched. */}
             <Suspense fallback={<div className="experience-loading" aria-hidden="true" />}>
               <ExperienceSection />
             </Suspense>
@@ -255,11 +262,6 @@ function App() {
           >
             <CloudWorld25D key="cloud-world-25d" onExit={returnToHero} />
           </Suspense>
-        )}
-        {currentWorld === 'experience' && (
-          <div className="placeholder-world">
-            <h1>Experience Section — Phase 5</h1>
-          </div>
         )}
       </main>
     </div>
