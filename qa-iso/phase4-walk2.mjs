@@ -9,7 +9,7 @@ await p.waitForFunction(() => window.__cw25d, { timeout: 30000 });
 await p.evaluate(() => __cw25d.forceHigh());
 await new Promise(r => setTimeout(r, 6000));
 // walk along the dock (-x), screenshot at two phases to catch a stride
-const p0 = await p.evaluate(() => { __cw25d.zoom(0.28); __cw25d.teleport(29.0, 0.4); __cw25d.key('a'); return JSON.stringify(__cw25d.pos); });
+const p0 = await p.evaluate(() => { __cw25d.zoom(0.5); __cw25d.teleport(23.5, 0.4); __cw25d.key('d'); return JSON.stringify(__cw25d.pos); });
 await new Promise(r => setTimeout(r, 350));
 await p.screenshot({ path: OUT + 'p4-4-walking.png' });
 const p1 = await p.evaluate(() => JSON.stringify(__cw25d.pos));
