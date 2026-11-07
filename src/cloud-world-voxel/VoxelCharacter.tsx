@@ -1,0 +1,161 @@
+/**
+ * The visitor: controller + voxel body.
+ *
+ * Movement reuses the v2 controller's approach — normalised input, fixed-step
+ * integration, and an axis-by-axis slide so walking into a cliff face does not
+ * stop you dead. The one thing v2 did not do is SMOOTH THE VERTICAL: with
+ * terrain quantised to whole blocks, a terrace edge would snap the character up
+ * a full unit and look like a teleport. Here the physics position is snapped
+ * (so collision stays honest) while the rendered position eases toward it.
+ *
+ * While aboard, the character stands on the whale's deck and the whale drives
+ * the position; the controller keeps animating so the visitor is never a statue.
+ */
+import { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+import { buildCharacter, HIP_Y, SHOULDER_Y } from './character';
+import { pilot, keys, input, boatPose, view } from './state';
+import { canSailTo, walkableHeight } from './world';
+
+const WALK_SPEED = 4.6;
+const RUN_SPEED = 8.4;
+const TURN_RATE = 13;
+const STEP = 1 / 60;
+const ARM_X = 0.3;
+const LEG_X = 0.13;
+
+export function VoxelCharacter() {
+  const parts = useMemo(() => buildCharacter(), []);
+  const material = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), []);
+
+  const root = useRef<THREE.Group>(null);
+  const bob = useRef<THREE.Group>(null);
+  const armL = useRef<THREE.Group>(null);
+  const armR = useRef<THREE.Group>(null);
+  const legL = useRef<THREE.Group>(null);
+  const legR = useRef<THREE.Group>(null);
+  const acc = useRef(0);
+
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.2);
+    acc.current = Math.min(acc.current + dt, 0.25);
+    while (acc.current >= STEP) {
+      acc.current -= STEP;
+      stepPhysics();
+    }
+
+    // render-side vertical easing: the feet glide between terrace levels
+    const targetY = pilot.mode === 'boat' ? boatPose.worldY + boatPose.deckY : pilot.pos.y;
+    pilot.visualY += (targetY - pilot.visualY) * Math.min(1, dt * 14);
+
+    const g = root.current;
+    if (g) {
+      g.position.set(pilot.pos.x, pilot.visualY, pilot.pos.z);
+      let dy = pilot.heading - g.rotation.y;
+      while (dy > Math.PI) dy -= Math.PI * 2;
+      while (dy < -Math.PI) dy += Math.PI * 2;
+      g.rotation.y += dy * Math.min(1, dt * TURN_RATE);
+    }
+
+    animate();
+  });
+
+  function stepPhysics() {
+    let ix = 0;
+    let iz = 0;
+    if (keys['w'] || keys['arrowup']) iz -= 1;
+    if (keys['s'] || keys['arrowdown']) iz += 1;
+    if (keys['a'] || keys['arrowleft']) ix -= 1;
+    if (keys['d'] || keys['arrowright']) ix += 1;
+    if (input.active) {
+      ix += input.x;
+      iz += input.z;
+    }
+    const len = Math.hypot(ix, iz);
+    const run = !!keys['shift'] || input.run;
+    pilot.running = run && len > 0.05;
+    pilot.moving = len > 0.05;
+
+    if (pilot.mode === 'walk') {
+      if (!pilot.moving) return;
+      ix /= len;
+      iz /= len;
+      // Input is camera-relative: "forward" always means away from the camera,
+      // whatever the orbit angle happens to be.
+      const c = Math.cos(-view.orbit);
+      const s = Math.sin(-view.orbit);
+      const wx = ix * c - iz * s;
+      const wz = ix * s + iz * c;
+      const speed = run ? RUN_SPEED : WALK_SPEED;
+      const nx = pilot.pos.x + wx * speed * STEP;
+      const nz = pilot.pos.z + wz * speed * STEP;
+      const h3 = walkableHeight(nx, nz);
+      const h1 = walkableHeight(nx, pilot.pos.z);
+      const h2 = walkableHeight(pilot.pos.x, nz);
+      if (h3 !== null) pilot.pos.set(nx, h3, nz);
+      else if (h1 !== null) pilot.pos.set(nx, h1, pilot.pos.z);
+      else if (h2 !== null) pilot.pos.set(pilot.pos.x, h2, nz);
+      pilot.heading = Math.atan2(wx, wz);
+      pilot.stride += speed * STEP * 2.6;
+    } else {
+      const speed = run ? 13 : 8.5;
+      if (pilot.moving) {
+        ix /= len;
+        iz /= len;
+        const nx = pilot.boatPos.x + ix * speed * STEP;
+        const nz = pilot.boatPos.z + iz * speed * STEP;
+        if (canSailTo(nx, pilot.boatPos.z)) pilot.boatPos.x = nx;
+        if (canSailTo(pilot.boatPos.x, nz)) pilot.boatPos.z = nz;
+        pilot.boatHeading = Math.atan2(ix, iz);
+        pilot.heading = pilot.boatHeading;
+        pilot.stride += speed * STEP * 1.1;
+      }
+      pilot.pos.set(pilot.boatPos.x, boatPose.worldY + boatPose.deckY, pilot.boatPos.z);
+    }
+  }
+
+  function animate() {
+    const moving = pilot.moving && pilot.mode === 'walk';
+    const fast = pilot.running && pilot.mode === 'walk';
+    const swing = moving ? Math.sin(pilot.stride * 2) * (fast ? 1.0 : 0.62) : 0;
+
+    if (legL.current) legL.current.rotation.x = swing;
+    if (legR.current) legR.current.rotation.x = -swing;
+    if (armL.current) {
+      armL.current.rotation.x = -swing * 0.8;
+      armL.current.rotation.z = 0.07;
+    }
+    if (armR.current) {
+      armR.current.rotation.x = swing * 0.8;
+      armR.current.rotation.z = -0.07;
+    }
+    if (bob.current) {
+      const idle = Math.sin(performance.now() * 0.0018) * 0.018;
+      bob.current.position.y = moving
+        ? Math.abs(Math.sin(pilot.stride * 2)) * (fast ? 0.055 : 0.032)
+        : idle;
+      bob.current.rotation.x = fast ? -0.13 : 0;
+    }
+  }
+
+  return (
+    <group ref={root}>
+      <group ref={bob}>
+        <mesh geometry={parts.body} material={material} castShadow receiveShadow />
+        <group ref={armL} position={[-ARM_X, SHOULDER_Y, 0]}>
+          <mesh geometry={parts.armL} material={material} castShadow />
+        </group>
+        <group ref={armR} position={[ARM_X, SHOULDER_Y, 0]}>
+          <mesh geometry={parts.armR} material={material} castShadow />
+        </group>
+        <group ref={legL} position={[-LEG_X, HIP_Y, 0]}>
+          <mesh geometry={parts.legL} material={material} castShadow />
+        </group>
+        <group ref={legR} position={[LEG_X, HIP_Y, 0]}>
+          <mesh geometry={parts.legR} material={material} castShadow />
+        </group>
+      </group>
+    </group>
+  );
+}

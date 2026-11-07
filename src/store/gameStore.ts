@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
 import type { CinematicPhase } from '../cinematic/timeline/beats';
 
-export type World = 'hero' | 'data-world' | 'cloud-world' | 'cloud-world-iso' | 'cloud-world-25d' | 'experience';
+export type World = 'hero' | 'data-world' | 'cloud-world' | 'cloud-world-iso' | 'cloud-world-25d' | 'cloud-world-v2' | 'cloud-world-voxel' | 'experience';
 
 /** The two worlds offered at the selection hold. */
 export type Path = 'data' | 'cloud';

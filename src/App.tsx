@@ -31,12 +31,24 @@ const ExperienceSection = lazy(() =>
 );
 const CloudWorldIso = lazy(() => import('./cloud-world-iso').then((m) => ({ default: m.IsoShell })));
 const CloudWorld25D = lazy(() => import('./cloud-world-25d').then((m) => ({ default: m.CloudWorld25D })));
+const CloudWorldV2 = lazy(() => import('./cloud-world-25d-v2').then((m) => ({ default: m.CloudWorldV2 })));
+/*
+ * The River Expedition — the voxel world. It sits BESIDE the routes above, not
+ * in place of them: nothing was deleted to add it, and reverting is these two
+ * lines. It loads no assets at all (the world is generated in code), so its
+ * chunk is the only thing the browser has to fetch.
+ */
+const CloudWorldVoxel = lazy(() =>
+  import('./cloud-world-voxel').then((m) => ({ default: m.CloudWorldVoxel })),
+);
 
 const HASH_WORLDS = {
   '#/data-world': 'data-world',
   '#/cloud-world': 'cloud-world',
   '#/cloud-world-iso': 'cloud-world-iso',
   '#/cloud-world-25d': 'cloud-world-25d',
+  '#/cloud-world-v2': 'cloud-world-v2',
+  '#/cloud-world-voxel': 'cloud-world-voxel',
 } as const;
 
 type HashWorld = (typeof HASH_WORLDS)[keyof typeof HASH_WORLDS];
@@ -261,6 +273,20 @@ function App() {
             fallback={<div className="cloud-world-loading" aria-hidden="true" />}
           >
             <CloudWorld25D key="cloud-world-25d" onExit={returnToHero} />
+          </Suspense>
+        )}
+        {currentWorld === 'cloud-world-v2' && (
+          <Suspense
+            fallback={<div className="cloud-world-loading" aria-hidden="true" />}
+          >
+            <CloudWorldV2 key="cloud-world-v2" onExit={returnToHero} />
+          </Suspense>
+        )}
+        {currentWorld === 'cloud-world-voxel' && (
+          <Suspense
+            fallback={<div className="cloud-world-loading" aria-hidden="true" />}
+          >
+            <CloudWorldVoxel key="cloud-world-voxel" onExit={returnToHero} />
           </Suspense>
         )}
       </main>

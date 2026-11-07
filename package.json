@@ -30,6 +30,8 @@
     "@fontsource/bebas-neue": "^5.2.6",
     "@fontsource/league-gothic": "^5.2.6",
     "@fontsource/oswald": "^5.2.6",
+    "@gltf-transform/cli": "^4.5.1",
+    "@gltf-transform/core": "^4.5.1",
     "@playwright/test": "^1.63.0",
     "@types/node": "^24.19.0",
     "@types/react": "^19.2.18",
