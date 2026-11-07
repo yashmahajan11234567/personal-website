@@ -32,6 +32,13 @@ export function DockerWhale() {
   const bobPhase = useRef(0);
   const wakeTimer = useRef(0);
   const wakeCursor = useRef(0);
+  // scratch objects hoisted out of the frame loop — allocating these per frame
+  // was feeding the GC a few hundred bytes 60 times a second
+  const _m = useRef(new THREE.Matrix4());
+  const _pos = useRef(new THREE.Vector3());
+  const _quat = useRef(new THREE.Quaternion());
+  const _scl = useRef(new THREE.Vector3());
+  const _euler = useRef(new THREE.Euler());
   const wake = useRef(
     Array.from({ length: WAKE_COUNT }, () => ({ x: 0, z: 0, age: WAKE_LIFE, yaw: 0, live: false })),
   );
@@ -82,11 +89,11 @@ export function DockerWhale() {
 
     const mesh = wakeMesh.current;
     if (mesh) {
-      const m = new THREE.Matrix4();
-      const pos = new THREE.Vector3();
-      const quat = new THREE.Quaternion();
-      const scl = new THREE.Vector3();
-      const euler = new THREE.Euler();
+      const m = _m.current;
+      const pos = _pos.current;
+      const quat = _quat.current;
+      const scl = _scl.current;
+      const euler = _euler.current;
       for (let i = 0; i < WAKE_COUNT; i++) {
         const w = wake.current[i];
         if (!w.live) {
@@ -111,7 +118,8 @@ export function DockerWhale() {
         mesh.setMatrixAt(i, m);
       }
       mesh.instanceMatrix.needsUpdate = true;
-      mesh.computeBoundingSphere();
+      // frustumCulled=false on this mesh, so the bounding sphere is never
+      // consulted — recomputing it every frame was pure waste
     }
   });
 

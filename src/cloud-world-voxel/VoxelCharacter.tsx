@@ -77,16 +77,31 @@ export function VoxelCharacter() {
     pilot.running = run && len > 0.05;
     pilot.moving = len > 0.05;
 
+    // boarding / disembark ease: glide pos between pier and deck instead of
+    // snapping, in whichever mode we are entering
+    if (pilot.boardFrom) {
+      // if the player starts walking mid-glide, let movement take over
+      if (pilot.mode === 'walk' && pilot.moving) {
+        pilot.boardFrom = null;
+      } else {
+        pilot.boardFrom.t += STEP / 0.55;
+        const k = Math.min(1, pilot.boardFrom.t);
+        const e = k * k * (3 - 2 * k);
+        pilot.pos.x = pilot.boardFrom.x + (pilot.boatPos.x - pilot.boardFrom.x) * e;
+        pilot.pos.z = pilot.boardFrom.z + (pilot.boatPos.z - pilot.boardFrom.z) * e;
+        if (k >= 1) pilot.boardFrom = null;
+      }
+    }
+
     if (pilot.mode === 'walk') {
       if (!pilot.moving) return;
       ix /= len;
       iz /= len;
       // Input is camera-relative: "forward" always means away from the camera,
-      // whatever the orbit angle happens to be.
-      const c = Math.cos(-view.orbit);
-      const s = Math.sin(-view.orbit);
-      const wx = ix * c - iz * s;
-      const wz = ix * s + iz * c;
+      // whatever the orbit angle happens to be. The basis vectors are published
+      // by CameraRig from the real blended offset each frame.
+      const wx = view.camRight.x * ix + view.camFwd.x * -iz;
+      const wz = view.camRight.z * ix + view.camFwd.z * -iz;
       const speed = run ? RUN_SPEED : WALK_SPEED;
       const nx = pilot.pos.x + wx * speed * STEP;
       const nz = pilot.pos.z + wz * speed * STEP;
@@ -99,15 +114,20 @@ export function VoxelCharacter() {
       pilot.heading = Math.atan2(wx, wz);
       pilot.stride += speed * STEP * 2.6;
     } else {
+      // boarding ease moved to the top of stepPhysics so both transitions glide
       const speed = run ? 13 : 8.5;
       if (pilot.moving) {
         ix /= len;
         iz /= len;
-        const nx = pilot.boatPos.x + ix * speed * STEP;
-        const nz = pilot.boatPos.z + iz * speed * STEP;
+        // same camera-relative basis as walking, so the whale steers where the
+        // screen points, not where world +z happens to be
+        const wx = view.camRight.x * ix + view.camFwd.x * -iz;
+        const wz = view.camRight.z * ix + view.camFwd.z * -iz;
+        const nx = pilot.boatPos.x + wx * speed * STEP;
+        const nz = pilot.boatPos.z + wz * speed * STEP;
         if (canSailTo(nx, pilot.boatPos.z)) pilot.boatPos.x = nx;
         if (canSailTo(pilot.boatPos.x, nz)) pilot.boatPos.z = nz;
-        pilot.boatHeading = Math.atan2(ix, iz);
+        pilot.boatHeading = Math.atan2(wx, wz);
         pilot.heading = pilot.boatHeading;
         pilot.stride += speed * STEP * 1.1;
       }

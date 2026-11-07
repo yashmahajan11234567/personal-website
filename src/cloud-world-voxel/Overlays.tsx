@@ -20,10 +20,9 @@ import { islandAt } from './terrain';
 /* ------------------------------------------------------------------ */
 
 function useLocationLabel(): string {
-  const nearId = useInteraction((s) => s.nearId);
   const [label, setLabel] = useState('Starting Island');
   useEffect(() => {
-    let raf = 0;
+    let id = 0;
     const tick = () => {
       if (pilot.mode === 'boat') {
         setLabel('At sea — Docker Whale');
@@ -31,11 +30,11 @@ function useLocationLabel(): string {
         const island = islandAt(pilot.pos.x, pilot.pos.z);
         setLabel(island ? island.label : 'At sea');
       }
-      raf = window.setTimeout(tick, 400) as unknown as number;
+      id = window.setTimeout(tick, 400);
     };
     tick();
-    return () => window.clearTimeout(raf);
-  }, [nearId]);
+    return () => window.clearTimeout(id);
+  }, []);
   return label;
 }
 
@@ -97,10 +96,17 @@ export function HUD({ onExit }: { onExit: () => void }) {
 
 export function HoverTooltip() {
   const hoveredId = useInteraction((s) => s.hoveredId);
-  const [pos, setPos] = useState({ x: -999, y: -999 });
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const onMove = (e: PointerEvent) => setPos({ x: e.clientX, y: e.clientY });
+    // write style directly instead of setState on every pointermove — a
+    // state update per mousemove re-renders the component dozens of times/s
+    const onMove = (e: PointerEvent) => {
+      const el = ref.current;
+      if (!el) return;
+      el.style.left = `${e.clientX}px`;
+      el.style.top = `${e.clientY}px`;
+    };
     window.addEventListener('pointermove', onMove);
     return () => window.removeEventListener('pointermove', onMove);
   }, []);
@@ -108,7 +114,7 @@ export function HoverTooltip() {
   const found = hotspot(hoveredId);
   if (!found) return null;
   return (
-    <div className="cwv-tip" style={{ left: pos.x, top: pos.y }}>
+    <div ref={ref} className="cwv-tip" style={{ left: -999, top: -999 }}>
       {found.label}
     </div>
   );
@@ -237,9 +243,12 @@ export function WelcomeToast() {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
+    // the old interval ticked every second forever, even after the toast had
+    // expired — stop the clock once 11s have passed or it was dismissed
+    if (dismissed || elapsed > 11000) return;
     const id = window.setInterval(() => setElapsed((e) => e + 1000), 1000);
     return () => window.clearInterval(id);
-  }, []);
+  }, [dismissed, elapsed > 11000]);
 
   if (dismissed || openPanel) return null;
   if (elapsed > 11000) return null;
@@ -339,6 +348,8 @@ export function TouchControls() {
     };
   }, [touch]);
 
+  const [runOn, setRunOn] = useState(false);
+
   if (!touch) return null;
 
   const interact = () => {
@@ -355,9 +366,11 @@ export function TouchControls() {
           USE
         </button>
         <button
-          className="cwv-round cwv-round--accent"
+          className={`cwv-round cwv-round--accent${runOn ? ' cwv-round--active' : ''}`}
+          aria-pressed={runOn}
           onClick={() => {
             input.run = !input.run;
+            setRunOn(input.run);
           }}
         >
           RUN

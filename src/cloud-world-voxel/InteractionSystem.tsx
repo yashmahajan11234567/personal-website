@@ -90,7 +90,8 @@ export function InteractionSystem() {
           pilot.mode = 'boat';
           pilot.boatPos.set(b.x, 0, b.z);
           pilot.boatHeading = b.heading;
-          pilot.pos.set(b.x, 0, b.z);
+          // keep pos at the pier and let VoxelCharacter glide it to the deck
+          pilot.boardFrom = { x: pilot.pos.x, z: pilot.pos.z, t: 0 };
           pilot.moving = false;
           close();
           return;
@@ -100,11 +101,12 @@ export function InteractionSystem() {
         if (Math.hypot(pilot.boatPos.x - b.x, pilot.boatPos.z - b.z) <= DISEMBARK_RANGE) {
           const d = b.dock;
           pilot.mode = 'walk';
-          pilot.pos.set(
-            THREE.MathUtils.clamp(b.x, d.x0 + 1, d.x1 - 1),
-            d.y,
-            THREE.MathUtils.clamp(b.z, d.z0 + 1, d.z1 - 1),
-          );
+          // land on the pier, then glide pos there instead of snapping
+          const lx = THREE.MathUtils.clamp(b.x, d.x0 + 1, d.x1 - 1);
+          const lz = THREE.MathUtils.clamp(b.z, d.z0 + 1, d.z1 - 1);
+          pilot.boardFrom = { x: pilot.boatPos.x, z: pilot.boatPos.z, t: 0 };
+          pilot.boatPos.set(lx, 0, lz);
+          pilot.pos.set(lx, d.y, lz);
           pilot.moving = false;
           close();
           return;
@@ -122,13 +124,40 @@ export function InteractionSystem() {
   }, [open, close]);
 
   /* ---- per-frame hover + proximity ---- */
+  /* hover raycast only re-runs when the pointer actually moved since the last
+   * frame (or the camera did) — raycasting 30 volumes every frame while the
+   * mouse sits still is wasted main-thread time */
+  const pointerDirty = useRef(true);
+  const lastCam = useRef([0, 0, 0]);
+  useEffect(() => {
+    const el = gl.domElement;
+    const mark = () => {
+      pointerDirty.current = true;
+    };
+    el.addEventListener('pointermove', mark);
+    return () => el.removeEventListener('pointermove', mark);
+  }, [gl]);
+
   useFrame(() => {
-    // hover
-    let hovered: string | null = null;
-    if (group.current && ndc.current.x < 2) {
+    // hover — re-raycast only when the pointer or the camera moved since the
+    // last frame; a resting cursor over a hotspot keeps its tooltip
+    if (group.current) {
+      const cp = camera.position;
+      const moved =
+        Math.abs(cp.x - lastCam.current[0]) > 0.01 ||
+        Math.abs(cp.y - lastCam.current[1]) > 0.01 ||
+        Math.abs(cp.z - lastCam.current[2]) > 0.01;
+      lastCam.current = [cp.x, cp.y, cp.z];
+      if (moved) pointerDirty.current = true;
+    }
+    let hovered: string | null = hoveredRef.current;
+    if (group.current && ndc.current.x < 2 && pointerDirty.current) {
       raycaster.setFromCamera(ndc.current, camera);
       const hits = raycaster.intersectObjects(group.current.children, false);
-      if (hits.length > 0) hovered = (hits[0].object.userData.hotspotId as string) ?? null;
+      hovered = hits.length > 0 ? (hits[0].object.userData.hotspotId as string) ?? null : null;
+      pointerDirty.current = false;
+    } else if (ndc.current.x >= 2) {
+      hovered = null; // pointer left the canvas
     }
     if (hovered !== hoveredRef.current) {
       hoveredRef.current = hovered;

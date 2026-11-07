@@ -22,6 +22,8 @@ export interface Pilot {
   running: boolean;
   /** walk-cycle phase, advanced by distance travelled */
   stride: number;
+  /** while non-null, the character is easing from this point onto the whale deck */
+  boardFrom: { x: number; z: number; t: number } | null;
 }
 
 const spawnY = walkableHeight(SPAWN.x, SPAWN.z) ?? 2;
@@ -36,6 +38,7 @@ export const pilot: Pilot = {
   moving: false,
   running: false,
   stride: 0,
+  boardFrom: null,
 };
 
 /** Analog input, written only by the touch controls. */
@@ -52,6 +55,9 @@ export const view = {
   sea: 0,
   /** camera orbit yaw, driven by dragging */
   orbit: 0,
+  /** camera ground-plane forward/right (unit vectors in xz), refreshed by CameraRig */
+  camFwd: { x: 0, z: -1 },
+  camRight: { x: 1, z: 0 },
   /** set by the loader once the first frame has rendered */
   ready: false,
 };

@@ -62,7 +62,7 @@ function SceneContents() {
 
 /** Inside the Canvas: route isolation, keyboard capture, QA hooks. */
 function WorldEffects() {
-  const { gl } = useThree();
+  const { gl, camera } = useThree();
 
   // scroll isolation — a world route must never scroll the portfolio beneath it
   useEffect(() => {
@@ -143,8 +143,10 @@ function WorldEffects() {
         view.zoom = zoom;
       },
       renderer: gl,
+      camera,
+      groundAt: (x: number, z: number) => walkableHeight(x, z),
     };
-  }, [gl]);
+  }, [gl, camera]);
 
   return null;
 }
@@ -159,10 +161,11 @@ export function CloudWorldVoxel({ onExit }: { onExit: () => void }) {
           antialias: true,
           alpha: false,
           powerPreference: 'high-performance',
-          // required so QA screenshots can read the framebuffer back
-          preserveDrawingBuffer: true,
+          // preserveDrawingBuffer costs a full buffer copy per frame on real
+          // GPUs; only pay it when the QA harness asks for it (?qa=1)
+          preserveDrawingBuffer: new URLSearchParams(window.location.search).has('qa'),
         }}
-        shadows={{ type: THREE.PCFSoftShadowMap }}
+        shadows={{ type: THREE.PCFShadowMap }}
         dpr={[1, 1.6]}
         style={{ width: '100%', height: '100dvh' }}
       >

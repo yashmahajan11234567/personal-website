@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { pilot, view } from './state';
+import { walkableHeight } from './world';
 
 const LAND_OFFSET = new THREE.Vector3(21, 27, 21);
 const SEA_OFFSET = new THREE.Vector3(2, 12.5, 31);
@@ -88,8 +89,21 @@ export function CameraRig() {
     target.set(pilot.pos.x, pilot.visualY + 1.05, pilot.pos.z);
     desired.set(target.x + ox, target.y + offset.y, target.z + oz);
 
+    // publish ground-plane camera basis so movement is screen-relative, not
+    // tied to a hardcoded offset direction
+    const fl = Math.hypot(ox, oz) || 1;
+    view.camFwd.x = -ox / fl;
+    view.camFwd.z = -oz / fl;
+    view.camRight.x = -view.camFwd.z;
+    view.camRight.z = view.camFwd.x;
+
     // frame-rate independent smoothing
     camera.position.lerp(desired, 1 - Math.exp(-7 * dt));
+    // safety clamp: never sink below the terrain under the camera
+    const ground = walkableHeight(camera.position.x, camera.position.z);
+    if (ground !== null && camera.position.y < ground + 2.2) {
+      camera.position.y = ground + 2.2;
+    }
     camera.lookAt(target);
   });
 
