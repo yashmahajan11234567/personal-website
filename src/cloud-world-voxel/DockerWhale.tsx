@@ -13,7 +13,7 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { buildWhale, WHALE_DECK_Y } from './whale';
-import { pilot, boatPose } from './state';
+import { pilot, boatPose, REDUCED_MOTION } from './state';
 
 /** Hull geometry is authored large; this brings it to world scale. */
 export const GROUP_SCALE = 0.62;
@@ -24,9 +24,14 @@ const WAKE_LIFE = 1.7;
 export function DockerWhale() {
   const parts = useMemo(() => buildWhale(), []);
   const material = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), []);
+  // cartoon ink outline: same geometry, back faces only, slightly larger
+  const ink = useMemo(
+    () => new THREE.MeshBasicMaterial({ color: 0x2b2118, side: THREE.BackSide }),
+    [],
+  );
 
   const group = useRef<THREE.Group>(null);
-  const tail = useRef<THREE.Mesh>(null);
+  const tail = useRef<THREE.Group>(null);
   const wakeMesh = useRef<THREE.InstancedMesh>(null);
 
   const bobPhase = useRef(0);
@@ -55,7 +60,8 @@ export function DockerWhale() {
     if (!g) return;
 
     bobPhase.current += dt * 1.25;
-    const bobY = Math.sin(bobPhase.current) * 0.16;
+    // idle bob is an infinite ambient loop — collapse it under reduced motion
+    const bobY = REDUCED_MOTION ? 0 : Math.sin(bobPhase.current) * 0.16;
     g.position.set(pilot.boatPos.x, bobY, pilot.boatPos.z);
     // turn toward the ordered heading, and bank into the turn
     let dy = pilot.boatHeading - g.rotation.y;
@@ -69,7 +75,7 @@ export function DockerWhale() {
     boatPose.deckY = WHALE_DECK_Y * GROUP_SCALE;
 
     if (tail.current) {
-      tail.current.rotation.y = Math.sin(bobPhase.current * 1.5) * 0.22;
+      tail.current.rotation.y = REDUCED_MOTION ? 0 : Math.sin(bobPhase.current * 1.5) * 0.22;
     }
 
     // ---- wake ----
@@ -127,7 +133,11 @@ export function DockerWhale() {
     <>
       <group ref={group} scale={[GROUP_SCALE, GROUP_SCALE, GROUP_SCALE]}>
         <mesh geometry={parts.hull} material={material} castShadow receiveShadow />
-        <mesh ref={tail} geometry={parts.tail} material={material} castShadow />
+        <mesh geometry={parts.hull} material={ink} scale={1.06} />
+        <group ref={tail}>
+          <mesh geometry={parts.tail} material={material} castShadow />
+          <mesh geometry={parts.tail} material={ink} scale={1.06} />
+        </group>
       </group>
       <instancedMesh ref={wakeMesh} args={[wakeGeo, undefined, WAKE_COUNT]} frustumCulled={false}>
         <meshBasicMaterial color={0xffffff} transparent opacity={0.62} depthWrite={false} />

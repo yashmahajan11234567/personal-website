@@ -25,6 +25,7 @@ import { CloudShadows, VoxelClouds, VoxelSky } from './VoxelSky';
 import { VoxelLighting } from './Lighting';
 import { VoxelCharacter } from './VoxelCharacter';
 import { DockerWhale } from './DockerWhale';
+import { VillageLabels } from './VillageLabels';
 import { CameraRig } from './CameraRig';
 import { InteractionSystem } from './InteractionSystem';
 import {
@@ -54,6 +55,7 @@ function SceneContents() {
       <VoxelOcean />
       <DockerWhale />
       <VoxelCharacter />
+      <VillageLabels />
       <InteractionSystem />
       <CameraRig />
     </Suspense>
@@ -62,7 +64,7 @@ function SceneContents() {
 
 /** Inside the Canvas: route isolation, keyboard capture, QA hooks. */
 function WorldEffects() {
-  const { gl, camera } = useThree();
+  const { gl, camera, scene } = useThree();
 
   // scroll isolation — a world route must never scroll the portfolio beneath it
   useEffect(() => {
@@ -144,9 +146,10 @@ function WorldEffects() {
       },
       renderer: gl,
       camera,
+      scene,
       groundAt: (x: number, z: number) => walkableHeight(x, z),
     };
-  }, [gl, camera]);
+  }, [gl, camera, scene]);
 
   return null;
 }

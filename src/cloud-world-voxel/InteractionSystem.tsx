@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { BERTHS, HOTSPOTS, deckAt, nearestBerth } from './world';
+import { islandAt, nearestShoreIsland } from './terrain';
 import { pilot } from './state';
 import { useInteraction } from './interactionStore';
 
@@ -93,6 +94,8 @@ export function InteractionSystem() {
           // keep pos at the pier and let VoxelCharacter glide it to the deck
           pilot.boardFrom = { x: pilot.pos.x, z: pilot.pos.z, t: 0 };
           pilot.moving = false;
+          useInteraction.getState().setMode('boat');
+          useInteraction.getState().setZone('At sea — Docker Whale');
           close();
           return;
         }
@@ -108,6 +111,9 @@ export function InteractionSystem() {
           pilot.boatPos.set(lx, 0, lz);
           pilot.pos.set(lx, d.y, lz);
           pilot.moving = false;
+          useInteraction.getState().setMode('walk');
+          const isl = islandAt(lx, lz) ?? nearestShoreIsland(lx, lz, 24);
+          useInteraction.getState().setZone(isl ? isl.label : 'Welcome Harbour');
           close();
           return;
         }

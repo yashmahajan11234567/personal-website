@@ -227,6 +227,26 @@ export function islandAt(x: number, z: number): IslandSpec | null {
 }
 
 /**
+ * Label of the nearest island when the point is within `maxDist` blocks of its
+ * shoreline (negative penetration = inland). Used to credit piers/jetties that
+ * sit over water to the island they serve. Returns null in open ocean.
+ */
+export function nearestShoreIsland(x: number, z: number, maxDist: number): IslandSpec | null {
+  let best = Infinity;
+  let hit: IslandSpec | null = null;
+  for (const spec of ISLANDS) {
+    const dx = x - spec.cx;
+    const dz = z - spec.cz;
+    const pen = Math.hypot(dx, dz) - radiusAt(spec, Math.atan2(dz, dx));
+    if (pen < best) {
+      best = pen;
+      hit = spec;
+    }
+  }
+  return hit && best <= maxDist ? hit : null;
+}
+
+/**
  * Distance from a point to the nearest island shoreline, in blocks. Negative
  * means the point is inside an island footprint. Drives the ocean's colour
  * rings, so the turquoise band always hugs the real coastline.

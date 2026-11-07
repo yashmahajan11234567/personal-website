@@ -12,30 +12,26 @@
 import { useEffect, useRef, useState } from 'react';
 import { PANELS, PANEL_ORDER, type PanelDef } from './panels';
 import { hotspot, useInteraction } from './interactionStore';
-import { pilot, input, view } from './state';
-import { islandAt } from './terrain';
+import { input, view } from './state';
 
 /* ------------------------------------------------------------------ */
 /* Location                                                            */
 /* ------------------------------------------------------------------ */
 
 function useLocationLabel(): string {
-  const [label, setLabel] = useState('Starting Island');
-  useEffect(() => {
-    let id = 0;
-    const tick = () => {
-      if (pilot.mode === 'boat') {
-        setLabel('At sea — Docker Whale');
-      } else {
-        const island = islandAt(pilot.pos.x, pilot.pos.z);
-        setLabel(island ? island.label : 'At sea');
-      }
-      id = window.setTimeout(tick, 400);
-    };
-    tick();
-    return () => window.clearTimeout(id);
-  }, []);
-  return label;
+  // event-driven: the character publishes zone changes to the store; no polling
+  return useInteraction((s) => s.zone);
+}
+
+/** One-line "where to go next" hint, derived from mode + zone (both event-driven). */
+function useObjective(): string {
+  const mode = useInteraction((s) => s.mode);
+  const zone = useInteraction((s) => s.zone);
+  if (mode === 'boat') return 'Sail to Welcome Harbour';
+  if (zone === 'Starting Island') return 'Find the dock and board the Docker Whale (E)';
+  if (zone === 'Portfolio Village') return 'Visit the five houses — walk to a sign, press E';
+  if (zone === 'Welcome Harbour') return 'Explore the harbour, then enter the village';
+  return 'Explore';
 }
 
 /* ------------------------------------------------------------------ */
@@ -45,6 +41,7 @@ function useLocationLabel(): string {
 export function HUD({ onExit }: { onExit: () => void }) {
   const [help, setHelp] = useState(false);
   const location = useLocationLabel();
+  const objective = useObjective();
 
   return (
     <>
@@ -64,6 +61,9 @@ export function HUD({ onExit }: { onExit: () => void }) {
             ← Portfolio
           </button>
         </div>
+      </div>
+      <div className="cwv-objective" role="status">
+        {objective}
       </div>
       {help && (
         <div className="cwv-help">
@@ -228,6 +228,9 @@ export function InfoPanel() {
             )}
           </section>
         ))}
+      </div>
+      <div className="cwv-panel__foot">
+        <kbd>←</kbd> <kbd>→</kbd> browse panels · <kbd>esc</kbd> close
       </div>
     </aside>
   );

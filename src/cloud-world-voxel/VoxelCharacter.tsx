@@ -15,8 +15,10 @@ import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { buildCharacter, HIP_Y, SHOULDER_Y } from './character';
-import { pilot, keys, input, boatPose, view } from './state';
-import { canSailTo, walkableHeight } from './world';
+import { pilot, keys, input, boatPose, view, REDUCED_MOTION } from './state';
+import { canSailTo, walkableHeight, VILLAGE_ORIGIN } from './world';
+import { islandAt, nearestShoreIsland } from './terrain';
+import { useInteraction } from './interactionStore';
 
 const WALK_SPEED = 4.6;
 const RUN_SPEED = 8.4;
@@ -28,6 +30,11 @@ const LEG_X = 0.13;
 export function VoxelCharacter() {
   const parts = useMemo(() => buildCharacter(), []);
   const material = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), []);
+  // cartoon ink outline: same geometry, back faces only, slightly larger
+  const ink = useMemo(
+    () => new THREE.MeshBasicMaterial({ color: 0x2b2118, side: THREE.BackSide }),
+    [],
+  );
 
   const root = useRef<THREE.Group>(null);
   const bob = useRef<THREE.Group>(null);
@@ -36,6 +43,31 @@ export function VoxelCharacter() {
   const legL = useRef<THREE.Group>(null);
   const legR = useRef<THREE.Group>(null);
   const acc = useRef(0);
+  const lastZone = useRef('Starting Island');
+
+  /** Publish the zone label to the HUD store, but only when it actually changes. */
+  function publishZone(): void {
+    let zone: string;
+    if (pilot.mode === 'boat') {
+      zone = 'At sea — Docker Whale';
+    } else {
+      // piers/jetties sit over water: credit them to the island they serve
+      // (berths are up to ~16 blocks offshore, so the margin must be generous)
+      const isl = islandAt(pilot.pos.x, pilot.pos.z) ?? nearestShoreIsland(pilot.pos.x, pilot.pos.z, 24);
+      zone = isl ? isl.label : 'At sea';
+      if (
+        zone === 'Welcome Harbour' &&
+        Math.abs(pilot.pos.x - VILLAGE_ORIGIN.x) < 17 &&
+        Math.abs(pilot.pos.z - VILLAGE_ORIGIN.z) < 17
+      ) {
+        zone = 'Portfolio Village';
+      }
+    }
+    if (zone !== lastZone.current) {
+      lastZone.current = zone;
+      useInteraction.getState().setZone(zone);
+    }
+  }
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.2);
@@ -44,6 +76,9 @@ export function VoxelCharacter() {
       acc.current -= STEP;
       stepPhysics();
     }
+    // publish every frame, not only while moving, so teleports/idle edge cases
+    // can never leave a stale zone label in the HUD (store dedupes on change)
+    publishZone();
 
     // render-side vertical easing: the feet glide between terrace levels
     const targetY = pilot.mode === 'boat' ? boatPose.worldY + boatPose.deckY : pilot.pos.y;
@@ -151,7 +186,8 @@ export function VoxelCharacter() {
       armR.current.rotation.z = -0.07;
     }
     if (bob.current) {
-      const idle = Math.sin(performance.now() * 0.0018) * 0.018;
+      // idle bob is an infinite ambient loop — collapse it under reduced motion
+      const idle = REDUCED_MOTION ? 0 : Math.sin(performance.now() * 0.0018) * 0.018;
       bob.current.position.y = moving
         ? Math.abs(Math.sin(pilot.stride * 2)) * (fast ? 0.055 : 0.032)
         : idle;
@@ -163,17 +199,22 @@ export function VoxelCharacter() {
     <group ref={root}>
       <group ref={bob}>
         <mesh geometry={parts.body} material={material} castShadow receiveShadow />
+        <mesh geometry={parts.body} material={ink} scale={1.08} />
         <group ref={armL} position={[-ARM_X, SHOULDER_Y, 0]}>
           <mesh geometry={parts.armL} material={material} castShadow />
+          <mesh geometry={parts.armL} material={ink} scale={1.12} />
         </group>
         <group ref={armR} position={[ARM_X, SHOULDER_Y, 0]}>
           <mesh geometry={parts.armR} material={material} castShadow />
+          <mesh geometry={parts.armR} material={ink} scale={1.12} />
         </group>
         <group ref={legL} position={[-LEG_X, HIP_Y, 0]}>
           <mesh geometry={parts.legL} material={material} castShadow />
+          <mesh geometry={parts.legL} material={ink} scale={1.12} />
         </group>
         <group ref={legR} position={[LEG_X, HIP_Y, 0]}>
           <mesh geometry={parts.legR} material={material} castShadow />
+          <mesh geometry={parts.legR} material={ink} scale={1.12} />
         </group>
       </group>
     </group>

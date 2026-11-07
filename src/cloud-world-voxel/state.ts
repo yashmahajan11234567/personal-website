@@ -41,6 +41,11 @@ export const pilot: Pilot = {
   boardFrom: null,
 };
 
+/** True when the OS asks for reduced motion; infinite ambient animation is gated on this. */
+export const REDUCED_MOTION =
+  typeof window !== 'undefined' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /** Analog input, written only by the touch controls. */
 export const input = { x: 0, z: 0, run: false, active: false };
 

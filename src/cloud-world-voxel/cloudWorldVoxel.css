@@ -98,7 +98,8 @@
 
 .cwv-btn--accent {
   background: var(--cw-terracotta);
-  color: #fff6e8;
+  /* ink on terracotta ≈ 4.8:1 — cream on terracotta was ~2.9:1 and failed WCAG AA */
+  color: var(--cw-ink);
 }
 
 /* ---------- help strip ---------- */
@@ -443,13 +444,89 @@
 
 .cwv-round--accent {
   background: var(--cw-terracotta);
-  color: #fff6e8;
+  color: var(--cw-ink);
 }
 
 .cwv-round--active {
   background: var(--cw-coral, #d96c4f);
   transform: translateY(3px);
   box-shadow: 0 1px 0 rgba(43, 33, 24, 0.32);
+}
+
+/* ---------- floating village labels ---------- */
+.cwv-label-wrap {
+  pointer-events: none;
+}
+
+.cwv-label {
+  pointer-events: none;
+  white-space: nowrap;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cw-ink);
+  border: 3px solid var(--cw-ink);
+  border-radius: 999px;
+  padding: 4px 12px;
+  box-shadow: 0 4px 0 rgba(43, 33, 24, 0.28);
+}
+
+@media (max-width: 820px) {
+  .cwv-label {
+    font-size: 10px;
+    padding: 3px 8px;
+    border-width: 2px;
+  }
+}
+
+/* ---------- objective strip (where to go next) ---------- */
+.cwv-objective {
+  position: fixed;
+  top: 62px;
+  left: 14px;
+  padding: 7px 14px;
+  background: rgba(245, 230, 200, 0.95);
+  border: 3px solid var(--cw-ink);
+  border-radius: 999px;
+  box-shadow: var(--cw-shadow);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--cw-ink);
+  z-index: 57;
+}
+
+/* ---------- panel footer hint ---------- */
+.cwv-panel__foot {
+  padding: 10px 18px;
+  border-top: 3px solid var(--cw-ink);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--cw-ink);
+  opacity: 0.8;
+}
+
+.cwv-panel__foot kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  margin: 0 2px;
+  border-radius: 3px;
+  background: var(--cw-blue-2);
+  color: var(--cw-cream);
+  font-family: inherit;
+  font-size: 10px;
+  text-align: center;
+}
+
+/* ---------- reduced motion: entrance animations are decorative, not functional ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .cwv-panel,
+  .cwv-toast {
+    animation: none;
+  }
 }
 
 /* ---------- narrow viewports ---------- */
@@ -490,5 +567,13 @@
   .cwv-prompt {
     bottom: 176px;
     font-size: 11px;
+  }
+}
+
+/* must come last so it also beats the narrow-viewport entrance animation above */
+@media (prefers-reduced-motion: reduce) {
+  .cwv-panel,
+  .cwv-toast {
+    animation: none;
   }
 }

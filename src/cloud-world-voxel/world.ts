@@ -226,7 +226,11 @@ function buildStructures(): VoxelList {
     placements.push({ chunk: c, cx: harbour.cx - 9, cz: harbour.cz + 6, quarter: 1, fx: 3, fz: 1 });
   }
 
-  /* ---------------- village: the five portfolio buildings ---------------- */
+  /* ---------------- village: the five portfolio buildings ----------------
+   * Each house gets its own identity so the village reads at a glance:
+   * a distinct roof silhouette, a saturated accent (plaque + signpost + path
+   * strip + floating label) and a rooftop landmark. Roof colours stay within
+   * the two adopted roof tokens; variety comes from shape, not new hues. */
   const village: { panel: string; lx: number; lz: number; quarter: number; opts: Parameters<typeof house>[1] }[] =
     [
       {
@@ -234,14 +238,14 @@ function buildStructures(): VoxelList {
         lx: 4,
         lz: -4,
         quarter: 0,
-        opts: { w: 9, d: 7, wallH: 4, roof: C.roofBlue, decor: 'shelves', accent: C.roofBlue, chimney: true },
+        opts: { w: 9, d: 7, wallH: 4, roof: C.roofBlue, roofShape: 'gable', landmark: 'flag', decor: 'shelves', accent: C.containerCyan, chimney: true },
       },
       {
         panel: 'projects',
         lx: 20,
         lz: -4,
         quarter: 0,
-        opts: { w: 9, d: 7, wallH: 4, roof: C.roofBlue, decor: 'stands', accent: C.whaleBlue, chimney: true },
+        opts: { w: 9, d: 7, wallH: 4, roof: C.roofTerracotta, roofDark: C.roofTerracottaDark, roofShape: 'hip', landmark: 'antenna', decor: 'stands', accent: C.flowerYellow, chimney: true },
       },
       {
         panel: 'experience',
@@ -254,8 +258,9 @@ function buildStructures(): VoxelList {
           wallH: 5,
           roof: C.roofTerracotta,
           roofDark: C.roofTerracottaDark,
+          roofShape: 'flat',
           decor: 'boards',
-          accent: C.roofTerracotta,
+          accent: C.flowerPink,
           columns: true,
           chimney: true,
         },
@@ -265,7 +270,7 @@ function buildStructures(): VoxelList {
         lx: 4,
         lz: 16,
         quarter: 2,
-        opts: { w: 9, d: 7, wallH: 4, roof: C.roofBlue, decor: 'racks', accent: C.containerCyan, chimney: false },
+        opts: { w: 9, d: 7, wallH: 4, roof: C.roofBlue, roofShape: 'hip', landmark: 'flag', decor: 'racks', accent: C.flowerPurple, chimney: false },
       },
       {
         panel: 'data',
@@ -278,6 +283,8 @@ function buildStructures(): VoxelList {
           wallH: 4,
           roof: C.roofTerracotta,
           roofDark: C.roofTerracottaDark,
+          roofShape: 'gable',
+          landmark: 'antenna',
           decor: 'benches',
           accent: C.cargoGreen,
           chimney: true,
@@ -287,6 +294,8 @@ function buildStructures(): VoxelList {
   for (const v of village) {
     const c = new Chunk();
     house(c, v.opts);
+    // an accent-coloured signpost at the front, facing out toward the plaza
+    signpost(c, 0, 0, (v.opts.d - 1) / 2 + 2, 0, 3, v.opts.accent);
     placements.push({
       chunk: c,
       cx: harbour.cx + v.lx,
@@ -313,6 +322,19 @@ function buildStructures(): VoxelList {
     // a paved cross through the plaza
     for (let x = -11; x <= 11; x++) c.putBox(x, 0.06, 0, 1, 0.12, 3.4, C.sandDark);
     for (let z = -9; z <= 9; z++) c.putBox(0, 0.06, z, 3.4, 0.12, 1, C.sandDark);
+    // accent-coloured path strips from the cross to each house front, so the
+    // way to every house is visible on the ground, not just on the label
+    const paths: { tx: number; tz: number; accent: number }[] = [
+      { tx: -8, tz: -4, accent: C.containerCyan }, // Skills House
+      { tx: 8, tz: -4, accent: C.flowerYellow }, // Projects House
+      { tx: -6, tz: 0, accent: C.flowerPink }, // Experience House
+      { tx: -8, tz: 5, accent: C.flowerPurple }, // Cloud / DevOps House
+      { tx: 8, tz: 5, accent: C.cargoGreen }, // Data / AI House
+    ];
+    for (const p of paths) {
+      c.putBox((p.tx / 2), 0.06, 0, Math.abs(p.tx) + 1, 0.12, 1.6, p.accent);
+      c.putBox(p.tx, 0.06, p.tz / 2, 1.6, 0.12, Math.abs(p.tz) + 1, p.accent);
+    }
     placements.push({
       chunk: c,
       cx: harbour.cx + 12,
@@ -507,9 +529,29 @@ export interface Hotspot {
 
 export const VILLAGE_ORIGIN = { x: 36 + 11, z: 36 + 4 };
 
+/** Floating label above each village house (rendered as HTML billboards). */
+export interface VillageLabel {
+  label: string;
+  x: number;
+  y: number;
+  z: number;
+  accent: number;
+}
+export const VILLAGE_LABELS: VillageLabel[] = [];
+
+/** Each house's accent colour, keyed by panel id (single source of truth). */
+export const ACCENT_BY_PANEL: Record<string, number> = {
+  skills: C.containerCyan,
+  projects: C.flowerYellow,
+  experience: C.flowerPink,
+  cloud: C.flowerPurple,
+  data: C.cargoGreen,
+};
+
 function buildSigns(): { blocks: VoxelList; hotspots: Hotspot[] } {
   const blocks: VoxelList = [];
   const hotspots: Hotspot[] = [];
+  VILLAGE_LABELS.length = 0;
   const H = 36; // harbour island centre
 
   /** Plant a voxel signpost on the ground at (x, z) and register its hotspot. */
@@ -576,6 +618,13 @@ function buildSigns(): { blocks: VoxelList; hotspots: Hotspot[] } {
     const g = islandSurfaceY(f.x, f.z);
     if (g === null) continue;
     hotspots.push({ id: `hs_${f.panel}`, panel: f.panel, label: f.label, x: f.x, y: g + 1, z: f.z, r: 6 });
+    VILLAGE_LABELS.push({
+      label: f.label,
+      x: f.x,
+      y: g + 9,
+      z: f.z,
+      accent: ACCENT_BY_PANEL[f.panel] ?? C.roofBlue,
+    });
   }
 
   /* ---- beacon islet ---- */

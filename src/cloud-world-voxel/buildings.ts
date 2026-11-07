@@ -15,6 +15,7 @@
  * `place(chunk, out, x, y, z, quarter)`.
  */
 import { C } from './palette';
+import { flagpole } from './props';
 import type { Chunk } from './voxel';
 
 export interface HouseOptions {
@@ -30,6 +31,10 @@ export interface HouseOptions {
   decor: 'shelves' | 'boards' | 'stands' | 'racks' | 'benches' | 'hall';
   /** sign plaque colour */
   accent: number;
+  /** roof silhouette: gable (ridge along z), hip (pyramid), flat (parapet) */
+  roofShape?: 'gable' | 'hip' | 'flat';
+  /** rooftop landmark so each house reads from across the plaza */
+  landmark?: 'flag' | 'antenna';
   /** taller, grander entrance with columns */
   columns?: boolean;
   /** a second storey band of windows */
@@ -141,26 +146,62 @@ export function house(c: Chunk, o: HouseOptions): void {
   c.put(openHalf - 1, o.wallH, hz, C.woodDark);
   if (openHalf > 2) c.put(0, o.wallH, hz, C.woodDark);
 
-  // Roof: stepped gable, overhanging one block on all four sides.
-  //
-  // The roof rises TWO z-units per layer. The first pass rose one, which for a
-  // 7-deep house produced five stacked slabs and a roof twice as tall as the
-  // walls under it — the village read as a field of roofs with legs.
-  // Two units per layer gives three slabs and a ridge, so the walls stay the
-  // dominant mass, which is what the references actually show.
+  // dark eave line: the roof overhangs one block, so a dark ring at the wall
+  // top reads as a shadow line and separates roof from walls at distance
+  for (let x = -hx - 1; x <= hx + 1; x++) {
+    for (let z = -hz - 1; z <= hz + 1; z++) {
+      if (Math.abs(x) === hx + 1 || Math.abs(z) === hz + 1) c.put(x, o.wallH, z, roofDark);
+    }
+  }
+
+  // Roof: overhangs one block on all four sides. Three silhouettes keep the
+  // five village houses distinguishable from across the plaza:
+  //   gable — stepped slabs rising two z-units per layer to a ridge
+  //   hip   — same rise, but the x span shrinks every layer (pyramid)
+  //   flat  — one roof slab plus a parapet ring
+  const shape = o.roofShape ?? 'gable';
   let roofLayer = 0;
-  for (let i = 0; i <= hz + 1; i += 2) {
-    const y = o.wallH + 1 + roofLayer;
-    const zA = -hz - 1 + i;
-    const zB = hz + 1 - i;
-    if (zA > zB) break;
-    const ridge = zA === zB;
+  if (shape === 'flat') {
+    const y = o.wallH + 1;
     for (let x = -hx - 1; x <= hx + 1; x++) {
-      for (let z = zA; z <= zB; z++) {
-        c.put(x, y, z, ridge ? roofDark : o.roof);
+      for (let z = -hz - 1; z <= hz + 1; z++) {
+        const edge = Math.abs(x) === hx + 1 || Math.abs(z) === hz + 1;
+        c.put(x, y, z, edge ? roofDark : o.roof);
       }
     }
-    roofLayer++;
+    for (let x = -hx - 1; x <= hx + 1; x++) {
+      for (let z = -hz - 1; z <= hz + 1; z++) {
+        if (Math.abs(x) === hx + 1 || Math.abs(z) === hz + 1) c.put(x, y + 1, z, roofDark);
+      }
+    }
+    roofLayer = 2;
+  } else {
+    for (let i = 0; i <= hz + 1; i += 2) {
+      const y = o.wallH + 1 + roofLayer;
+      const zA = -hz - 1 + i;
+      const zB = hz + 1 - i;
+      if (zA > zB) break;
+      const ridge = zA === zB;
+      // hip roofs also taper along x, one block per side per layer
+      const xHalf = hx + 1 - (shape === 'hip' ? roofLayer : 0);
+      for (let x = -xHalf; x <= xHalf; x++) {
+        for (let z = zA; z <= zB; z++) {
+          c.put(x, y, z, ridge ? roofDark : o.roof);
+        }
+      }
+      roofLayer++;
+    }
+  }
+
+  // rooftop landmark on the ridge / parapet top
+  const topY = o.wallH + 1 + roofLayer;
+  if (o.landmark === 'flag') {
+    flagpole(c, 0, topY, 0, 3, o.accent);
+  } else if (o.landmark === 'antenna') {
+    for (let i = 0; i < 3; i++) c.put(0, topY + i, 0, C.woodDark);
+    c.put(-1, topY + 2, 0, C.woodDark);
+    c.put(1, topY + 2, 0, C.woodDark);
+    c.put(0, topY + 3, 0, o.accent);
   }
 
   if (o.columns) {

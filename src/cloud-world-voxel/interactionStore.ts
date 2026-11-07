@@ -20,9 +20,15 @@ export interface InteractionState {
   /** a berth is in reach, so E will board or step ashore */
   canBoard: boolean;
   canDisembark: boolean;
+  /** current zone label, published by the character on zone change (event, not poll) */
+  zone: string;
+  /** walk | boat, mirrored from pilot on transitions */
+  mode: 'walk' | 'boat';
   setHovered: (id: string | null) => void;
   setNear: (id: string | null) => void;
   setBoard: (canBoard: boolean, canDisembark: boolean) => void;
+  setZone: (zone: string) => void;
+  setMode: (mode: 'walk' | 'boat') => void;
   open: (panelId: string) => void;
   close: () => void;
 }
@@ -33,12 +39,16 @@ export const useInteraction = create<InteractionState>((set) => ({
   openPanel: null,
   canBoard: false,
   canDisembark: false,
+  zone: 'Starting Island',
+  mode: 'walk',
   setHovered: (id) => set((s) => (s.hoveredId === id ? s : { hoveredId: id })),
   setNear: (id) => set((s) => (s.nearId === id ? s : { nearId: id })),
   setBoard: (canBoard, canDisembark) =>
     set((s) =>
       s.canBoard === canBoard && s.canDisembark === canDisembark ? s : { canBoard, canDisembark },
     ),
+  setZone: (zone) => set((s) => (s.zone === zone ? s : { zone })),
+  setMode: (mode) => set((s) => (s.mode === mode ? s : { mode })),
   open: (panelId) => set({ openPanel: panelId }),
   close: () => set({ openPanel: null }),
 }));
