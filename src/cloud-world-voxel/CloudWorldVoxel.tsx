@@ -135,14 +135,36 @@ function WorldEffects() {
         if (mode === 'walk') {
           pilot.pos.set(x, walkableHeight(x, z) ?? 2, z);
           pilot.visualY = pilot.pos.y;
+          pilot.grounded = true;
+          pilot.velY = 0;
+          pilot.moveTarget = null;
         } else {
           pilot.boatPos.set(x, 0, z);
           pilot.pos.set(x, pilot.visualY, z);
         }
       },
-      look: (orbit: number, zoom = 1) => {
+      look: (orbit: number, zoom = 1, pitch?: number) => {
         view.orbit = orbit;
         view.zoom = zoom;
+        if (typeof pitch === 'number') view.pitch = pitch;
+      },
+      /** QA: press jump exactly like the player does (buffered, fixed-step) */
+      jump: () => {
+        keys[' '] = true;
+        window.setTimeout(() => {
+          keys[' '] = false;
+        }, 60);
+      },
+      /** QA: hold the jump key down for `ms` */
+      holdJump: (ms: number) => {
+        keys[' '] = true;
+        window.setTimeout(() => {
+          keys[' '] = false;
+        }, ms);
+      },
+      /** QA: order a walk to a ground point, exactly like a click does */
+      moveTo: (x: number, z: number) => {
+        pilot.moveTarget = { x, z };
       },
       renderer: gl,
       camera,

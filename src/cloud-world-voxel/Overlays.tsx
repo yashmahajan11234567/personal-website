@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PANELS, PANEL_ORDER, type PanelDef } from './panels';
 import { hotspot, useInteraction } from './interactionStore';
-import { input, view } from './state';
+import { input, view, keys } from './state';
 
 /* ------------------------------------------------------------------ */
 /* Location                                                            */
@@ -28,10 +28,10 @@ function useObjective(): string {
   const mode = useInteraction((s) => s.mode);
   const zone = useInteraction((s) => s.zone);
   if (mode === 'boat') return 'Sail to Welcome Harbour';
-  if (zone === 'Starting Island') return 'Find the dock and board the Docker Whale (E)';
-  if (zone === 'Portfolio Village') return 'Visit the five houses — walk to a sign, press E';
-  if (zone === 'Welcome Harbour') return 'Explore the harbour, then enter the village';
-  return 'Explore';
+  if (zone === 'Starting Island') return 'Click the ground to walk · jump the rocks · board the whale (E)';
+  if (zone === 'Portfolio Village') return 'Click a house to open it · E when you are close';
+  if (zone === 'Welcome Harbour') return 'Explore the harbour, then head up to the village';
+  return 'Click the ground to walk';
 }
 
 /* ------------------------------------------------------------------ */
@@ -52,7 +52,7 @@ export function HUD({ onExit }: { onExit: () => void }) {
         </div>
         <div className="cwv-hud__right">
           <span className="cwv-hud__hint" style={{ fontSize: 10.5, opacity: 0.85 }}>
-            WASD move · Shift run · E interact · drag to look
+            WASD move · Shift run · Space jump · click ground to walk · drag to look
           </span>
           <button className="cwv-btn" onClick={() => setHelp((h) => !h)} aria-expanded={help}>
             {help ? 'Hide controls' : 'Controls'}
@@ -77,13 +77,23 @@ export function HUD({ onExit }: { onExit: () => void }) {
             <kbd>⇧</kbd> run
           </div>
           <div>
+            <kbd>space</kbd> jump
+          </div>
+          <div>
+            <kbd>click</kbd> ground to walk there
+          </div>
+          <div>
+            <kbd>click</kbd> a house or sign to open it
+          </div>
+          <div>
             <kbd>E</kbd> interact / board the whale
           </div>
           <div>
             <kbd>esc</kbd> close a panel
           </div>
-          <div>drag — orbit the camera</div>
+          <div>drag — orbit and pitch the camera</div>
           <div>scroll — zoom</div>
+          <div>double-click — recentre the camera</div>
         </div>
       )}
     </>
@@ -359,6 +369,13 @@ export function TouchControls() {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'e' }));
   };
 
+  const jump = () => {
+    keys[' '] = true;
+    window.setTimeout(() => {
+      keys[' '] = false;
+    }, 90);
+  };
+
   return (
     <div className="cwv-touch">
       <div ref={pad} className="cwv-stick" aria-hidden="true">
@@ -367,6 +384,9 @@ export function TouchControls() {
       <div className="cwv-touch__buttons">
         <button className="cwv-round" onClick={interact}>
           USE
+        </button>
+        <button className="cwv-round cwv-round--jump" onClick={jump}>
+          JUMP
         </button>
         <button
           className={`cwv-round cwv-round--accent${runOn ? ' cwv-round--active' : ''}`}

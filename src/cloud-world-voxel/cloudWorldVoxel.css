@@ -447,6 +447,11 @@
   color: var(--cw-ink);
 }
 
+.cwv-round--jump {
+  background: var(--cw-blue-2);
+  color: var(--cw-cream);
+}
+
 .cwv-round--active {
   background: var(--cw-coral, #d96c4f);
   transform: translateY(3px);

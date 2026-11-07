@@ -1,32 +1,34 @@
 /**
- * InteractionSystem — proximity, hover, click and boarding.
+ * InteractionSystem — hover, click, click-to-move, proximity and boarding.
  *
- * The two interaction modes required by the brief live here together so they
- * can never disagree:
+ * Three input paths, all resolved in one place so they can never disagree:
  *
- *   PROXIMITY  the nearest hotspot within reach becomes `nearId`; the HTML
- *              layer renders its prompt and E acts on it.
- *   CLICK      a raycast against invisible hotspot volumes sets `hoveredId`;
- *              clicking opens that hotspot's panel.
+ *   HOVER      a pointer raycast against one box proxy per hotspot sets
+ *              `hoveredId`. Boxes (not spheres) because buildings are boxes —
+ *              a sphere lets the cursor miss a roof corner it is clearly over.
+ *   CLICK      if the cursor is over a hotspot, open its panel. Otherwise
+ *              raycast the ground plane and set `pilot.moveTarget`, so the
+ *              whole floor of the world is a control surface. This is what
+ *              makes the world feel clickable rather than key-only.
+ *   PROXIMITY  the nearest hotspot in reach becomes `nearId`; E acts on it.
  *
- * BOARDING OUTRANKS PANELS ON A DOCK. Standing at the end of a pier, the whale
- * hotspot and the board action overlap, and the visitor's intent there is
- * always to get on the boat. The whale's panel is still reachable by clicking
- * its hotspot.
+ * BOARDING OUTRANKS PANELS ON A DOCK: at the end of a pier the visitor always
+ * wants the boat. The whale's panel stays reachable by clicking it.
  *
- * v2's version called `useInteraction()` inside a click handler — a hook call
- * outside render, which happens to survive because the dispatch is
- * renderer-global. Here the hovered id lives in a ref, which is simply correct.
+ * COST CONTROL: the hover raycast only runs when the pointer or the camera
+ * actually moved since the last frame. A resting cursor costs nothing.
  */
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { BERTHS, HOTSPOTS, deckAt, nearestBerth } from './world';
+import { BERTHS, HOTSPOTS, deckAt, nearestBerth, walkableHeight } from './world';
 import { islandAt, nearestShoreIsland } from './terrain';
 import { pilot } from './state';
 import { useInteraction } from './interactionStore';
 
 const DISEMBARK_RANGE = 14;
+/** click-to-move refuses targets further than this (keeps it a gesture, not a teleport) */
+const MAX_MOVE_DIST = 60;
 
 export function InteractionSystem() {
   const { camera, gl } = useThree();
@@ -35,6 +37,10 @@ export function InteractionSystem() {
   const ndc = useRef(new THREE.Vector2(9, 9));
   const hoveredRef = useRef<string | null>(null);
   const nearRef = useRef<string | null>(null);
+
+  // ground plane at y = 0 for click-to-move; terrain height is resolved after
+  const groundPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), []);
+  const hitPoint = useMemo(() => new THREE.Vector3(), []);
 
   const setHovered = useInteraction((s) => s.setHovered);
   const setNear = useInteraction((s) => s.setNear);
@@ -59,20 +65,32 @@ export function InteractionSystem() {
     };
   }, [gl]);
 
-  /* ---- click opens whatever is hovered ---- */
+  /* ---- click: hotspot first, otherwise walk there ---- */
   useEffect(() => {
     const el = gl.domElement;
     const onClick = () => {
       const id = hoveredRef.current;
-      if (!id) return;
-      const hs = HOTSPOTS.find((h) => h.id === id);
-      if (hs) open(hs.panel);
+      if (id) {
+        const hs = HOTSPOTS.find((h) => h.id === id);
+        if (hs) open(hs.panel);
+        return;
+      }
+      // click-to-move: only meaningful on foot, and never while a panel is open
+      if (pilot.mode !== 'walk' || useInteraction.getState().openPanel) return;
+      raycaster.setFromCamera(ndc.current, camera);
+      if (!raycaster.ray.intersectPlane(groundPlane, hitPoint)) return;
+      const d = Math.hypot(hitPoint.x - pilot.pos.x, hitPoint.z - pilot.pos.z);
+      if (d > MAX_MOVE_DIST) return;
+      // re-project onto the real terrain so clicking a hillside aims at its top
+      const surface = walkableHeight(hitPoint.x, hitPoint.z);
+      if (surface === null) return;
+      pilot.moveTarget = { x: hitPoint.x, z: hitPoint.z };
     };
     el.addEventListener('click', onClick);
     return () => el.removeEventListener('click', onClick);
-  }, [gl, open]);
+  }, [gl, camera, open, groundPlane, hitPoint]);
 
-  /* ---- keyboard ---- */
+  /* ---- keyboard: E interact, Esc close, Space jump ---- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement;
@@ -80,6 +98,11 @@ export function InteractionSystem() {
       const k = e.key.toLowerCase();
       if (k === 'escape') {
         close();
+        return;
+      }
+      if (k === ' ' && !e.repeat) {
+        // jump is buffered in the controller; this only guarantees the press is
+        // seen even if a keydown lands between fixed steps
         return;
       }
       if (k !== 'e') return;
@@ -111,6 +134,8 @@ export function InteractionSystem() {
           pilot.boatPos.set(lx, 0, lz);
           pilot.pos.set(lx, d.y, lz);
           pilot.moving = false;
+          pilot.grounded = true;
+          pilot.velY = 0;
           useInteraction.getState().setMode('walk');
           const isl = islandAt(lx, lz) ?? nearestShoreIsland(lx, lz, 24);
           useInteraction.getState().setZone(isl ? isl.label : 'Welcome Harbour');
@@ -130,9 +155,6 @@ export function InteractionSystem() {
   }, [open, close]);
 
   /* ---- per-frame hover + proximity ---- */
-  /* hover raycast only re-runs when the pointer actually moved since the last
-   * frame (or the camera did) — raycasting 30 volumes every frame while the
-   * mouse sits still is wasted main-thread time */
   const pointerDirty = useRef(true);
   const lastCam = useRef([0, 0, 0]);
   useEffect(() => {
@@ -160,10 +182,15 @@ export function InteractionSystem() {
     if (group.current && ndc.current.x < 2 && pointerDirty.current) {
       raycaster.setFromCamera(ndc.current, camera);
       const hits = raycaster.intersectObjects(group.current.children, false);
-      hovered = hits.length > 0 ? (hits[0].object.userData.hotspotId as string) ?? null : null;
+      // nearest volume wins: proxies can crowd in the village plaza, and
+      // whatever the cursor is physically closest to is what the player meant
+      hovered = hits.length > 0 ? ((hits[0].object.userData.hotspotId as string) ?? null) : null;
       pointerDirty.current = false;
+      // cursor affordance: a hotspot is clickable, the bare ground is walkable
+      gl.domElement.style.cursor = hovered ? 'pointer' : 'default';
     } else if (ndc.current.x >= 2) {
       hovered = null; // pointer left the canvas
+      gl.domElement.style.cursor = 'default';
     }
     if (hovered !== hoveredRef.current) {
       hoveredRef.current = hovered;
@@ -198,11 +225,19 @@ export function InteractionSystem() {
       {HOTSPOTS.map((h) => (
         <mesh
           key={h.id}
-          position={[h.x, h.y + 0.6, h.z]}
+          position={[h.x, h.y + 2.1, h.z]}
           userData={{ hotspotId: h.id }}
           visible={false}
         >
-          <sphereGeometry args={[h.r * 0.55, 8, 6]} />
+          {/* CLICK VOLUME ≠ PROXIMITY RADIUS.
+              `h.r` is how close you must walk for E to work — 6-8 blocks, far
+              wider than a building. Sizing the click box off it blanketed the
+              plaza: 44 of 48 screen points resolved to a hotspot, so ground
+              clicks never became walk orders, and adjacent houses stole each
+              other's clicks. The box is now building-shaped (torso to roof,
+              narrower than the gap between houses) and the raycast takes the
+              nearest hit, so aiming at a wall opens that house. */}
+          <boxGeometry args={[h.r * 0.42, h.r * 0.62, h.r * 0.42]} />
           <meshBasicMaterial />
         </mesh>
       ))}

@@ -1,15 +1,25 @@
 /**
  * The visitor: controller + voxel body.
  *
- * Movement reuses the v2 controller's approach — normalised input, fixed-step
- * integration, and an axis-by-axis slide so walking into a cliff face does not
- * stop you dead. The one thing v2 did not do is SMOOTH THE VERTICAL: with
- * terrain quantised to whole blocks, a terrace edge would snap the character up
- * a full unit and look like a teleport. Here the physics position is snapped
- * (so collision stays honest) while the rendered position eases toward it.
+ * MOTION MODEL (third-person action, per input-systems / camera-systems /
+ * game-feel skills):
  *
- * While aboard, the character stands on the whale's deck and the whale drives
- * the position; the controller keeps animating so the visitor is never a statue.
+ *   fixed step  physics integrates on a fixed 60 Hz accumulator so jump arcs
+ *               are identical at 30 and 144 fps.
+ *   gravity     velY drives vertical motion; terrain only supplies the floor.
+ *               Jumping is therefore a real ballistic arc, not a tween.
+ *   stepping    walking into a 1-block terrace climbs it instantly (voxel
+ *               step-up), anything taller blocks the axis. Axis-by-axis slide
+ *               keeps you moving along a cliff instead of stopping dead.
+ *   buffering   a jump pressed up to 120 ms early fires on landing; a jump
+ *               pressed up to 100 ms after leaving a ledge still fires
+ *               (coyote time). Both are the standard forgiveness windows.
+ *   click-move  a ground click sets moveTarget; the controller paths there and
+ *               any manual input cancels the order immediately.
+ *
+ * RENDER vs PHYSICS: physics Y snaps (collision stays honest), and the render
+ * Y eases only when grounded, so terraces glide but jumps stay crisp. Squash
+ * and landing impact are render-side only — they never touch collision.
  */
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
@@ -24,6 +34,14 @@ const WALK_SPEED = 4.6;
 const RUN_SPEED = 8.4;
 const TURN_RATE = 13;
 const STEP = 1 / 60;
+
+const GRAVITY = 26;
+const JUMP_V = 8.5; // apex ≈ 1.39 blocks
+const STEP_UP = 1.15; // one voxel of terrace is walkable
+const JUMP_BUFFER = 0.12;
+const COYOTE = 0.1;
+const ARRIVE = 0.75;
+
 const ARM_X = 0.3;
 const LEG_X = 0.13;
 
@@ -44,6 +62,8 @@ export function VoxelCharacter() {
   const legR = useRef<THREE.Group>(null);
   const acc = useRef(0);
   const lastZone = useRef('Starting Island');
+  const prevJump = useRef(false);
+  const squash = useRef(0);
 
   /** Publish the zone label to the HUD store, but only when it actually changes. */
   function publishZone(): void {
@@ -52,8 +72,9 @@ export function VoxelCharacter() {
       zone = 'At sea — Docker Whale';
     } else {
       // piers/jetties sit over water: credit them to the island they serve
-      // (berths are up to ~16 blocks offshore, so the margin must be generous)
-      const isl = islandAt(pilot.pos.x, pilot.pos.z) ?? nearestShoreIsland(pilot.pos.x, pilot.pos.z, 24);
+      const isl =
+        islandAt(pilot.pos.x, pilot.pos.z) ??
+        nearestShoreIsland(pilot.pos.x, pilot.pos.z, 24);
       zone = isl ? isl.label : 'At sea';
       if (
         zone === 'Welcome Harbour' &&
@@ -76,13 +97,16 @@ export function VoxelCharacter() {
       acc.current -= STEP;
       stepPhysics();
     }
-    // publish every frame, not only while moving, so teleports/idle edge cases
-    // can never leave a stale zone label in the HUD (store dedupes on change)
+    // publish every frame so teleports/idle can never leave a stale zone label
     publishZone();
 
-    // render-side vertical easing: the feet glide between terrace levels
-    const targetY = pilot.mode === 'boat' ? boatPose.worldY + boatPose.deckY : pilot.pos.y;
-    pilot.visualY += (targetY - pilot.visualY) * Math.min(1, dt * 14);
+    // render-side vertical: crisp while airborne, eased on terraces
+    const deckTarget = pilot.mode === 'boat' ? boatPose.worldY + boatPose.deckY : pilot.pos.y;
+    if (pilot.grounded || pilot.mode === 'boat') {
+      pilot.visualY += (deckTarget - pilot.visualY) * Math.min(1, dt * 14);
+    } else {
+      pilot.visualY = deckTarget;
+    }
 
     const g = root.current;
     if (g) {
@@ -93,10 +117,13 @@ export function VoxelCharacter() {
       g.rotation.y += dy * Math.min(1, dt * TURN_RATE);
     }
 
-    animate();
+    animate(dt);
   });
 
   function stepPhysics() {
+    pilot.simTime += STEP;
+
+    // ---- 1. read intent ---------------------------------------------------
     let ix = 0;
     let iz = 0;
     if (keys['w'] || keys['arrowup']) iz -= 1;
@@ -107,15 +134,37 @@ export function VoxelCharacter() {
       ix += input.x;
       iz += input.z;
     }
-    const len = Math.hypot(ix, iz);
+    const manual = Math.hypot(ix, iz) > 0.05;
     const run = !!keys['shift'] || input.run;
+
+    // jump edge → buffer (input-systems: remember the press briefly)
+    const jumpDown = !!keys[' '];
+    if (jumpDown && !prevJump.current) pilot.jumpBuffer = JUMP_BUFFER;
+    prevJump.current = jumpDown;
+    pilot.jumpBuffer = Math.max(0, pilot.jumpBuffer - STEP);
+    pilot.coyote = Math.max(0, pilot.coyote - STEP);
+
+    // ---- 2. click-to-move: manual input always wins -----------------------
+    if (manual) {
+      pilot.moveTarget = null;
+    } else if (pilot.moveTarget && pilot.mode === 'walk') {
+      const dx = pilot.moveTarget.x - pilot.pos.x;
+      const dz = pilot.moveTarget.z - pilot.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d <= ARRIVE) {
+        pilot.moveTarget = null;
+      } else {
+        ix = dx / d;
+        iz = dz / d;
+      }
+    }
+
+    const len = Math.hypot(ix, iz);
     pilot.running = run && len > 0.05;
     pilot.moving = len > 0.05;
 
-    // boarding / disembark ease: glide pos between pier and deck instead of
-    // snapping, in whichever mode we are entering
+    // ---- 3. boarding / disembark glide ------------------------------------
     if (pilot.boardFrom) {
-      // if the player starts walking mid-glide, let movement take over
       if (pilot.mode === 'walk' && pilot.moving) {
         pilot.boardFrom = null;
       } else {
@@ -129,35 +178,82 @@ export function VoxelCharacter() {
     }
 
     if (pilot.mode === 'walk') {
-      if (!pilot.moving) return;
-      ix /= len;
-      iz /= len;
-      // Input is camera-relative: "forward" always means away from the camera,
-      // whatever the orbit angle happens to be. The basis vectors are published
-      // by CameraRig from the real blended offset each frame.
-      const wx = view.camRight.x * ix + view.camFwd.x * -iz;
-      const wz = view.camRight.z * ix + view.camFwd.z * -iz;
-      const speed = run ? RUN_SPEED : WALK_SPEED;
-      const nx = pilot.pos.x + wx * speed * STEP;
-      const nz = pilot.pos.z + wz * speed * STEP;
-      const h3 = walkableHeight(nx, nz);
-      const h1 = walkableHeight(nx, pilot.pos.z);
-      const h2 = walkableHeight(pilot.pos.x, nz);
-      if (h3 !== null) pilot.pos.set(nx, h3, nz);
-      else if (h1 !== null) pilot.pos.set(nx, h1, pilot.pos.z);
-      else if (h2 !== null) pilot.pos.set(pilot.pos.x, h2, nz);
-      pilot.heading = Math.atan2(wx, wz);
-      pilot.stride += speed * STEP * 2.6;
+      // ---- 4. horizontal: camera-relative, axis slide, step-up -----------
+      if (pilot.moving) {
+        const nx0 = ix / len;
+        const nz0 = iz / len;
+        const wx = view.camRight.x * nx0 + view.camFwd.x * -nz0;
+        const wz = view.camRight.z * nx0 + view.camFwd.z * -nz0;
+        const speed = run ? RUN_SPEED : WALK_SPEED;
+        const nx = pilot.pos.x + wx * speed * STEP;
+        const nz = pilot.pos.z + wz * speed * STEP;
+
+        // step-up tolerance is generous while grounded, zero while airborne
+        const tol = pilot.grounded ? STEP_UP : 0.06;
+        const feet = pilot.pos.y;
+        const ok = (h: number | null) => h !== null && h - feet <= tol;
+
+        const h3 = walkableHeight(nx, nz);
+        const h1 = walkableHeight(nx, pilot.pos.z);
+        const h2 = walkableHeight(pilot.pos.x, nz);
+        if (ok(h3)) {
+          pilot.pos.x = nx;
+          pilot.pos.z = nz;
+          if (pilot.grounded) pilot.pos.y = h3 as number;
+        } else if (ok(h1)) {
+          pilot.pos.x = nx;
+          if (pilot.grounded) pilot.pos.y = h1 as number;
+        } else if (ok(h2)) {
+          pilot.pos.z = nz;
+          if (pilot.grounded) pilot.pos.y = h2 as number;
+        } else {
+          pilot.moveTarget = null; // blocked: drop the order rather than grind
+        }
+        pilot.heading = Math.atan2(wx, wz);
+        pilot.stride += speed * STEP * 2.6;
+      }
+
+      // ---- 5. vertical: gravity, landing, jump ---------------------------
+      const ground = walkableHeight(pilot.pos.x, pilot.pos.z);
+      const floorY = ground === null ? pilot.pos.y : ground;
+
+      if (pilot.grounded) {
+        // stick to the floor; if the floor dropped away, start falling
+        if (pilot.pos.y - floorY > 0.12) {
+          pilot.grounded = false;
+          pilot.coyote = COYOTE;
+        } else {
+          pilot.pos.y = floorY;
+        }
+      }
+
+      if (!pilot.grounded) {
+        pilot.velY -= GRAVITY * STEP;
+        pilot.pos.y += pilot.velY * STEP;
+        if (pilot.pos.y <= floorY) {
+          // landing: clamp, record impact for the renderer, restore grounding
+          pilot.landImpact = Math.min(1, Math.abs(pilot.velY) / 12);
+          pilot.pos.y = floorY;
+          pilot.velY = 0;
+          pilot.grounded = true;
+        }
+      }
+
+      // jump consumes buffer when grounded or inside the coyote window
+      if (pilot.jumpBuffer > 0 && (pilot.grounded || pilot.coyote > 0)) {
+        pilot.velY = JUMP_V;
+        pilot.grounded = false;
+        pilot.coyote = 0;
+        pilot.jumpBuffer = 0;
+      }
     } else {
-      // boarding ease moved to the top of stepPhysics so both transitions glide
+      // ---- sailing -------------------------------------------------------
       const speed = run ? 13 : 8.5;
       if (pilot.moving) {
-        ix /= len;
-        iz /= len;
-        // same camera-relative basis as walking, so the whale steers where the
-        // screen points, not where world +z happens to be
-        const wx = view.camRight.x * ix + view.camFwd.x * -iz;
-        const wz = view.camRight.z * ix + view.camFwd.z * -iz;
+        const nx0 = ix / len;
+        const nz0 = iz / len;
+        const wx = view.camRight.x * nx0 + view.camFwd.x * -nz0;
+        const wz = view.camRight.z * nx0 + view.camFwd.z * -nz0;
         const nx = pilot.boatPos.x + wx * speed * STEP;
         const nz = pilot.boatPos.z + wz * speed * STEP;
         if (canSailTo(nx, pilot.boatPos.z)) pilot.boatPos.x = nx;
@@ -167,31 +263,47 @@ export function VoxelCharacter() {
         pilot.stride += speed * STEP * 1.1;
       }
       pilot.pos.set(pilot.boatPos.x, boatPose.worldY + boatPose.deckY, pilot.boatPos.z);
+      pilot.grounded = true;
+      pilot.velY = 0;
+      pilot.moveTarget = null;
     }
   }
 
-  function animate() {
-    const moving = pilot.moving && pilot.mode === 'walk';
+  function animate(dt: number) {
+    const airborne = !pilot.grounded && pilot.mode === 'walk';
+    const moving = pilot.moving && pilot.mode === 'walk' && !airborne;
     const fast = pilot.running && pilot.mode === 'walk';
     const swing = moving ? Math.sin(pilot.stride * 2) * (fast ? 1.0 : 0.62) : 0;
 
-    if (legL.current) legL.current.rotation.x = swing;
-    if (legR.current) legR.current.rotation.x = -swing;
+    // airborne pose: legs tuck, arms rise — reads as a jump from any angle
+    const tuck = airborne ? 0.85 : 0;
+
+    if (legL.current) legL.current.rotation.x = swing + tuck;
+    if (legR.current) legR.current.rotation.x = -swing + tuck * 0.6;
     if (armL.current) {
-      armL.current.rotation.x = -swing * 0.8;
-      armL.current.rotation.z = 0.07;
+      armL.current.rotation.x = airborne ? -1.5 : -swing * 0.8;
+      armL.current.rotation.z = airborne ? 0.5 : 0.07;
     }
     if (armR.current) {
-      armR.current.rotation.x = swing * 0.8;
-      armR.current.rotation.z = -0.07;
+      armR.current.rotation.x = airborne ? -1.5 : swing * 0.8;
+      armR.current.rotation.z = airborne ? -0.5 : -0.07;
     }
+
+    // landing impact decays fast; drives a vertical squash that conserves volume
+    pilot.landImpact = Math.max(0, pilot.landImpact - dt * 4.5);
+    const impact = pilot.landImpact;
+    if (impact > 0.01) squash.current = impact * 0.55;
+    squash.current *= 1 - Math.min(1, dt * 9);
+
     if (bob.current) {
-      // idle bob is an infinite ambient loop — collapse it under reduced motion
       const idle = REDUCED_MOTION ? 0 : Math.sin(performance.now() * 0.0018) * 0.018;
       bob.current.position.y = moving
         ? Math.abs(Math.sin(pilot.stride * 2)) * (fast ? 0.055 : 0.032)
         : idle;
       bob.current.rotation.x = fast ? -0.13 : 0;
+      // squash on landing, stretch on the way up
+      const stretch = airborne ? THREE.MathUtils.clamp(pilot.velY * 0.014, -0.1, 0.14) : 0;
+      bob.current.scale.set(1 + squash.current * 0.5, 1 - squash.current + stretch, 1 + squash.current * 0.5);
     }
   }
 

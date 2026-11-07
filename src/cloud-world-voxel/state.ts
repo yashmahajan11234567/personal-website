@@ -24,6 +24,22 @@ export interface Pilot {
   stride: number;
   /** while non-null, the character is easing from this point onto the whale deck */
   boardFrom: { x: number; z: number; t: number } | null;
+
+  /* ---- vertical physics (T1) ---- */
+  /** vertical velocity, blocks/second; positive is up */
+  velY: number;
+  /** true while standing on terrain or a deck */
+  grounded: boolean;
+  /** seconds remaining in which a jump press is remembered (input buffering) */
+  jumpBuffer: number;
+  /** seconds remaining after walking off an edge where a jump still works */
+  coyote: number;
+  /** 0..1 impulse set on touchdown, decayed by the renderer for landing feel */
+  landImpact: number;
+  /** click-to-move destination in the ground plane; null when not pathing */
+  moveTarget: { x: number; z: number } | null;
+  /** seconds of simulated time elapsed — lets tests measure speed independent of frame rate */
+  simTime: number;
 }
 
 const spawnY = walkableHeight(SPAWN.x, SPAWN.z) ?? 2;
@@ -39,6 +55,13 @@ export const pilot: Pilot = {
   running: false,
   stride: 0,
   boardFrom: null,
+  velY: 0,
+  grounded: true,
+  jumpBuffer: 0,
+  coyote: 0,
+  landImpact: 0,
+  moveTarget: null,
+  simTime: 0,
 };
 
 /** True when the OS asks for reduced motion; infinite ambient animation is gated on this. */
@@ -60,6 +83,8 @@ export const view = {
   sea: 0,
   /** camera orbit yaw, driven by dragging */
   orbit: 0,
+  /** camera pitch in radians, driven by dragging vertically (third-person look) */
+  pitch: 0.42,
   /** camera ground-plane forward/right (unit vectors in xz), refreshed by CameraRig */
   camFwd: { x: 0, z: -1 },
   camRight: { x: 1, z: 0 },
