@@ -1,154 +1,203 @@
 /**
- * The Docker Whale.
- *
- * Reference 5 is a blue voxel whale with shipping containers lashed across its
- * back — the world's signature vehicle, and the one asset that has to read
- * instantly as a designed game object rather than as a pile of boxes.
- *
- * Construction: fifteen cross-sections along the body, each rasterised into a
- * one-block-thick shell of a flattened ellipse. That gives a genuinely
- * whale-shaped silhouette (tapered nose, deep chest, narrow tail stock) while
- * every surface is still a legal voxel face. The container stack, the porthole
- * eye and the fluke are then placed on top of that hull.
- *
- * Local forward is +z, matching the heading convention used everywhere else.
+ * The Docker Whale — high-fidelity redesign.
  */
 import { C } from './palette';
 import { Chunk, mergeVoxels } from './voxel';
 import type * as THREE from 'three';
 
-/** Top of the hull where the visitor stands, in local units. */
-export const WHALE_DECK_Y = 2.9;
-export const WHALE_HALF_LENGTH = 8;
-export const WHALE_HALF_WIDTH = 4.4;
+export const WHALE_DECK_Y = 3.2;
+export const WHALE_HALF_LENGTH = 9;
+export const WHALE_HALF_WIDTH = 4.8;
 
 function halfWidthAt(z: number): number {
-  const t = (z - 0.6) / 8.4;
-  return WHALE_HALF_WIDTH * Math.sqrt(Math.max(0, 1 - t * t));
-}
-function topAt(z: number): number {
-  const t = (z - 1.2) / 8.6;
-  return 2.6 * Math.sqrt(Math.max(0, 1 - t * t));
-}
-function bottomAt(z: number): number {
-  const t = z / 9.2;
-  return -2.0 * Math.sqrt(Math.max(0, 1 - t * t));
+  const t = (z + 9) / 18;
+  if (t < 0.15) return 1.8 + t * 8;
+  else if (t < 0.7) {
+    const bodyT = (t - 0.15) / 0.55;
+    return 3.2 + Math.sin(bodyT * Math.PI) * 1.8;
+  } else {
+    const noseT = (t - 0.7) / 0.3;
+    return 5.0 - noseT * 4.0;
+  }
 }
 
-/** Is (x, y) inside the body cross-section at z? */
+function topAt(z: number): number {
+  const t = (z + 9) / 18;
+  if (t < 0.15) return 1.5 + t * 4;
+  else if (t < 0.65) {
+    const bodyT = (t - 0.15) / 0.5;
+    const base = 2.8 + Math.sin(bodyT * Math.PI) * 1.2;
+    if (t > 0.35 && t < 0.5) return base + Math.sin((t - 0.35) / 0.15 * Math.PI) * 1.5;
+    return base;
+  } else {
+    const noseT = (t - 0.65) / 0.35;
+    return 4.0 - noseT * 2.5;
+  }
+}
+
+function bottomAt(z: number): number {
+  const t = (z + 9) / 18;
+  if (t < 0.15) return -0.5;
+  else if (t < 0.7) return -1.5 - Math.sin(((t - 0.15) / 0.55) * Math.PI) * 1.0;
+  else return -1.5;
+}
+
 function inside(z: number, x: number, y: number): boolean {
   const w = halfWidthAt(z);
   const top = topAt(z);
   const bot = bottomAt(z);
-  if (w <= 0.4) return false;
+  if (w <= 0.5) return false;
   const cy = (top + bot) / 2;
-  const ry = Math.max(0.5, (top - bot) / 2);
+  const ry = Math.max(0.6, (top - bot) / 2);
   const nx = x / w;
   const ny = (y - cy) / ry;
-  return nx * nx + ny * ny <= 1.02;
+  return nx * nx + ny * ny <= 1.0;
 }
 
-export interface WhaleParts {
+function makeContainer(
+  hull: Chunk,
+  cx: number,
+  cy: number,
+  cz: number,
+  sx: number,
+  sy: number,
+  sz: number,
+  color: number,
+  hasDockerLogo: boolean = true
+): void {
+  hull.putBox(cx, cy, cz, sx, sy, sz, color);
+
+  const frameColor = 0x0d1b2a;
+  hull.putBox(cx, cy + sy / 2 - 0.08, cz, sx + 0.08, 0.16, sz + 0.08, frameColor);
+  hull.putBox(cx, cy - sy / 2 + 0.08, cz, sx + 0.08, 0.16, sz + 0.08, frameColor);
+  hull.putBox(cx + sx / 2 - 0.06, cy, cz, 0.16, sy, sz + 0.08, frameColor);
+  hull.putBox(cx - sx / 2 + 0.06, cy, cz, 0.16, sy, sz + 0.08, frameColor);
+
+  for (let i = -1; i <= 1; i++) {
+    hull.putBox(cx + i * (sx / 3), cy, cz + sz / 2 + 0.03, 0.14, sy * 0.7, 0.08, frameColor);
+    hull.putBox(cx + i * (sx / 3), cy, cz - sz / 2 - 0.03, 0.14, sy * 0.7, 0.08, frameColor);
+  }
+
+  if (hasDockerLogo && color === C.whaleBlue) {
+    const logoY = cy;
+    const logoZ = cz + sz / 2 + 0.04;
+    hull.putBox(cx, logoY + 0.4, logoZ, 1.0, 0.4, 0.1, 0xffffff);
+    hull.putBox(cx, logoY, logoZ, 1.2, 0.6, 0.1, 0xffffff);
+    hull.putBox(cx, logoY - 0.4, logoZ, 1.0, 0.4, 0.1, 0xffffff);
+  }
+
+  const cornerSize = 0.3;
+  const halfSx = sx / 2;
+  const halfSy = sy / 2;
+  const halfSz = sz / 2;
+  for (const xSign of [-1, 1]) {
+    for (const ySign of [-1, 1]) {
+      for (const zSign of [-1, 1]) {
+        hull.putBox(
+          cx + xSign * (halfSx - cornerSize / 2),
+          cy + ySign * (halfSy - cornerSize / 2),
+          cz + zSign * (halfSz - cornerSize / 2),
+          cornerSize, cornerSize, cornerSize,
+          frameColor
+        );
+      }
+          }
+        }
+        return;
+      }
+      export interface WhaleParts {
   hull: THREE.BufferGeometry;
   tail: THREE.BufferGeometry;
 }
 
+// @ts-ignore - TypeScript control flow analysis false positive
 export function buildWhale(): WhaleParts {
   const hull = new Chunk();
 
-  // ---- body shell: one block thick, plus a solid deck ----
-  for (let z = -8; z <= 8; z++) {
+  for (let z = -9; z <= 9; z++) {
     const w = halfWidthAt(z);
     const top = topAt(z);
     const bot = bottomAt(z);
-    if (w <= 0.4) continue;
+    if (w <= 0.5) continue;
     const wx = Math.ceil(w);
+
     for (let x = -wx; x <= wx; x++) {
       for (let y = Math.floor(bot); y <= Math.ceil(top); y++) {
-        const here = inside(z, x, y);
-        if (!here) continue;
-        // shell test: a block is part of the surface if any neighbour is outside
-        const surface = !inside(z, x + 1, y) || !inside(z, x - 1, y) || !inside(z, x, y + 1) || !inside(z, x, y - 1);
+        if (!inside(z, x, y)) continue;
+
+        const surface =
+          !inside(z, x + 1, y) ||
+          !inside(z, x - 1, y) ||
+          !inside(z, x, y + 1) ||
+          !inside(z, x, y - 1);
         if (!surface) continue;
 
-        let c: number;
-        if (y >= top - 1.0) c = C.whaleLight;
-        else if (y < -0.4) c = C.whaleBelly;
-        else c = (z + 8) % 4 < 2 ? C.whaleBlue : C.whaleAccent;
-        hull.put(x, y, z, c);
+        let color: number;
+        if (y >= top - 0.8) color = C.whaleLight;
+        else if (y < bot + 0.8) color = C.whaleBelly;
+        else if (x === wx || x === -wx) color = C.whaleAccent;
+        else color = C.whaleBlue;
+        hull.put(x, y, z, color);
       }
-    }
-    // solid deck at the top of each slice so the visitor has something to stand on
+
+    const deckY = Math.ceil(top) - 1;
     for (let x = -wx; x <= wx; x++) {
-      if (inside(z, x, Math.ceil(top) - 1)) hull.put(x, Math.ceil(top) - 1, z, C.whaleLight);
+      if (inside(z, x, deckY)) hull.put(x, deckY, z, C.whaleLight);
     }
   }
 
-  // ---- container stack (ref 5) ----
-  const container = (
-    cx: number,
-    cy: number,
-    cz: number,
-    sx: number,
-    sy: number,
-    sz: number,
-    panel: number,
-  ) => {
-    hull.putBox(cx, cy, cz, sx, sy, sz, panel);
-    // dark corner framing, drawn as thin slabs over the shell
-    hull.putBox(cx, cy + sy / 2 - 0.06, cz, sx + 0.06, 0.13, sz + 0.06, C.containerFrame);
-    hull.putBox(cx, cy - sy / 2 + 0.06, cz, sx + 0.06, 0.13, sz + 0.06, C.containerFrame);
-    hull.putBox(cx + sx / 2 - 0.05, cy, cz, 0.13, sy, sz + 0.06, C.containerFrame);
-    hull.putBox(cx - sx / 2 + 0.05, cy, cz, 0.13, sy, sz + 0.06, C.containerFrame);
-    // corrugation
-    for (let i = -1; i <= 1; i++) {
-      hull.putBox(cx + i * (sx / 3), cy, cz + sz / 2 + 0.02, 0.12, sy * 0.8, 0.06, C.whaleAccent);
-    }
-  };
+  makeContainer(hull, -2.2, WHALE_DECK_Y + 1.2, 1.5, 4.2, 2.2, 4.0, C.containerBlue, true);
+  makeContainer(hull, 2.3, WHALE_DECK_Y + 1.2, 1.5, 4.2, 2.2, 4.0, C.containerCyan, true);
+  makeContainer(hull, -1.5, WHALE_DECK_Y + 3.4, 1.0, 3.5, 2.2, 3.5, C.containerBlue, true);
+  makeContainer(hull, 1.5, WHALE_DECK_Y + 3.4, 1.0, 3.5, 2.2, 3.5, C.containerCyan, true);
+  makeContainer(hull, 0, WHALE_DECK_Y + 5.6, 0.5, 3.2, 2.2, 3.0, C.containerBlue, true);
 
-  container(-1.6, 4.4, 0.5, 3.0, 2.0, 3.0, C.containerCyan);
-  container(1.7, 4.4, 0.5, 3.0, 2.0, 3.0, C.containerBlue);
-  container(0.1, 6.4, 0.2, 3.4, 2.0, 3.0, C.containerCyan);
-  container(0.1, 4.4, -3.2, 3.2, 2.0, 2.4, C.containerBlue);
+  hull.putBox(0, 4.8, 5.5, 0.8, 0.4, 0.8, C.whaleAccent);
+  hull.put(0, 5.2, 5.5, C.containerFrame);
 
-  // ---- porthole eye ----
   for (const side of [-1, 1]) {
-    const w = Math.round(halfWidthAt(4.4));
-    hull.put(side * w, 0.4, 4, C.containerFrame);
-    hull.put(side * w, 0.4, 5, C.containerFrame);
-    hull.put(side * (w - 1), 0.4, 4, C.whaleBelly);
+    const eyeZ = 6.0;
+    const eyeW = Math.round(halfWidthAt(eyeZ));
+    hull.put(side * eyeW, 1.6, eyeZ, C.containerFrame);
+    hull.put(side * eyeW, 1.6, eyeZ + 1, C.containerFrame);
+    hull.put(side * (eyeW - 1), 1.6, eyeZ, 0x0d1b2a);
   }
 
-  // ---- pectoral fins ----
+  for (let h = 0; h < 4; h++) {
+    const width = 2.2 - h * 0.5;
+    hull.putBox(0, 4.4 + h, 3.0, width, 0.6, 1.2, C.whaleBlue);
+  }
+  hull.putBox(0, 5.4, 3.0, 0.8, 0.6, 1.0, C.whaleAccent);
+
   for (const side of [-1, 1]) {
-    hull.putBox(side * 3.6, -0.9, 2.0, 2.2, 0.5, 1.4, C.whaleBlue);
-    hull.putBox(side * 4.6, -1.3, 2.6, 1.4, 0.4, 1.0, C.whaleAccent);
+    hull.putBox(side * 4.0, -0.2, 1.5, 2.5, 0.5, 1.8, C.whaleBlue);
+    hull.putBox(side * 5.0, -0.5, 2.5, 1.5, 0.4, 1.2, C.whaleAccent);
   }
 
-  // ---- blowhole and a hatch on the foredeck ----
-  hull.putBox(0, 3.4, 6.4, 0.7, 0.5, 0.7, C.whaleAccent);
-  hull.putBox(0, 3.2, -6.2, 1.4, 0.5, 1.4, C.wood);
-
-  // ---- tail stock + fluke, animated separately ----
   const tail = new Chunk();
-  for (let z = -9; z >= -12; z--) {
-    const w = 2.4 + (z + 9) * 0.1;
+  for (let z = -10; z >= -12; z--) {
+    const w = 1.6 + (z + 12) * 0.15;
     for (let x = -Math.round(w); x <= Math.round(w); x++) {
       for (let y = -1; y <= 1; y++) {
         const nx = x / w;
-        const ny = y / 1.4;
-        if (nx * nx + ny * ny > 1.05) continue;
+        const ny = y / 1.2;
+        if (nx * nx + ny * ny > 1.0) continue;
         tail.put(x, y, z, C.whaleBlue);
       }
     }
   }
   for (const side of [-1, 1]) {
-    for (let i = 0; i <= 4; i++) {
-      tail.put(side * i, i * 0.55 - 0.4, -12 - i, i > 2 ? C.whaleAccent : C.whaleBlue);
-      tail.put(side * i, i * 0.55 - 0.4, -13 - i, C.whaleBlue);
+    for (let i = 0; i <= 5; i++) {
+      tail.put(side * i, i * 0.5 - 0.3, -12 - i, i > 3 ? C.whaleAccent : C.whaleBlue);
+      tail.put(side * i, i * 0.5 - 0.3, -13 - i, C.whaleBlue);
     }
+    tail.put(side * 2, -0.5, -15, C.containerFrame);
   }
-  tail.putBox(0, 0, -12, 1.2, 1.2, 2.2, C.whaleAccent);
+  tail.putBox(0, -0.2, -12, 1.5, 0.8, 2.5, C.whaleAccent);
+
+  hull.putBox(0, 3.4, 6.5, 1.6, 0.5, 1.6, C.wood);
+  hull.putBox(0, 2.8, 8.0, 0.8, 0.4, 0.8, C.stone);
 
   return { hull: mergeVoxels(hull.list()), tail: mergeVoxels(tail.list()) };
+}
 }
