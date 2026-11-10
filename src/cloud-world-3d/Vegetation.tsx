@@ -8,6 +8,7 @@ import {
   pathCenterX,
   pathHalfWidth,
   terrainHeight,
+  inProjectsCloudKeepOut,
 } from './world';
 
 // Vegetation and rocks: deterministic scatter, exact analytic grounding
@@ -51,11 +52,7 @@ export function getTreeSpecs(): TreeSpec[] {
     if (dist < 18) continue; // keep mid-valley clearing open
     const d = Math.abs(x - pathCenterX(z));
     if (d < 6.5) continue; // path clearance (broadleaf canopy can reach ~3.1u)
-    // FORENSIC FIX (vis007/08, 2026-10-25): trees with |dx| 6.5..9 inside the
-    // passage z-band stand in the hollow under the massif skin (the heightfield
-    // is single-sided) and their canopies clip through the carved bore into the
-    // exit aperture. No trees may stand within the massif footprint band.
-    if (z > 88 && z < 186 && d < 10) continue;
+    if (inProjectsCloudKeepOut(x, z)) continue; // keep the building footprint clear
     const y = terrainHeight(x, z);
     // Depth layers: foreground big, background smaller.
     let scale: number;
@@ -341,6 +338,7 @@ export function RocksAndGrass() {
       const x = (rnd() * 2 - 1) * 115;
       const d = Math.abs(x - pathCenterX(z));
       if (d < 2.9) continue;
+      if (inProjectsCloudKeepOut(x, z)) continue;
       const y = terrainHeight(x, z);
       const sc = 0.6 + rnd() * 0.8;
       e.set(0, rnd() * Math.PI, 0);
@@ -401,23 +399,10 @@ export function RocksAndGrass() {
     while (fi < 40 && guard < 400) {
       guard++;
       const z = -30 + rnd() * 255;
-      // VIS-002 fix (2026-10-22): no flowers inside the mountain passage.
-      // The bore spans z 100..170 and its mouths open into stone aprons —
-      // nothing grows there. The old placement hiked the path edge
-      // (lateral 2.9..5.0u), which lands INSIDE the ±5.2u bore radius, so 6
-      // instances grew in the tunnel interior and 5 more in the mouth aprons
-      // (one directly on the exit walkway at z≈176.6, vision-confirmed
-      // "flowers scattered on the path outside the exit"). Resampling z
-      // keeps the full flower count (40) — rejected draws consume only the
-      // z rnd(), flowers are the LAST consumers of this PRNG stream, and
-      // the ~66% accept rate sits far inside the 400-draw guard.
-      // Window (92, 178) = the canyon entry/exit ramps (same bounds as
-      // pathCenterX's canyon smoothstep), so valley and sunset zones keep
-      // their flowers.
-      if (z > 92 && z < 178) continue;
       const side = rnd() < 0.5 ? -1 : 1;
       const d = pathHalfWidth(z) + 0.6 + rnd() * 1.8;
       const x = pathCenterX(z) + side * d;
+      if (inProjectsCloudKeepOut(x, z)) continue;
       const y = terrainHeight(x, z);
       const sc = 0.7 + rnd() * 0.5;
       e.set((rnd() - 0.5) * 0.2, rnd() * Math.PI, (rnd() - 0.5) * 0.2);

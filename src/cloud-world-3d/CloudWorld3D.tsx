@@ -9,18 +9,14 @@ import * as THREE from 'three';
 import './CloudWorld3D.css';
 import { DistantMountains, Terrain } from './Terrain';
 import { Clouds, RocksAndGrass, Trees } from './Vegetation';
-import { MountainPassage } from './MountainPassage';
 import { Sky } from './Sky';
 import { CloudCharacter } from './CloudCharacter';
-import {
-  ProjectMarker,
-  SkillMarker,
-  type ProjectInfo,
-} from './Markers';
-import { FOG_COLOR, FOG_FAR, FOG_NEAR, SKILL_SIGN_STATIONS, clearSignPosition, pathCenterX, terrainHeight } from './world';
+import { SkillMarker } from './Markers';
+import { FOG_COLOR, FOG_FAR, FOG_NEAR, SKILL_SIGN_STATIONS, clearSignPosition, terrainHeight, PROJECTS_CLOUD_X, PROJECTS_CLOUD_Z, CLOUD_INTERIOR_CAM_R } from './world';
 import { SKILL_CATEGORIES } from './categories';
 import { CloudCard } from './CloudCard';
-import { PORTFOLIO } from '../content';
+import { ProjectsCloud } from './ProjectsCloud';
+import { ProjectsCloudInterior } from './ProjectsCloudInterior';
 
 // Module-level flag to prevent duplicate FrameDriver loops in React.StrictMode
 let frameDriverRunning = false;
@@ -33,9 +29,15 @@ function FrameDriver({ composerRef }: { composerRef: React.RefObject<EffectCompo
 
   // QA instrumentation (harmless in prod): scene handle for live graph audits.
   useEffect(() => {
-    if (typeof window !== 'undefined') (window as any).__cwScene = scene;
-    return () => { if ((window as any).__cwScene === scene) (window as any).__cwScene = undefined; };
-  }, [scene]);
+    if (typeof window !== 'undefined') {
+      (window as any).__cwScene = scene;
+      (window as any).__cwCamera = cam;
+    }
+    return () => {
+      if ((window as any).__cwScene === scene) (window as any).__cwScene = undefined;
+      if ((window as any).__cwCamera === cam) (window as any).__cwCamera = undefined;
+    };
+  }, [scene, cam]);
 
   useEffect(() => {
     // Prevent multiple loops - use module-level flag
@@ -140,68 +142,35 @@ const CATEGORY_STOPS = SKILL_CATEGORIES.map((cat, i) => {
     side: station.side,
   };
 });
-// Project data — the CLOUD WORLD's own projects (user-approved switch):
-// RxVerify, DevOps Masterclass (replacing MediGen), Go Microservices,
-// matching `worlds.data.ts` projectOrder. Titles/technologies come from
-// PORTFOLIO (single source of truth); positions in the Sunset zone below.
-// The cloud project entries carry a `github` URL field in projects.cloud.ts.
-const PROJECT_DATA: ProjectInfo[] = ['rxverify', 'devops-masterclass', 'go-microservices'].map((id) => {
-  const p = PORTFOLIO.projects[id] as unknown as (ProjectInfo & { github?: string }) | undefined;
-  return {
-    id,
-    title: p?.title ?? id,
-    github: p?.github ?? 'https://github.com/yashmahajan11234567',
-    technologies: [...(p?.technologies ?? [])],
-  };
-});
+// Project data lives inside the Projects Cloud building (see ProjectsCloud.tsx);
+// the outdoor Projects Sunset markers are gone with the old destination.
 
-// Project markers in the Projects Sunset zone (world z≈196-226). Positions
-// follow the winding path centerline in the Sunset stretch, alternating
-// sides. ±13u offset (new-req r2 Stage 1): project boards are scale 3.6
-// (half-width ≈5.6u), so 13u keeps the board edge ≥3.5u clear of the path.
-const PROJECT_MARKER_POSITIONS: [number, number][] = (() => {
-  const zs = [196, 206, 216, 226];
-  return zs.map((z, i) => {
-    const dir = i % 2 === 0 ? -1 : 1;
-    return [pathCenterX(z) + dir * 13, z] as [number, number];
-  });
-})();
+// QA mirror: live category-stop positions for browser tests.
+if (typeof window !== 'undefined') {
+  (window as any).__cwCategoryStops = CATEGORY_STOPS.map((s) => ({ id: s.id, x: s.x, z: s.z }));
+}
 
-// Concentric sunset rings lying on the ground at the sunset overlook — kept
-// from the old zone (reduced 6→5, radius 20-80 → 7-27) but grounded on the
-// terrain and pulled into the final meadow instead of sprawling over the
-// whole valley.
-const FOLLOW_DISTANCE = 15; // u
+const FOLLOW_DISTANCE = 15; // u (outside)
+const FOLLOW_DISTANCE_INSIDE = 7.5; // u (inside the Projects Cloud gallery)
 const FOLLOW_EASE_RATE = 1.2; // 1/s
 const FOLLOW_MAX_DELTA_SQUARED = 0.0025;
-// Inside the mountain bore the ceiling is ~4.8u above the walking floor, so
-// the normal 15u orbit (camera ~7.5u up) would sit inside rock. While the
-// avatar is in the canyon stretch, pull the orbit closer and clamp the
-// camera under the bore ceiling so the view stays inside the carved passage.
-const CANYON_Z0 = 92; // Stage 5 (forensic plan 2026-10-25): engage clamp
-// at the facade plane now that the mouth is a real carved opening.
-// Clamp stays on past the bore exit (CANYON_Z1 + margin): the camera trails
-// the avatar by ~9-15u, so while the avatar exits (z 173→178) the camera is
-// still INSIDE the bore — turning the clamp off at the bore edge pops the
-// camera up into the crown rock mid-exit.
-const CANYON_Z1 = 178;
-const CANYON_FOLLOW_DISTANCE = 9.5; // u — closer third-person inside the bore
-const BORE_CEILING_CLEAR = 4.0; // max camera height above the floor inside
-// Bore arch (shell) radius — mirrors MountainPassage.tsx SHELL_R (BORE_R-0.4):
-// the visible free space inside the bore is this half-cylinder centered at
-// floor+0.2. The lateral clamp derives its height-aware limit from it.
-const BORE_SHELL_R = 4.8;
 function CameraTargetRig({
   controlsRef,
   targetPosRef,
   velRef,
+  insideRef,
 }: {
   controlsRef: React.MutableRefObject<any>;
   targetPosRef: React.MutableRefObject<THREE.Vector3 | null>;
   velRef: React.MutableRefObject<THREE.Vector3>;
+  /** true while the avatar is inside the Projects Cloud interior */
+  insideRef: React.RefObject<boolean>;
 }) {
   const desired = useMemo(() => new THREE.Vector3(), []);
   const camOffset = useMemo(() => new THREE.Vector3(), []);
+  // 0 = outdoor rig, 1 = interior rig. Eased so crossing the doorway never
+  // snaps the follow distance or the spring arm.
+  const insideMix = useRef(0);
   useFrame((_, delta) => {
     const controls = controlsRef.current;
     const charPos = targetPosRef.current;
@@ -222,11 +191,13 @@ function CameraTargetRig({
     const k = 1 - Math.exp(-5.5 * Math.min(delta, 1 / 30));
     controls.target.lerp(desired, k);
 
-    // Stage 5: engage the camera clamp at the facade plane (facade slabs
-    // z 92..108.5) now that the mouth is a real carved opening rather than
-    // the old culling stack.
-    const inCanyon = charPos.z > CANYON_Z0 && charPos.z < CANYON_Z1;
-    const followDist = inCanyon ? CANYON_FOLLOW_DISTANCE : FOLLOW_DISTANCE;
+    // Inside the Projects Cloud the camera tightens up: shorter follow
+    // distance and a spring arm that keeps it inside the gallery shell.
+    const inside = insideRef.current;
+    insideMix.current +=
+      ((inside ? 1 : 0) - insideMix.current) * (1 - Math.exp(-4 * Math.min(delta, 1 / 30)));
+    const followDist =
+      FOLLOW_DISTANCE + (FOLLOW_DISTANCE_INSIDE - FOLLOW_DISTANCE) * insideMix.current;
 
     // Ease orbit distance to the follow distance while moving.
     const moving = velRef.current.lengthSq() > FOLLOW_MAX_DELTA_SQUARED;
@@ -245,67 +216,60 @@ function CameraTargetRig({
       }
     }
 
-    // Inside the bore: THIRD-PERSON CAMERA COLLISION. The camera orbits the
-    // avatar, so its azimuth can swing it ±9u sideways — inside a ±4.4u-wide
-    // bore that lands it in the flank rock (screen reads as solid warm rock:
-    // backfaces are culled, you see through the dome into the lit mass).
-    // Clamp the camera back into the walkable corridor every frame AFTER
-    // controls.update() (update() re-derives its spherical state from the
-    // clamped position, so the clamp persists and the camera slides along
-    // the passage walls like standard third-person camera collision).
-    const cam = controls.object as THREE.Camera;
-    if (cam.position.z > CANYON_Z0 - 2 && cam.position.z < CANYON_Z1) {
-      const axisX = pathCenterX(cam.position.z);
-      const floorY = terrainHeight(axisX, cam.position.z);
-      // VIS-001 fix (2026-10-22): the lateral limit is HEIGHT-AWARE. The bore
-      // free space is the arched shell (radius BORE_SHELL_R centered
-      // floor+0.2): a flat ±3.4 clamp validated only at low heights let the
-      // camera reach the clamp-box corner (x=±3.4, y=floor+4.0), which sits
-      // OUTSIDE the arch (free half-width at y=4.0 is 2.44u) — corner-test
-      // screenshots showed 88% flat warm-rock fill (camera inside the dome
-      // rock, vision-confirmed). At the camera's height h the free half-width
-      // is sqrt(BORE_SHELL_R^2 − (h−floor−0.2)^2); keep a 1.0u margin and
-      // never exceed the old flat cap. Order matters: clamp y FIRST, then
-      // derive the lateral limit from the clamped height.
-      const maxY = floorY + BORE_CEILING_CLEAR;
-      if (cam.position.y > maxY) cam.position.y = THREE.MathUtils.lerp(cam.position.y, maxY, 0.5);
-      const minY = floorY + 0.9;
-      if (cam.position.y < minY) cam.position.y = THREE.MathUtils.lerp(cam.position.y, minY, 0.5);
-      const archH = Math.min(
-        Math.max(0, cam.position.y - floorY - 0.2),
-        BORE_SHELL_R - 0.01,
-      );
-      const maxLateral = Math.min(
-        3.4,
-        Math.sqrt(Math.max(0, BORE_SHELL_R * BORE_SHELL_R - archH * archH)) - 1.0,
-      );
-      if (Math.abs(cam.position.x - axisX) > maxLateral) {
-        cam.position.x = axisX + Math.sign(cam.position.x - axisX) * maxLateral;
-      }
-    }
-
     controls.update();
 
-    // Re-apply after update(): OrbitControls overwrites position from its
-    // internal spherical each update, so the corridor clamps must win.
-    if (cam.position.z > CANYON_Z0 - 2 && cam.position.z < CANYON_Z1) {
-      const axisX = pathCenterX(cam.position.z);
-      const floorY = terrainHeight(axisX, cam.position.z);
-      const maxY = floorY + BORE_CEILING_CLEAR;
-      if (cam.position.y > maxY) cam.position.y = maxY;
-      const minY = floorY + 0.9;
-      if (cam.position.y < minY) cam.position.y = minY;
-      const archH = Math.min(
-        Math.max(0, cam.position.y - floorY - 0.2),
-        BORE_SHELL_R - 0.01,
-      );
-      const maxLateral = Math.min(
-        3.4,
-        Math.sqrt(Math.max(0, BORE_SHELL_R * BORE_SHELL_R - archH * archH)) - 1.0,
-      );
-      if (Math.abs(cam.position.x - axisX) > maxLateral) {
-        cam.position.x = axisX + Math.sign(cam.position.x - axisX) * maxLateral;
+    // Spring arm (inside the gallery): SHORTEN the camera's distance along the
+    // same target→camera ray until it fits inside the shell.
+    //
+    // The previous version scaled the camera radially about the cloud centre
+    // instead. That moved the camera to whichever side of the player the ray
+    // happened to point at, so on entry it slid THROUGH the player to the far
+    // side (measured: camera z 165.4 with the avatar at 158.0, azimuth flipped
+    // 0 instead of ≈π). The view then faced the doorway, and because movement
+    // is camera-relative, W walked the player back out — the "inverted
+    // controls". Shortening along the ray can never cross the player, so the
+    // camera stays behind them and the azimuth is preserved.
+    if (insideMix.current > 0.001) {
+      const cam = controls.object as THREE.Camera;
+      const groundY = terrainHeight(PROJECTS_CLOUD_X, PROJECTS_CLOUD_Z);
+      const shellR = CLOUD_INTERIOR_CAM_R + 0.7; // stay just inside the shell
+      const ox = controls.target.x - PROJECTS_CLOUD_X;
+      const oz = controls.target.z - PROJECTS_CLOUD_Z;
+      const ddx = cam.position.x - controls.target.x;
+      const ddz = cam.position.z - controls.target.z;
+      const dist = Math.hypot(ddx, ddz);
+      if (dist > 1e-4) {
+        const ux = ddx / dist;
+        const uz = ddz / dist;
+        // |o + u·t|² = shellR²  →  t² + 2(o·u)t + (|o|² − shellR²) = 0
+        const b = ox * ux + oz * uz;
+        const c = ox * ox + oz * oz - shellR * shellR;
+        const disc = b * b - c;
+        let tMax = Infinity;
+        if (disc >= 0) tMax = -b + Math.sqrt(disc); // far intersection = exit
+        const clamped = Math.max(Math.min(dist, tMax), 2.6);
+        const blend = insideMix.current;
+        const newDist = dist + (clamped - dist) * blend;
+        if (Math.abs(newDist - dist) > 0.01) {
+          cam.position.x = controls.target.x + ux * newDist;
+          cam.position.z = controls.target.z + uz * newDist;
+        }
       }
+      // Keep the camera above the floor and below the ceiling.
+      const clampedY = THREE.MathUtils.clamp(cam.position.y, groundY + 1.4, groundY + 8.5);
+      cam.position.y += (clampedY - cam.position.y) * insideMix.current;
+    }
+
+    // QA mirror: interior rig state (used by the controls/transition tests).
+    if (typeof window !== 'undefined') {
+      const cam = controls.object as THREE.Camera;
+      (window as any).__cwRigDbg = {
+        insideMix: +insideMix.current.toFixed(3),
+        followDist: +followDist.toFixed(2),
+        camZ: +cam.position.z.toFixed(2),
+        targetZ: +controls.target.z.toFixed(2),
+        avatarZ: +charPos.z.toFixed(2),
+      };
     }
   });
   return null;
@@ -325,6 +289,9 @@ export const CloudWorld3D = ({ onExit }: CloudWorld3DProps) => {
   // Live avatar velocity, published by CloudCharacter, read by CameraTargetRig
   // to ease the orbit distance to the follow distance while moving.
   const avatarVelRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  // True while the avatar is inside the Projects Cloud — drives the camera
+  // interior mode and the entrance door swing.
+  const avatarInsideRef = useRef(false);
   const [cardData, setCardData] = useState<{ kind: 'skill' | 'project' | 'category'; id: string } | null>(null);
 
   useEffect(() => {
@@ -361,6 +328,19 @@ export const CloudWorld3D = ({ onExit }: CloudWorld3DProps) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onExit]);
+
+  // QA mirror: live OrbitControls instance (tests relax min/max distance for
+  // close-up screenshots). controlsRef fills after child commit, so poll briefly.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const t = window.setInterval(() => {
+      if (controlsRef.current && !(window as any).__cwControls) {
+        (window as any).__cwControls = controlsRef.current;
+        window.clearInterval(t);
+      }
+    }, 100);
+    return () => window.clearInterval(t);
+  }, []);
 
   if (!webglAvailable) {
     return (
@@ -406,10 +386,15 @@ export const CloudWorld3D = ({ onExit }: CloudWorld3DProps) => {
         {/* Continuous displaced terrain with painted winding path */}
         <Terrain />
         <DistantMountains />
-        <MountainPassage />
-                <Trees />
+        <Trees />
         <RocksAndGrass />
         <Clouds />
+
+        {/* Projects Cloud building — the giant enterable destination that
+            replaced the old Mountain Passage. Exterior + interior shells;
+            displays inside open the project CloudCard via onProjectClick. */}
+        <ProjectsCloud insideRef={avatarInsideRef} avatarPosRef={avatarPosRef} />
+        <ProjectsCloudInterior onProjectClick={(id) => setCardData({ kind: 'project', id })} />
 
         {/* Skill and project markers (interactive, click → overlay).
             Skills render as FOUR category boards (2026-10-16 redesign);
@@ -422,20 +407,12 @@ export const CloudWorld3D = ({ onExit }: CloudWorld3DProps) => {
             onClick={(id) => setCardData({ kind: 'category', id })}
           />
         ))}
-        {PROJECT_DATA.map((project, i) => (
-          <ProjectMarker
-            key={project.id}
-            project={project}
-            position={PROJECT_MARKER_POSITIONS[i % PROJECT_MARKER_POSITIONS.length]}
-            onClick={(id) => setCardData({ kind: 'project', id })}
-          />
-        ))}
-
         {/* Player avatar — ground-level cloud character */}
         <CloudCharacter
           controlsRef={controlsRef}
           avatarPosRef={avatarPosRef}
           avatarVelRef={avatarVelRef}
+          insideRef={avatarInsideRef}
         />
 
         {/* Orbit target follows the avatar; mouse-look orbits around the player */}
@@ -443,6 +420,7 @@ export const CloudWorld3D = ({ onExit }: CloudWorld3DProps) => {
           controlsRef={controlsRef}
           targetPosRef={avatarPosRef}
           velRef={avatarVelRef}
+          insideRef={avatarInsideRef}
         />
         <OrbitControls
           ref={controlsRef}
@@ -494,7 +472,7 @@ export const CloudWorld3D = ({ onExit }: CloudWorld3DProps) => {
           <main className="overlay-main">
             <div id="overlay-body">
               <p className="placeholder-text">
-                Journey through Skills Valley → Mountain Passage → Projects Sunset
+                Journey through Skills Valley → Projects Cloud
               </p>
               <div className="journey-hint">
                 <kbd>WASD</kbd> / <kbd>Arrow Keys</kbd> Move Character &nbsp;

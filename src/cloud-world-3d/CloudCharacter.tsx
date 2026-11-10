@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { pathCenterX, terrainHeight } from './world';
+import {
+  pathCenterX,
+  terrainHeight,
+  PROJECTS_CLOUD_X,
+  PROJECTS_CLOUD_Z,
+  CLOUD_R_EXT,
+  CLOUD_R_INT,
+  CLOUD_DOOR_HALF,
+} from './world';
 
 // Player avatar: a soft volumetric cloud character built from overlapping
 // squashed spheres, grounded via the shared analytic terrainHeight() so it
@@ -29,10 +37,17 @@ export function CloudCharacter({
   controlsRef,
   avatarPosRef,
   avatarVelRef,
+  insideRef,
 }: {
-  controlsRef: React.RefObject<{ getAzimuthalAngle(): number } | null>;
+  controlsRef: React.RefObject<{
+    getAzimuthalAngle(): number;
+    object?: THREE.Camera;
+    target?: THREE.Vector3;
+  } | null>;
   avatarPosRef?: React.MutableRefObject<THREE.Vector3 | null>;
   avatarVelRef?: React.MutableRefObject<THREE.Vector3>;
+  /** published true while the player is inside the Projects Cloud interior */
+  insideRef?: React.MutableRefObject<boolean>;
 }) {
   const characterRef = useRef<THREE.Group>(null);
   const keysRef = useRef<Record<string, boolean>>({});
@@ -50,6 +65,22 @@ export function CloudCharacter({
     return new THREE.Vector3(x, terrainHeight(x, z), z);
   }, []);
   const posRef = useRef(spawn.clone());
+  // True while the player is inside the Projects Cloud interior. Flips when
+  // the player crosses the interior radius through the door corridor.
+  const insideCloudRef = useRef(false);
+
+  // QA hook: tests may teleport the avatar to an exact (x, z) — works even
+  // while __cwInputLocked is set, since it writes posRef directly.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    (window as any).__cwTeleport = (x: number, z: number) => {
+      posRef.current.set(x, terrainHeight(x, z), z);
+      velRef.current.set(0, 0, 0);
+    };
+    return () => {
+      if ((window as any).__cwTeleport) delete (window as any).__cwTeleport;
+    };
+  }, []);
 
   useEffect(() => {
     const isTypingTarget = () => {
@@ -106,15 +137,28 @@ export function CloudCharacter({
       if (keysRef.current['d'] || keysRef.current['arrowright']) ix += 1;
 
       if (ix !== 0 || iz !== 0) {
-        // Camera-relative movement using the live OrbitControls azimuth.
-        let azimuth = 0;
+        // Camera-relative movement: the movement basis IS the live
+        // camera→target direction, so "W" always goes the way the player is
+        // looking — inside the cloud and outside, at every orbit angle.
+        //
+        // The previous version rebuilt the basis from getAzimuthalAngle():
+        //   forward = (sin az, 0, −cos az), right = (cos az, 0, sin az)
+        // That is a mirrored basis — it only matches the real view direction
+        // at azimuth ≈ 0 and ±π. The trailing outdoor camera sits at ≈ ±π, so
+        // the error was invisible outside and every rotated camera (i.e. the
+        // whole time the player is inside the cloud) read inverted/sideways.
         const controls = controlsRef.current;
-        if (controls) {
-          azimuth = controls.getAzimuthalAngle();
+        const camObj = controls?.object;
+        const tgt = controls?.target;
+        if (camObj && tgt) {
+          forward.set(tgt.x - camObj.position.x, 0, tgt.z - camObj.position.z);
+        } else {
+          forward.set(0, 0, -1);
         }
-        // World forward (into the screen, -Z at azimuth 0), right (+X at 0).
-        forward.set(Math.sin(azimuth), 0, -Math.cos(azimuth));
-        right.set(Math.cos(azimuth), 0, Math.sin(azimuth));
+        if (forward.lengthSq() < 1e-6) forward.set(0, 0, -1);
+        forward.normalize();
+        // Screen right = cross(forward, up) with up = +Y  →  (−fz, 0, fx).
+        right.set(-forward.z, 0, forward.x);
         wish.set(0, 0, 0).addScaledVector(forward, iz).addScaledVector(right, ix);
         if (wish.lengthSq() > 0) wish.normalize();
 
@@ -141,14 +185,42 @@ export function CloudCharacter({
       }
 
       // Journey bounds.
-      pos.x = THREE.MathUtils.clamp(pos.x, -24, 24);
+      pos.x = THREE.MathUtils.clamp(pos.x, -36, 36);
       pos.z = THREE.MathUtils.clamp(pos.z, -60, 235);
 
-      // Path lock: inside the canyon walls the character rides the path line.
-      const inCanyon = pos.z > 95 && pos.z < 175;
-      if (inCanyon) {
-        const cx = pathCenterX(pos.z);
-        pos.x = THREE.MathUtils.lerp(pos.x, cx, 0.12);
+      // Projects Cloud collision: a solid disc of radius CLOUD_R_EXT with a
+      // door corridor cut into its -z face. Once through the corridor past
+      // the interior radius, the player is "inside" and the boundary becomes
+      // CLOUD_R_INT until they step back out through the corridor.
+      const cdx = pos.x - PROJECTS_CLOUD_X;
+      const cdz = pos.z - PROJECTS_CLOUD_Z;
+      const cd = Math.hypot(cdx, cdz);
+      const inDoorCorridor =
+        Math.abs(cdx) < CLOUD_DOOR_HALF &&
+        cdz > -CLOUD_R_EXT - 3 &&
+        cdz < -CLOUD_R_INT + 3;
+      if (!insideCloudRef.current) {
+        if (cd < CLOUD_R_INT) {
+          // Already deep inside (covers QA teleports straight into the
+          // interior) — checked BEFORE the exterior push-out below.
+          insideCloudRef.current = true;
+        } else if (cd < CLOUD_R_EXT && !inDoorCorridor) {
+          const s = CLOUD_R_EXT / Math.max(cd, 1e-6);
+          pos.x = PROJECTS_CLOUD_X + cdx * s;
+          pos.z = PROJECTS_CLOUD_Z + cdz * s;
+        } else if (cd < CLOUD_R_INT + 1.5 && inDoorCorridor) {
+          // Walking in through the door corridor.
+          insideCloudRef.current = true;
+        }
+      } else {
+        if (cd > CLOUD_R_INT && !inDoorCorridor) {
+          const s = CLOUD_R_INT / Math.max(cd, 1e-6);
+          pos.x = PROJECTS_CLOUD_X + cdx * s;
+          pos.z = PROJECTS_CLOUD_Z + cdz * s;
+        }
+        if (inDoorCorridor && cdz < -CLOUD_R_EXT + 0.5) {
+          insideCloudRef.current = false;
+        }
       }
     }
 
@@ -161,6 +233,9 @@ export function CloudCharacter({
     // Publish live position + velocity for the camera target rig.
     if (avatarPosRef) avatarPosRef.current = pos;
     if (avatarVelRef) avatarVelRef.current.copy(velRef.current);
+    // Publish interior state (drives the camera interior mode + door swing).
+    if (insideRef) insideRef.current = insideCloudRef.current;
+    if (typeof window !== 'undefined') (window as any).__cwInside = insideCloudRef.current;
 
     // Idle bob — applied ONLY to the visual puff group (and the rider that
     // rides inside it), never to the physics position or grounding.
