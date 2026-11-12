@@ -5,7 +5,7 @@
 import Phaser from 'phaser';
 import { gameConfig } from './config/game';
 import { BootScene } from './scenes/BootScene';
-import { StartingHubScene } from './scenes/StartingHubScene';
+import { RoomScene } from './scenes/RoomScene';
 
 let game: Phaser.Game | null = null;
 let panelOpen = false;
@@ -23,14 +23,14 @@ export function mountDataNexusWorld(container: HTMLElement): () => void {
   const config = {
     ...gameConfig,
     parent: container,
-    scene: [BootScene, StartingHubScene],
+    scene: [BootScene, RoomScene],
   };
 
   game = new Phaser.Game(config);
   (window as unknown as Record<string, unknown>).__dataNexusGame = game;
 
   const bindScene = (): void => {
-    const scene = game!.scene.getScene('starting-hub');
+    const scene = game!.scene.getScene('room');
     if (scene) {
       (scene as any).setPanelOpenGetter?.(() => panelOpen);
     } else {
