@@ -6,6 +6,7 @@ import { useGameStore } from './store/gameStore';
 import type { Path } from './store/gameStore';
 import './App.css';
 import { LoadingScreen } from './components/LoadingScreen';
+import { CoursesCarousel } from './components/CoursesCarousel';
 
 /*
  * Cloud World is code-split (audit 2026-10-16, K3). three.js + R3F weigh
@@ -255,6 +256,8 @@ function App() {
             <Suspense fallback={<div className="experience-loading" aria-hidden="true" />}>
               <ExperienceSection />
             </Suspense>
+            {/* Courses & Certifications carousel after Experience */}
+            <CoursesCarousel />
           </>
         )}
         {currentWorld === 'data-world' && (
