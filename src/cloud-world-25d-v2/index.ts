@@ -1,1 +1,0 @@
-export { default as CloudWorldV2 } from './CloudWorldV2';

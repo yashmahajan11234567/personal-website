@@ -1,17 +1,19 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { CinematicHero } from './components/Hero';
-import { DataNexusShell } from './data-nexus/DataNexusShell';
+import { WorldShell } from './components/WorldShell';
 import { destroyActiveTimeline } from './cinematic/timeline/activeTimeline';
 import { useGameStore } from './store/gameStore';
 import type { Path } from './store/gameStore';
 import './App.css';
 import { LoadingScreen } from './components/LoadingScreen';
-import { CoursesCarousel } from './components/CoursesCarousel';
 
 /*
  * Cloud World is code-split (audit 2026-10-16, K3). three.js + R3F weigh
  * ~1.4 MB minified and the hero must not pay for them: `lazy()` moves the
- * whole stack into a chunk that loads only when the route mounts.
+ * whole stack into a chunk that loads only when the route mounts — the same
+ * on-demand strategy WorldShell already uses for Phaser. While the chunk
+ * loads, the Suspense fallback paints the app background (no flash of a
+ * wrong color behind the unmounting hero).
  */
 const CloudWorld3D = lazy(() =>
   import('./cloud-world-3d').then((m) => ({ default: m.CloudWorld3D })),
@@ -29,7 +31,6 @@ const ExperienceSection = lazy(() =>
 );
 const CloudWorldIso = lazy(() => import('./cloud-world-iso').then((m) => ({ default: m.IsoShell })));
 const CloudWorld25D = lazy(() => import('./cloud-world-25d').then((m) => ({ default: m.CloudWorld25D })));
-const CloudWorldV2 = lazy(() => import('./cloud-world-25d-v2').then((m) => ({ default: m.CloudWorldV2 })));
 /*
  * The River Expedition — the voxel world. It sits BESIDE the routes above, not
  * in place of them: nothing was deleted to add it, and reverting is these two
@@ -39,23 +40,13 @@ const CloudWorldV2 = lazy(() => import('./cloud-world-25d-v2').then((m) => ({ de
 const CloudWorldVoxel = lazy(() =>
   import('./cloud-world-voxel').then((m) => ({ default: m.CloudWorldVoxel })),
 );
-/*
- * Cloud World 2.0 — the greenfield rebuild. It mounts at its own route
- * (`#/cloud-world-2`) alongside the legacy worlds; nothing is deleted and the
- * cutover is a one-line change recorded in the implementation log.
- */
-const CloudWorld2 = lazy(() =>
-  import('./cloud-world-2').then((m) => ({ default: m.CloudWorld2 })),
-);
 
 const HASH_WORLDS = {
   '#/data-world': 'data-world',
   '#/cloud-world': 'cloud-world',
   '#/cloud-world-iso': 'cloud-world-iso',
   '#/cloud-world-25d': 'cloud-world-25d',
-  '#/cloud-world-v2': 'cloud-world-v2',
   '#/cloud-world-voxel': 'cloud-world-voxel',
-  '#/cloud-world-2': 'cloud-world-2',
 } as const;
 
 type HashWorld = (typeof HASH_WORLDS)[keyof typeof HASH_WORLDS];
@@ -256,16 +247,10 @@ function App() {
             <Suspense fallback={<div className="experience-loading" aria-hidden="true" />}>
               <ExperienceSection />
             </Suspense>
-            {/* Courses & Certifications carousel after Experience */}
-            <CoursesCarousel />
           </>
         )}
         {currentWorld === 'data-world' && (
-          <Suspense
-            fallback={<div className="cloud-world-loading" aria-hidden="true" />}
-          >
-            <DataNexusShell key="data-world" onExit={returnToHero} />
-          </Suspense>
+          <WorldShell key="data-world" world="data" onExit={returnToHero} />
         )}
         {currentWorld === 'cloud-world' && (
           <Suspense
@@ -288,25 +273,11 @@ function App() {
             <CloudWorld25D key="cloud-world-25d" onExit={returnToHero} />
           </Suspense>
         )}
-        {currentWorld === 'cloud-world-v2' && (
-          <Suspense
-            fallback={<div className="cloud-world-loading" aria-hidden="true" />}
-          >
-            <CloudWorldV2 key="cloud-world-v2" onExit={returnToHero} />
-          </Suspense>
-        )}
         {currentWorld === 'cloud-world-voxel' && (
           <Suspense
             fallback={<div className="cloud-world-loading" aria-hidden="true" />}
           >
             <CloudWorldVoxel key="cloud-world-voxel" onExit={returnToHero} />
-          </Suspense>
-        )}
-        {currentWorld === 'cloud-world-2' && (
-          <Suspense
-            fallback={<div className="cloud-world-loading" aria-hidden="true" />}
-          >
-            <CloudWorld2 key="cloud-world-2" onExit={returnToHero} />
           </Suspense>
         )}
       </main>
