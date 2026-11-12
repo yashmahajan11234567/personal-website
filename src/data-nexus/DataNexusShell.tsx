@@ -11,27 +11,145 @@ interface DataNexusShellProps {
   onExit: () => void;
 }
 
-const ConsolePanel: React.FC<{ id: string; onClose: () => void }> = ({ onClose }) => (
-  <div className="dn-panel console-panel" role="dialog" aria-modal="true" aria-labelledby="console-title">
-    <div className="dn-panel-inner">
-      <header>
-        <h2 id="console-title">Data Core Console</h2>
-        <button onClick={onClose} aria-label="Close">×</button>
-      </header>
-      <div className="dn-panel-body">
-        <p>Central Data Core interface. System status: NOMINAL.</p>
-        <p>Core temperature: 2.4K</p>
-        <p>Power output: 98.7%</p>
-        <p>Data throughput: 4.2 PB/s</p>
+type PanelData =
+  | { kind: 'skill'; skill: { id: string; name: string; world: string; category: string; experience: { experienceType: string; evidence: string[]; trainingContext?: string; repositories?: { name: string; url: string }[] }; visual: { kind: string; treatment: string }; summary: string } }
+  | { kind: 'project'; project: { id: string; title: string; world: string; authorship: string; contribution: string; collaborators?: { name: string; role: string }[]; description: string; technologies: string[]; workflow: { metaphor: string; stages: { id: string; label: string; detail?: string }[] }; results?: string[]; limitations: string[]; github?: string; dashboards?: { id: string; title: string; technology: string; previewPath: string; summary: string }[]; evidence?: string[] } }
+  | { kind: 'info'; info: { title: string; paragraphs: string[] } };
+
+const SkillPanel: React.FC<{ data: PanelData & { kind: 'skill' }; onClose: () => void }> = ({ data, onClose }) => {
+  const { skill } = data;
+  const exp = skill.experience;
+  return (
+    <div className="dn-panel skill-panel" role="dialog" aria-modal="true" aria-labelledby="skill-title">
+      <div className="dn-panel-inner">
+        <header>
+          <h2 id="skill-title">{skill.name}</h2>
+          <button onClick={onClose} aria-label="Close">×</button>
+        </header>
+        <div className="dn-panel-body">
+          <p className="dn-badge dn-badge-{exp.experienceType.toLowerCase()}">{exp.experienceType}</p>
+          <p>{skill.summary}</p>
+          <div className="dn-section">
+            <h3>Evidence</h3>
+            <ul>{exp.evidence.map((e, i) => <li key={i}>{e}</li>)}</ul>
+          </div>
+          {exp.trainingContext && (
+            <div className="dn-section">
+              <h3>Training Context</h3>
+              <p>{exp.trainingContext}</p>
+            </div>
+          )}
+          {exp.repositories && exp.repositories.length > 0 && (
+            <div className="dn-section">
+              <h3>Repositories</h3>
+              <ul>
+                {exp.repositories.map((r) => (
+                  <li key={r.url}><a href={r.url} target="_blank" rel="noopener noreferrer">{r.name}</a></li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
+
+const ProjectPanel: React.FC<{ data: PanelData & { kind: 'project' }; onClose: () => void }> = ({ data, onClose }) => {
+  const { project } = data;
+  return (
+    <div className="dn-panel project-panel" role="dialog" aria-modal="true" aria-labelledby="project-title">
+      <div className="dn-panel-inner">
+        <header>
+          <h2 id="project-title">{project.title}</h2>
+          <button onClick={onClose} aria-label="Close">×</button>
+        </header>
+        <div className="dn-panel-body">
+          <p className="dn-badge dn-badge-{project.authorship}">{project.authorship}</p>
+          <p>{project.description}</p>
+          <div className="dn-section">
+            <h3>Your Contribution</h3>
+            <p>{project.contribution}</p>
+          </div>
+          {project.collaborators && project.collaborators.length > 0 && (
+            <div className="dn-section">
+              <h3>Collaborators</h3>
+              <ul>{project.collaborators.map((c, i) => <li key={i}><strong>{c.name}</strong> — {c.role}</li>)}</ul>
+            </div>
+          )}
+          <div className="dn-section">
+            <h3>Technologies</h3>
+            <div className="dn-tech-tags">{project.technologies.map((t) => <span key={t} className="dn-tech-tag">{t}</span>)}</div>
+          </div>
+          <div className="dn-section">
+            <h3>Workflow</h3>
+            <ol>{project.workflow.stages.map((s) => <li key={s.id}><strong>{s.label}</strong>: {s.detail}</li>)}</ol>
+          </div>
+          {project.results && project.results.length > 0 && (
+            <div className="dn-section">
+              <h3>Results</h3>
+              <ul>{project.results.map((r, i) => <li key={i}>{r}</li>)}</ul>
+            </div>
+          )}
+          <div className="dn-section">
+            <h3>Limitations</h3>
+            <ul>{project.limitations.map((l, i) => <li key={i}>{l}</li>)}</ul>
+          </div>
+          {project.github && (
+            <div className="dn-section">
+              <a href={project.github} target="_blank" rel="noopener noreferrer" className="dn-link">View Repository →</a>
+            </div>
+          )}
+          {project.dashboards && project.dashboards.length > 0 && (
+            <div className="dn-section">
+              <h3>Dashboards</h3>
+              <div className="dn-dashboard-grid">
+                {project.dashboards.map((d) => (
+                  <div key={d.id} className="dn-dashboard-card">
+                    <img src={d.previewPath} alt={d.title} loading="lazy" />
+                    <div className="dn-dashboard-info">
+                      <strong>{d.title}</strong>
+                      <span className="dn-tech-tag">{d.technology}</span>
+                      <p>{d.summary}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {project.evidence && project.evidence.length > 0 && (
+            <div className="dn-section">
+              <h3>Evidence</h3>
+              <ul>{project.evidence.map((e, i) => <li key={i}>{e}</li>)}</ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const InfoPanel: React.FC<{ data: PanelData & { kind: 'info' }; onClose: () => void }> = ({ data, onClose }) => {
+  const { info } = data;
+  return (
+    <div className="dn-panel info-panel" role="dialog" aria-modal="true" aria-labelledby="info-title">
+      <div className="dn-panel-inner">
+        <header>
+          <h2 id="info-title">{info.title}</h2>
+          <button onClick={onClose} aria-label="Close">×</button>
+        </header>
+        <div className="dn-panel-body">
+          {info.paragraphs.map((p, i) => <p key={i}>{p}</p>)}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const DataNexusShell: React.FC<DataNexusShellProps> = ({ onExit }) => {
   const hostRef = useRef<HTMLDivElement>(null);
   const unmountRef = useRef<() => void>(() => {});
-  const [panel, setPanel] = useState<{ kind: 'console'; id: string } | null>(null);
+  const [panel, setPanel] = useState<PanelData | null>(null);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -47,16 +165,16 @@ export const DataNexusShell: React.FC<DataNexusShellProps> = ({ onExit }) => {
     const game = (window as unknown as Record<string, unknown>).__dataNexusGame as Phaser.Game | undefined;
     if (!game) return;
 
-    const scene = game.scene.getScene('starting-hub') as Phaser.Scene | null;
+    const scene = game.scene.getScene('room') as Phaser.Scene | null;
     if (!scene) return;
 
     const emitter = scene.events;
-    const handler = (data: any) => {
-      setPanel({ kind: 'console', id: data.id });
+    const handler = (panelData: PanelData) => {
+      setPanel(panelData);
     };
-    emitter.on('open-console', handler);
+    emitter.on('open-panel', handler);
 
-    return () => { emitter.off('open-console', handler); };
+    return () => { emitter.off('open-panel', handler); };
   }, []);
 
   const handleClose = () => { setPanel(null); };
@@ -68,21 +186,22 @@ export const DataNexusShell: React.FC<DataNexusShellProps> = ({ onExit }) => {
   }, [panel]);
 
   return (
-    <div className="dn-shell" role="application" aria-label="Data Nexus — Starting Hub">
+    <div className="dn-shell" role="application" aria-label="Data Nexus">
       <div ref={hostRef} className="dn-canvas-host" />
       <div className="dn-overlay">
         <div className="dn-index" aria-label="World index">
           <button className="dn-index-btn" onClick={onExit}>← Back to Portfolio</button>
         </div>
       </div>
-      {panel && panel.kind === 'console' && (
+      {panel && (
         <Suspense fallback={<div className="dn-panel-skeleton" />}>
-          <ConsolePanel id={panel.id} onClose={handleClose} />
+          {panel.kind === 'skill' && <SkillPanel data={panel} onClose={handleClose} />}
+          {panel.kind === 'project' && <ProjectPanel data={panel} onClose={handleClose} />}
+          {panel.kind === 'info' && <InfoPanel data={panel} onClose={handleClose} />}
         </Suspense>
       )}
     </div>
   );
 };
 
-// Need to import Phaser for type
 import Phaser from 'phaser';
