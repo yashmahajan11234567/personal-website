@@ -14,7 +14,7 @@
 
 import { P } from './palette';
 import { BERTHS, DECKS, ISLANDS, SPAWN, buildHotspots, HARBOUR_CX, HARBOUR_CZ, STALLS, STALL_ROW_Z, HOUSES } from './registry';
-import { columnHeight, hash2, terrainBlocks, valueNoise, islandSurfaceYFn } from './terrainShim';
+import { columnHeight, hash2, terrainBlocks, islandSurfaceYFn } from './terrainShim';
 import type { Block, BlockList, Hotspot, WorldLabel, Deck, Berth } from './types';
 import { Chunk, placeChunk, placeWithFoundation, highestGroundBase } from './voxel/builder';
 
@@ -60,7 +60,6 @@ function isOccupied(x: number, z: number, pad = 2): boolean {
 function islandVegetation(specId: string): BlockList {
   const spec = ISLANDS.find((s) => s.id === specId);
   if (!spec) return [];
-  const out: BlockList = [];
   const c = new Chunk();
   const rnd = lcg(spec.seed * 977);
   const small = spec.r < 10;
@@ -385,7 +384,6 @@ function buildStructures(lanterns: [number, number, number][]): BlockList {
  * The geometry lives in core/structures/*.ts; these wrappers bind palette
  * defaults and register lantern positions. */
 
-import { buildDock } from './structures/dock';
 import { buildWelcomeHall } from './structures/welcomeHall';
 import { buildLighthouse } from './structures/lighthouse';
 import { buildStall } from './structures/stall';

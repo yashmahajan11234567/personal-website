@@ -14,7 +14,6 @@ import './styles/cloudWorld2.css';
 
 import { staticWorld, renderPartition } from './core/world';
 import { buildCollisionIndex } from './player/collision';
-import { terrainY } from './core/world';
 import { partitionBlocks, Voxels } from './core/voxel/mesh';
 import { Sky } from './core/environment/Sky';
 import { VoxelOcean, FoamRings } from './core/environment/Ocean';
@@ -114,7 +113,7 @@ function FirstFrameSignal(): null {
 function QAHook(): null {
   useEffect(() => {
     void (async () => {
-      const [{ pilot, view, keys }, { collisionStats }] = await Promise.all([
+      const [{ pilot, view, keys }, { collisionStats, solidSpansAt }] = await Promise.all([
         import('./player/state'),
         import('./player/collision'),
       ]);
@@ -134,10 +133,7 @@ function QAHook(): null {
         },
         walkLine: (ax: number, az: number, bx: number, bz: number) =>
           lineWalkable({ x: ax, z: az }, { x: bx, z: bz }, terrainY),
-        columnAt: (x: number, z: number) => {
-          const { solid } = staticWorld();
-          return solid.columnAt(x, z);
-        },
+        columnAt: (x: number, z: number) => solidSpansAt(x, z),
         cellWalkable: (x: number, z: number) => cellWalkable(x, z),
         terrainY: (x: number, z: number) => terrainY(x, z),
         get camera() {

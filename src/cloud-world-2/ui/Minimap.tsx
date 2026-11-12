@@ -12,7 +12,7 @@ const SCALE = MAP_SIZE / (WORLD_RADIUS * 2); // world 180 → 150px
 
 export function Minimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef = useRef<number>();
+  const animRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const canvas = canvasRef.current;

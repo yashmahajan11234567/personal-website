@@ -171,7 +171,7 @@ function buildLandmark(c: Chunk, spec: HouseSpec, halfW: number, halfD: number, 
 /**
  * Build interior dressing per project theme.
  */
-function buildInterior(c: Chunk, spec: HouseSpec, halfW: number, halfD: number, wallH: number): void {
+function buildInterior(c: Chunk, spec: HouseSpec, halfW: number, halfD: number, _wallH: number): void {
   // Interior floor level is y=1 (already done)
   // Back wall is at z = halfD
 
