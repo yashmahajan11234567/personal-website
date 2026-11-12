@@ -1,94 +1,30 @@
-/**
- * CameraRig — third-person orbit camera.
+/** CameraRig — third-person Minecraft-style camera.
  *
- * Two rigs blended, never cut:
- *   LAND  a true third-person orbit: yaw from horizontal drag, pitch from
- *         vertical drag, distance from the wheel. Elevation comes from the
- *         pitch angle rather than a fixed offset, so the player can look level
- *         across the island or steeply down at the village.
- *   SEA   dropped and pulled back so the horizon and sky sit in frame.
+ * Camera orbits behind and above the character. Drag the canvas to rotate
+ * around the player horizontally and tilt vertically. No pointer lock — the
+ * canvas stays interactive for clicking hotspots and the ground (click to
+ * walk, E to interact).
  *
- * Why a fixed offset vector was wrong: with `LAND_OFFSET = (21, 27, 21)` the
- * camera elevation was welded to the zoom, so dragging could only spin the
- * world — you could never see a rooftop or a jump arc from below. Pitch is now
- * an independent degree of freedom.
- *
- * Framing rules applied (camera-systems):
- *   - exponential smoothing (frame-rate independent), never a constant lerp
- *   - the camera target sits above the feet, and while airborne it lags a little
- *     so a jump reads as vertical motion instead of the world dropping away
- *   - soft ground clamp: the camera is pushed up rather than ever going under
- *     a hill, and the pitch is clamped so it cannot flip
- *   - the ground-plane basis (camFwd/camRight) is published from the REAL
- *     blended direction, which is what makes WASD screen-relative
+ * Publishes view.camFwd / view.camRight so movement stays camera-relative.
+ * The character body is rendered by VoxelCharacter.
  */
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { pilot, view } from './state';
-import { walkableHeight } from './world';
 
-const LAND_DIST = 30;
-const SEA_DIST = 34;
-const TARGET_H = 1.05;
-const PITCH_MIN = 0.06;
-const PITCH_MAX = 1.15;
-const FOV = 40;
+const DIST = 5;        // camera distance from character, in blocks
+const HEIGHT = 3.2;    // camera height above character's feet
+const LOOK_AHEAD = 1.0;// camera looks slightly ahead of the character
+const PITCH_MIN = -1.1;
+const PITCH_MAX = 0.9;
+const FOV = 70;
 
 export function CameraRig() {
   const { camera, gl } = useThree();
-  const desired = useMemo(() => new THREE.Vector3(), []);
   const target = useMemo(() => new THREE.Vector3(), []);
-  const smoothTarget = useMemo(() => new THREE.Vector3(), []);
-  const drag = useRef({ active: false, x: 0, y: 0 });
-
-  // Wheel zoom, clamped: too far in and the block grid turns into noise, too
-  // far out and the character is a speck.
-  useEffect(() => {
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      view.zoom = THREE.MathUtils.clamp(view.zoom * (1 + Math.sign(e.deltaY) * 0.09), 0.55, 2.0);
-    };
-    const el = gl.domElement;
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
-  }, [gl]);
-
-  // Drag to orbit: X yaws, Y pitches. Bound to the canvas so HTML panels never
-  // steal the gesture. Double-click recentres the camera behind the player.
-  useEffect(() => {
-    const el = gl.domElement;
-    const down = (e: PointerEvent) => {
-      drag.current = { active: true, x: e.clientX, y: e.clientY };
-    };
-    const move = (e: PointerEvent) => {
-      if (!drag.current.active) return;
-      const dx = e.clientX - drag.current.x;
-      const dy = e.clientY - drag.current.y;
-      drag.current.x = e.clientX;
-      drag.current.y = e.clientY;
-      view.orbit -= dx * 0.005;
-      view.pitch = THREE.MathUtils.clamp(view.pitch + dy * 0.004, PITCH_MIN, PITCH_MAX);
-    };
-    const up = () => {
-      drag.current.active = false;
-    };
-    const recentre = () => {
-      view.orbit = 0;
-      view.pitch = 0.42;
-      view.zoom = 1;
-    };
-    el.addEventListener('pointerdown', down);
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    el.addEventListener('dblclick', recentre);
-    return () => {
-      el.removeEventListener('pointerdown', down);
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      el.removeEventListener('dblclick', recentre);
-    };
-  }, [gl]);
+  const offset = useMemo(() => new THREE.Vector3(), []);
+  const dir = useMemo(() => new THREE.Vector3(), []);
 
   useEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
@@ -98,48 +34,79 @@ export function CameraRig() {
     }
   }, [camera]);
 
-  useFrame((_, rawDt) => {
-    const dt = Math.min(rawDt, 0.1);
+  // Drag to orbit / tilt (no pointer lock)
+  useEffect(() => {
+    const el = gl.domElement;
+    let isDragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    let pointerId = 0;
 
-    const wantSea = pilot.mode === 'boat' ? 1 : 0;
-    view.sea += (wantSea - view.sea) * Math.min(1, dt * 1.8);
+    const onDown = (e: PointerEvent) => {
+      isDragging = true;
+      pointerId = e.pointerId;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      el.setPointerCapture(pointerId);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!isDragging) return;
+      view.orbit -= (e.clientX - lastX) * 0.005;
+      view.pitch = THREE.MathUtils.clamp(
+        view.pitch - (e.clientY - lastY) * 0.005,
+        PITCH_MIN,
+        PITCH_MAX,
+      );
+      lastX = e.clientX;
+      lastY = e.clientY;
+    };
+    const onUp = () => {
+      isDragging = false;
+      el.releasePointerCapture(pointerId);
+    };
+    el.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
 
-    // distance: pitch pulls the camera in slightly as it looks down, which
-    // keeps the player framed instead of shrinking to a dot from a high angle
-    const dist = THREE.MathUtils.lerp(LAND_DIST, SEA_DIST, view.sea) * view.zoom;
-    const pitch = THREE.MathUtils.lerp(view.pitch, 0.3, view.sea);
-    const elev = dist * Math.sin(pitch);
-    const flat = dist * Math.cos(pitch);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [gl]);
 
-    const c = Math.cos(view.orbit);
-    // camera sits behind the player along the orbit direction
-    const ox = Math.sin(c) * flat;
-    const oz = Math.cos(c) * flat;
+  useFrame((_, _rawDt) => {
 
-    target.set(pilot.pos.x, pilot.visualY + TARGET_H, pilot.pos.z);
-    // airborne lag: the target follows the body more slowly mid-jump so the
-    // jump reads as vertical motion rather than the world dropping away
-    const lag = pilot.grounded ? 16 : 5;
-    smoothTarget.lerp(target, 1 - Math.exp(-lag * dt));
+    // Character heading follows movement direction (set in VoxelCharacter),
+    // not camera yaw — camera can look around independently in 360°.
+    target.set(
+      pilot.pos.x - Math.sin(view.orbit) * LOOK_AHEAD,
+      pilot.visualY + 1.2,
+      pilot.pos.z - Math.cos(view.orbit) * LOOK_AHEAD,
+    );
 
-    desired.set(smoothTarget.x + ox, smoothTarget.y + elev, smoothTarget.z + oz);
+    // Camera offset: behind and above the character
+    offset.set(
+      -Math.sin(view.orbit) * Math.cos(view.pitch) * DIST,
+      HEIGHT + Math.sin(view.pitch) * DIST * 0.4,
+      -Math.cos(view.orbit) * Math.cos(view.pitch) * DIST,
+    );
 
-    // publish ground-plane camera basis so movement is screen-relative
-    const fl = Math.hypot(ox, oz) || 1;
-    view.camFwd.x = -ox / fl;
-    view.camFwd.z = -oz / fl;
-    view.camRight.x = -view.camFwd.z;
-    view.camRight.z = view.camFwd.x;
+    camera.position.copy(target).add(offset);
+    camera.lookAt(target);
 
-    // frame-rate independent smoothing
-    camera.position.lerp(desired, 1 - Math.exp(-9 * dt));
-
-    // safety clamp: never sink below the terrain under the camera
-    const ground = walkableHeight(camera.position.x, camera.position.z);
-    if (ground !== null && camera.position.y < ground + 2.4) {
-      camera.position.y = ground + 2.4;
-    }
-    camera.lookAt(smoothTarget);
+    // Publish ground-plane camera basis for camera-relative movement
+    dir.set(
+      -Math.sin(view.orbit) * Math.cos(view.pitch),
+      0,
+      -Math.cos(view.orbit) * Math.cos(view.pitch),
+    ).normalize();
+    view.camFwd.x = dir.x;
+    view.camFwd.z = dir.z;
+    view.camRight.x = -dir.z;
+    view.camRight.z = dir.x;
   });
 
   return null;

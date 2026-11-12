@@ -1,5 +1,4 @@
-/**
- * The visitor: controller + voxel body.
+/** The visitor: controller + voxel body.
  *
  * MOTION MODEL (third-person action, per input-systems / camera-systems /
  * game-feel skills):
@@ -21,49 +20,39 @@
  * Y eases only when grounded, so terraces glide but jumps stay crisp. Squash
  * and landing impact are render-side only — they never touch collision.
  */
-import { useMemo, useRef } from 'react';
+import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { buildCharacter, HIP_Y, SHOULDER_Y } from './character';
-import { pilot, keys, input, boatPose, view, REDUCED_MOTION } from './state';
-import { canSailTo, walkableHeight, VILLAGE_ORIGIN } from './world';
+import { pilot, keys, input, boatPose, view } from './state';
+import { canSailTo, VILLAGE_ORIGIN } from './world';
 import { islandAt, nearestShoreIsland } from './terrain';
+import { STEP_UP, tryMove, floorBelow } from './collision';
+import { findPath } from './navigation';
 import { useInteraction } from './interactionStore';
 
 const WALK_SPEED = 4.6;
 const RUN_SPEED = 8.4;
-const TURN_RATE = 13;
 const STEP = 1 / 60;
 
 const GRAVITY = 26;
 const JUMP_V = 8.5; // apex ≈ 1.39 blocks
-const STEP_UP = 1.15; // one voxel of terrace is walkable
 const JUMP_BUFFER = 0.12;
 const COYOTE = 0.1;
-const ARRIVE = 0.75;
+const ARRIVE = 0.9;
 
-const ARM_X = 0.3;
-const LEG_X = 0.13;
+const BODY_H = 1.7; // character height, blocks
 
 export function VoxelCharacter() {
-  const parts = useMemo(() => buildCharacter(), []);
-  const material = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true }), []);
-  // cartoon ink outline: same geometry, back faces only, slightly larger
-  const ink = useMemo(
-    () => new THREE.MeshBasicMaterial({ color: 0x2b2118, side: THREE.BackSide }),
-    [],
-  );
-
-  const root = useRef<THREE.Group>(null);
-  const bob = useRef<THREE.Group>(null);
-  const armL = useRef<THREE.Group>(null);
-  const armR = useRef<THREE.Group>(null);
-  const legL = useRef<THREE.Group>(null);
-  const legR = useRef<THREE.Group>(null);
   const acc = useRef(0);
   const lastZone = useRef('Starting Island');
   const prevJump = useRef(false);
-  const squash = useRef(0);
+  const groupRef = useRef<THREE.Group>(null);
+  const headRef = useRef<THREE.Mesh>(null);
+  const bodyRef = useRef<THREE.Mesh>(null);
+  const leftLegRef = useRef<THREE.Mesh>(null);
+  const rightLegRef = useRef<THREE.Mesh>(null);
+  const leftArmRef = useRef<THREE.Mesh>(null);
+  const rightArmRef = useRef<THREE.Mesh>(null);
 
   /** Publish the zone label to the HUD store, but only when it actually changes. */
   function publishZone(): void {
@@ -100,30 +89,42 @@ export function VoxelCharacter() {
     // publish every frame so teleports/idle can never leave a stale zone label
     publishZone();
 
-    // render-side vertical: crisp while airborne, eased on terraces
-    const deckTarget = pilot.mode === 'boat' ? boatPose.worldY + boatPose.deckY : pilot.pos.y;
-    if (pilot.grounded || pilot.mode === 'boat') {
-      pilot.visualY += (deckTarget - pilot.visualY) * Math.min(1, dt * 14);
-    } else {
-      pilot.visualY = deckTarget;
-    }
+    // ---- character transform + animation ---------------------------------
+    if (groupRef.current) {
+      groupRef.current.position.set(pilot.pos.x, pilot.visualY, pilot.pos.z);
+      groupRef.current.rotation.y = pilot.heading;
 
-    const g = root.current;
-    if (g) {
-      g.position.set(pilot.pos.x, pilot.visualY, pilot.pos.z);
-      let dy = pilot.heading - g.rotation.y;
-      while (dy > Math.PI) dy -= Math.PI * 2;
-      while (dy < -Math.PI) dy += Math.PI * 2;
-      g.rotation.y += dy * Math.min(1, dt * TURN_RATE);
-    }
+      const stride = pilot.stride;
+      const walking = pilot.moving && pilot.grounded;
+      const animSpeed = walking ? 14 : 5;
 
-    animate(dt);
+      // leg swing (opposite phases)
+      if (leftLegRef.current && rightLegRef.current) {
+        const swing = Math.sin(stride * animSpeed) * 0.3;
+        leftLegRef.current.rotation.x = walking ? swing : 0;
+        rightLegRef.current.rotation.x = walking ? -swing : 0;
+      }
+
+      // arm swing (opposite to legs)
+      if (leftArmRef.current && rightArmRef.current) {
+        const swing = Math.sin(stride * animSpeed + Math.PI) * 0.25;
+        leftArmRef.current.rotation.x = walking ? swing : 0;
+        rightArmRef.current.rotation.x = walking ? -swing : 0;
+      }
+
+      // body bob + head height
+      if (bodyRef.current && headRef.current) {
+        const bob = walking ? Math.abs(Math.sin(stride * animSpeed)) * 0.04 : 0;
+        bodyRef.current.position.y = bob;
+        headRef.current.position.y = BODY_H - 0.45 + bob;
+      }
+    }
   });
 
   function stepPhysics() {
     pilot.simTime += STEP;
 
-    // ---- 1. read intent ---------------------------------------------------
+    // ---- 1. read intent --------------------------------------------------
     let ix = 0;
     let iz = 0;
     if (keys['w'] || keys['arrowup']) iz -= 1;
@@ -144,18 +145,146 @@ export function VoxelCharacter() {
     pilot.jumpBuffer = Math.max(0, pilot.jumpBuffer - STEP);
     pilot.coyote = Math.max(0, pilot.coyote - STEP);
 
-    // ---- 2. click-to-move: manual input always wins -----------------------
+    // ---- 2. click-to-move: manual input always wins ----------------------
     if (manual) {
       pilot.moveTarget = null;
+      pilot.path = null;
     } else if (pilot.moveTarget && pilot.mode === 'walk') {
-      const dx = pilot.moveTarget.x - pilot.pos.x;
-      const dz = pilot.moveTarget.z - pilot.pos.z;
-      const d = Math.hypot(dx, dz);
-      if (d <= ARRIVE) {
-        pilot.moveTarget = null;
-      } else {
-        ix = dx / d;
-        iz = dz / d;
+      // walk the planned route waypoint-by-waypoint; the final waypoint is
+      // the moveTarget itself, so plain orders (no route) behave as before
+      let tx = pilot.moveTarget.x;
+      let tz = pilot.moveTarget.z;
+      let aimX = tx;
+      let aimZ = tz;
+      if (pilot.path && pilot.path.length > 0) {
+        const wp = pilot.path[Math.min(pilot.pathIndex, pilot.path.length - 1)];
+        tx = wp.x;
+        tz = wp.z;
+        aimX = tx;
+        aimZ = tz;
+        const dwp = Math.hypot(wp.x - pilot.pos.x, wp.z - pilot.pos.z);
+        if (dwp <= ARRIVE && pilot.pathIndex < pilot.path.length - 1) {
+          pilot.pathIndex += 1;
+          const next = pilot.path[pilot.pathIndex];
+          tx = next.x;
+          tz = next.z;
+          aimX = tx;
+          aimZ = tz;
+        }
+        // SEGMENT PROJECTION: once past the first waypoint, steer along the
+        // validated polyline instead of straight at the waypoint. A character
+        // pushed off the line by geometry must get back ON the validated
+        // segment before closing on the waypoint, or it grinds into the very
+        // obstacle the route was steering around.
+        if (pilot.pathIndex > 0) {
+          const prev = pilot.path[pilot.pathIndex - 1];
+          const sx = tx - prev.x;
+          const sz = tz - prev.z;
+          const len2 = sx * sx + sz * sz || 1;
+          let t = ((pilot.pos.x - prev.x) * sx + (pilot.pos.z - prev.z) * sz) / len2;
+          t = Math.max(0, Math.min(1, t));
+          const px = prev.x + sx * t;
+          const pz = prev.z + sz * t;
+          const ahead = (pilot.pos.x - px) * sx + (pilot.pos.z - pz) * sz;
+          if (ahead < -0.05) {
+            // behind the projection: walk back to the validated line first
+            aimX = px;
+            aimZ = pz;
+          }
+        }
+      }
+      const d = Math.hypot(tx - pilot.pos.x, tz - pilot.pos.z);
+      const adx = aimX - pilot.pos.x;
+      const adz = aimZ - pilot.pos.z;
+      const ad = Math.hypot(adx, adz);
+      const lastLeg = !pilot.path || pilot.pathIndex >= pilot.path.length - 1;
+      if (d <= ARRIVE && lastLeg && aimX === tx && aimZ === tz) {
+        if (pilot.retreatGoal) {
+          // the backing-out manoeuvre finished — resume the original order
+          const goal = pilot.retreatGoal;
+          pilot.retreatGoal = null;
+          const route = findPath({ x: pilot.pos.x, z: pilot.pos.z }, goal);
+          if (route.ok && route.points.length > 0) {
+            pilot.path = route.points;
+            pilot.pathIndex = 0;
+            pilot.moveTarget = { x: route.points[route.points.length - 1].x, z: route.points[route.points.length - 1].z };
+            pilot.lastPathDist = null;
+          } else {
+            pilot.moveTarget = null;
+            pilot.path = null;
+          }
+        } else {
+          pilot.moveTarget = null;
+          pilot.path = null;
+        }
+      } else if (ad > 1e-6) {
+        ix = adx / ad;
+        iz = adz / ad;
+      }
+      // STUCK DETECTION: if the distance to the active waypoint stops
+      // shrinking (pushed against geometry mid-route), re-plan from where the
+      // character actually is instead of grinding into the wall.
+      if (pilot.moveTarget) {
+        if (pilot.lastPathDist !== null && d > pilot.lastPathDist - 0.005) {
+          pilot.pathStuck += STEP;
+        } else {
+          pilot.pathStuck = 0;
+          pilot.replanCount = 0;
+          pilot.retreatCount = 0;
+        }
+        pilot.lastPathDist = d;
+        if (pilot.pathStuck > 0.6) {
+          pilot.pathStuck = 0;
+          if (pilot.retreatGoal) {
+            // even the backing-out manoeuvre is stuck: give up cleanly
+            pilot.moveTarget = null;
+            pilot.path = null;
+            pilot.retreatGoal = null;
+            pilot.replanCount = 0;
+          } else {
+            pilot.replanCount += 1;
+            if (pilot.replanCount >= 2) {
+              if (pilot.retreatCount >= 3) {
+                // three backing-out cycles changed nothing: the destination
+                // is unreachable from here — stop cleanly, never grind
+                pilot.moveTarget = null;
+                pilot.path = null;
+                pilot.retreatGoal = null;
+                pilot.replanCount = 0;
+              } else {
+                // two consecutive re-plans changed nothing: walk back to the
+                // previous waypoint (open ground the character came from),
+                // keeping the original destination queued, instead of grinding
+                const back =
+                  pilot.path && pilot.pathIndex > 0 ? pilot.path[pilot.pathIndex - 1] : null;
+                if (back) {
+                  pilot.retreatGoal = { x: pilot.moveTarget.x, z: pilot.moveTarget.z };
+                  pilot.retreatCount += 1;
+                  pilot.moveTarget = { x: back.x, z: back.z };
+                  pilot.path = null;
+                  pilot.pathIndex = 0;
+                } else {
+                  pilot.moveTarget = null;
+                  pilot.path = null;
+                }
+                pilot.replanCount = 0;
+              }
+            } else {
+              const goal = pilot.moveTarget;
+              const route = findPath({ x: pilot.pos.x, z: pilot.pos.z }, goal);
+              if (route.ok && route.points.length > 0) {
+                pilot.path = route.points;
+                pilot.pathIndex = 0;
+                // deliberately keep lastPathDist: the no-progress measurement
+                // must continue across re-plans or the retreat never arms and
+                // the character oscillates between re-plan and grind forever
+              } else {
+                pilot.moveTarget = null;
+                pilot.path = null;
+              }
+            }
+          }
+        }
       }
     }
 
@@ -163,7 +292,7 @@ export function VoxelCharacter() {
     pilot.running = run && len > 0.05;
     pilot.moving = len > 0.05;
 
-    // ---- 3. boarding / disembark glide ------------------------------------
+    // ---- 3. boarding / disembark glide -----------------------------------
     if (pilot.boardFrom) {
       if (pilot.mode === 'walk' && pilot.moving) {
         pilot.boardFrom = null;
@@ -188,34 +317,41 @@ export function VoxelCharacter() {
         const nx = pilot.pos.x + wx * speed * STEP;
         const nz = pilot.pos.z + wz * speed * STEP;
 
-        // step-up tolerance is generous while grounded, zero while airborne
+        // step-up tolerance is generous while grounded, near-zero while airborne
         const tol = pilot.grounded ? STEP_UP : 0.06;
         const feet = pilot.pos.y;
-        const ok = (h: number | null) => h !== null && h - feet <= tol;
 
-        const h3 = walkableHeight(nx, nz);
-        const h1 = walkableHeight(nx, pilot.pos.z);
-        const h2 = walkableHeight(pilot.pos.x, nz);
-        if (ok(h3)) {
+        // PHYSICAL COLLISION: walls, stalls, props and foundations are solid
+        // (collision.ts); terrain, decks and solid tops remain the floor.
+        // Axis-by-axis slide is unchanged — try the combined move, then each
+        // axis alone, so the character keeps sliding along a wall.
+        const m3 = tryMove(feet, nx, nz, tol);
+        const m1 = tryMove(feet, nx, pilot.pos.z, tol);
+        const m2 = tryMove(feet, pilot.pos.x, nz, tol);
+        if (m3.ok) {
           pilot.pos.x = nx;
           pilot.pos.z = nz;
-          if (pilot.grounded) pilot.pos.y = h3 as number;
-        } else if (ok(h1)) {
+          if (pilot.grounded) pilot.pos.y = m3.y;
+        } else if (m1.ok) {
           pilot.pos.x = nx;
-          if (pilot.grounded) pilot.pos.y = h1 as number;
-        } else if (ok(h2)) {
+          if (pilot.grounded) pilot.pos.y = m1.y;
+        } else if (m2.ok) {
           pilot.pos.z = nz;
-          if (pilot.grounded) pilot.pos.y = h2 as number;
+          if (pilot.grounded) pilot.pos.y = m2.y;
         } else {
           pilot.moveTarget = null; // blocked: drop the order rather than grind
+          pilot.path = null;
         }
         pilot.heading = Math.atan2(wx, wz);
         pilot.stride += speed * STEP * 2.6;
       }
 
       // ---- 5. vertical: gravity, landing, jump ---------------------------
-      const ground = walkableHeight(pilot.pos.x, pilot.pos.z);
-      const floorY = ground === null ? pilot.pos.y : ground;
+      // The floor is the highest standing surface at or below the feet —
+      // terrain, a pier deck, or a solid top (plinth, counter, stair block).
+      // No step-up here: climbing happens only through validated horizontal
+      // moves, never by snapping upward in place.
+      const floorY = floorBelow(pilot.pos.x, pilot.pos.z, pilot.pos.y + 0.01) ?? pilot.pos.y;
 
       if (pilot.grounded) {
         // stick to the floor; if the floor dropped away, start falling
@@ -269,66 +405,36 @@ export function VoxelCharacter() {
     }
   }
 
-  function animate(dt: number) {
-    const airborne = !pilot.grounded && pilot.mode === 'walk';
-    const moving = pilot.moving && pilot.mode === 'walk' && !airborne;
-    const fast = pilot.running && pilot.mode === 'walk';
-    const swing = moving ? Math.sin(pilot.stride * 2) * (fast ? 1.0 : 0.62) : 0;
-
-    // airborne pose: legs tuck, arms rise — reads as a jump from any angle
-    const tuck = airborne ? 0.85 : 0;
-
-    if (legL.current) legL.current.rotation.x = swing + tuck;
-    if (legR.current) legR.current.rotation.x = -swing + tuck * 0.6;
-    if (armL.current) {
-      armL.current.rotation.x = airborne ? -1.5 : -swing * 0.8;
-      armL.current.rotation.z = airborne ? 0.5 : 0.07;
-    }
-    if (armR.current) {
-      armR.current.rotation.x = airborne ? -1.5 : swing * 0.8;
-      armR.current.rotation.z = airborne ? -0.5 : -0.07;
-    }
-
-    // landing impact decays fast; drives a vertical squash that conserves volume
-    pilot.landImpact = Math.max(0, pilot.landImpact - dt * 4.5);
-    const impact = pilot.landImpact;
-    if (impact > 0.01) squash.current = impact * 0.55;
-    squash.current *= 1 - Math.min(1, dt * 9);
-
-    if (bob.current) {
-      const idle = REDUCED_MOTION ? 0 : Math.sin(performance.now() * 0.0018) * 0.018;
-      bob.current.position.y = moving
-        ? Math.abs(Math.sin(pilot.stride * 2)) * (fast ? 0.055 : 0.032)
-        : idle;
-      bob.current.rotation.x = fast ? -0.13 : 0;
-      // squash on landing, stretch on the way up
-      const stretch = airborne ? THREE.MathUtils.clamp(pilot.velY * 0.014, -0.1, 0.14) : 0;
-      bob.current.scale.set(1 + squash.current * 0.5, 1 - squash.current + stretch, 1 + squash.current * 0.5);
-    }
-  }
-
   return (
-    <group ref={root}>
-      <group ref={bob}>
-        <mesh geometry={parts.body} material={material} castShadow receiveShadow />
-        <mesh geometry={parts.body} material={ink} scale={1.08} />
-        <group ref={armL} position={[-ARM_X, SHOULDER_Y, 0]}>
-          <mesh geometry={parts.armL} material={material} castShadow />
-          <mesh geometry={parts.armL} material={ink} scale={1.12} />
-        </group>
-        <group ref={armR} position={[ARM_X, SHOULDER_Y, 0]}>
-          <mesh geometry={parts.armR} material={material} castShadow />
-          <mesh geometry={parts.armR} material={ink} scale={1.12} />
-        </group>
-        <group ref={legL} position={[-LEG_X, HIP_Y, 0]}>
-          <mesh geometry={parts.legL} material={material} castShadow />
-          <mesh geometry={parts.legL} material={ink} scale={1.12} />
-        </group>
-        <group ref={legR} position={[LEG_X, HIP_Y, 0]}>
-          <mesh geometry={parts.legR} material={material} castShadow />
-          <mesh geometry={parts.legR} material={ink} scale={1.12} />
-        </group>
-      </group>
+    <group ref={groupRef}>
+      {/* Legs (blue jeans) */}
+      <mesh ref={leftLegRef} position={[-0.2, 0, 0]}>
+        <boxGeometry args={[0.4, 1.2, 0.4]} />
+        <meshLambertMaterial color={0x2a5fc4} />
+      </mesh>
+      <mesh ref={rightLegRef} position={[0.2, 0, 0]}>
+        <boxGeometry args={[0.4, 1.2, 0.4]} />
+        <meshLambertMaterial color={0x2a5fc4} />
+      </mesh>
+      {/* Body (blue shirt) */}
+      <mesh ref={bodyRef} position={[0, 0.85, 0]}>
+        <boxGeometry args={[0.6, 1.0, 0.4]} />
+        <meshLambertMaterial color={0x4a90e2} />
+      </mesh>
+      {/* Head (skin) */}
+      <mesh ref={headRef} position={[0, BODY_H - 0.45, 0]}>
+        <boxGeometry args={[0.6, 0.6, 0.6]} />
+        <meshLambertMaterial color={0xe0ac70} />
+      </mesh>
+      {/* Arms (skin) */}
+      <mesh ref={leftArmRef} position={[-0.35, 0.95, 0]}>
+        <boxGeometry args={[0.3, 0.8, 0.3]} />
+        <meshLambertMaterial color={0xe0ac70} />
+      </mesh>
+      <mesh ref={rightArmRef} position={[0.35, 0.95, 0]}>
+        <boxGeometry args={[0.3, 0.8, 0.3]} />
+        <meshLambertMaterial color={0xe0ac70} />
+      </mesh>
     </group>
   );
 }

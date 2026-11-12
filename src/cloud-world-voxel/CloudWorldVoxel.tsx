@@ -12,13 +12,15 @@
  * there is no asset loader, no progress bar and no way for the world to come up
  * half-missing.
  */
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState, lazy } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import './cloudWorldVoxel.css';
 
 import { C } from './palette';
 import { BERTHS, HOTSPOTS, staticWorld, walkableHeight } from './world';
+import { findPath, validateWorld, approachFor, gridStats, lineWalkable, cellWalkable, cellHeight } from './navigation';
+import { collisionStats, capsuleBlocked, supportHeight } from './collision';
 import { Voxels } from './VoxelMesh';
 import { VoxelOcean } from './Ocean';
 import { CloudShadows, VoxelClouds, VoxelSky } from './VoxelSky';
@@ -43,10 +45,29 @@ import { useInteraction } from './interactionStore';
 /** The static archipelago. Built once, never rebuilt. */
 const WORLD_BLOCKS = staticWorld();
 
-function SceneContents() {
+/* Development-only navigation overlay (`?nav=1`). Both dynamic imports point
+ * at the same lazy chunk, which Vite eliminates from production builds because
+ * `import.meta.env.DEV` folds to `false` there (verified in the build output). */
+const NAV_DEBUG_PARAM = new URLSearchParams(window.location.search).has('nav');
+const NAV_DEFAULT_FLAGS = {
+  walkable: true,
+  blocked: true,
+  path: true,
+  radii: false,
+  approaches: false,
+  unreachable: true,
+  region: false,
+  player: true,
+};
+type NavFlags = typeof NAV_DEFAULT_FLAGS;
+
+const NavDebugLayers = lazy(() => import('./NavDebug'));
+const NavDebugPanel = lazy(() => import('./NavDebug').then((m) => ({ default: m.NavDebugPanel })));
+
+function SceneContents({ navFlags }: { navFlags: NavFlags }) {
   return (
     <Suspense fallback={null}>
-      <fogExp2 attach="fog" args={[C.skyHorizon, 0.0016]} />
+      <fogExp2 attach="fog" args={[C.skyHorizon, 0.00035]} />
       <VoxelSky />
       <VoxelClouds />
       <CloudShadows />
@@ -58,6 +79,7 @@ function SceneContents() {
       <VillageLabels />
       <InteractionSystem />
       <CameraRig />
+      {import.meta.env.DEV && NAV_DEBUG_PARAM && <NavDebugLayers flags={navFlags} />}
     </Suspense>
   );
 }
@@ -138,9 +160,14 @@ function WorldEffects() {
           pilot.grounded = true;
           pilot.velY = 0;
           pilot.moveTarget = null;
+          pilot.path = null;
+          pilot.pathIndex = 0;
         } else {
           pilot.boatPos.set(x, 0, z);
           pilot.pos.set(x, pilot.visualY, z);
+          pilot.moveTarget = null;
+          pilot.path = null;
+          pilot.pathIndex = 0;
         }
       },
       look: (orbit: number, zoom = 1, pitch?: number) => {
@@ -162,14 +189,41 @@ function WorldEffects() {
           keys[' '] = false;
         }, ms);
       },
-      /** QA: order a walk to a ground point, exactly like a click does */
+      /** QA: order a walk to a ground point, exactly like a click does —
+       * routed through the navigation grid so walls are respected */
       moveTo: (x: number, z: number) => {
-        pilot.moveTarget = { x, z };
+        const route = findPath({ x: pilot.pos.x, z: pilot.pos.z }, { x, z });
+        if (route.ok) {
+          pilot.path = route.points;
+          pilot.pathIndex = 0;
+          const last = route.points[route.points.length - 1];
+          pilot.moveTarget = { x: last.x, z: last.z };
+        } else {
+          // surface the failure for QA instead of silently ordering a grind
+          console.warn(`[cwv] moveTo(${x}, ${z}) unreachable: ${route.reason}`);
+          pilot.moveTarget = null;
+          pilot.path = null;
+        }
       },
       renderer: gl,
       camera,
       scene,
       groundAt: (x: number, z: number) => walkableHeight(x, z),
+      /** QA: the interaction store (openPanel / hoveredId / nearId reads) */
+      store: useInteraction,
+      /** QA: navigation + collision handles (read-only) */
+      nav: {
+        findPath,
+        validateWorld,
+        approachFor,
+        gridStats,
+        lineWalkable,
+        cellWalkable,
+        cellHeight,
+        collision: collisionStats,
+        capsuleBlocked,
+        supportHeight,
+      },
     };
   }, [gl, camera, scene]);
 
@@ -177,6 +231,8 @@ function WorldEffects() {
 }
 
 export function CloudWorldVoxel({ onExit }: { onExit: () => void }) {
+  const [navFlags, setNavFlags] = useState<NavFlags>(NAV_DEFAULT_FLAGS);
+  const navDebugEnabled = import.meta.env.DEV && NAV_DEBUG_PARAM;
   return (
     <div className="cwv-root">
       <HUD onExit={onExit} />
@@ -195,7 +251,7 @@ export function CloudWorldVoxel({ onExit }: { onExit: () => void }) {
         style={{ width: '100%', height: '100dvh' }}
       >
         <WorldEffects />
-        <SceneContents />
+        <SceneContents navFlags={navFlags} />
       </Canvas>
       <HoverTooltip />
       <ActionPrompt />
@@ -203,6 +259,11 @@ export function CloudWorldVoxel({ onExit }: { onExit: () => void }) {
       <WelcomeToast />
       <TouchControls />
       <LoadingOverlay />
+      {navDebugEnabled && (
+        <Suspense fallback={null}>
+          <NavDebugPanel flags={navFlags} setFlags={setNavFlags} />
+        </Suspense>
+      )}
     </div>
   );
 }

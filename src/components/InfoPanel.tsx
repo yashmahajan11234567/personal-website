@@ -237,7 +237,7 @@ const ProjectPanel = ({
       THE TITLE IS THE REPOSITORY LINK.
 
       The audit found the title rendered as plain text
-      (`<h3>{project.title}</h3>`) with the repository reachable only through a
+      (`h3 with project.title`) with the repository reachable only through a
       generic "Repository" link at the very bottom of a scrolling panel. The
       requirement was that the project title itself be a visible, real repository
       hyperlink - so the `h3` wraps an anchor whenever `github` exists, and it is
@@ -499,7 +499,7 @@ export const InfoPanel = ({ kind, id, onClose, initialDashboardId }: InfoPanelPr
           the panel offered a bare `×` glyph and a muted `Close` strip, and a
           visitor has to interpret a 16px glyph as "leave this dialog". The
           request was for a button that says BACK, so that is what this is — a
-          real `<button>` with visible text, in the normal tab order, carrying an
+          real button element with visible text, in the normal tab order, carrying an
           accessible name that states where it goes.
 
           It calls the same `onClose` the previous `×` and footer strip used.

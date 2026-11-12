@@ -1,0 +1,82 @@
+.dataWorldPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+  text-align: center;
+  background: var(--card, #0f0f0f);
+  color: var(--foreground, #fff);
+}
+
+.placeholderHeader h1 {
+  margin: 0 0 0.5rem;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 700;
+}
+
+.placeholderSubtitle {
+  margin: 0;
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  color: var(--muted-foreground, #888);
+}
+
+.placeholderBody {
+  margin: 2rem 0;
+  max-width: 40rem;
+}
+
+.placeholderBody p {
+  margin: 0 0 1.5rem;
+  line-height: 1.6;
+  color: var(--muted-foreground, #888);
+}
+
+.placeholderStatus {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  text-align: left;
+}
+
+.placeholderStatus li {
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.875rem;
+}
+
+.placeholderFooter {
+  margin-top: 2rem;
+}
+
+.placeholderExitButton {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--foreground, #fff);
+  background: var(--accent, #0ea5e9);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+
+.placeholderExitButton:hover {
+  opacity: 0.9;
+}
+
+.placeholderExitButton:active {
+  transform: scale(0.98);
+}
+
+.placeholderExitButton:focus-visible {
+  outline: 2px solid var(--accent, #0ea5e9);
+  outline-offset: 2px;
+}

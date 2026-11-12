@@ -12,42 +12,42 @@
 
 export const C = {
   /* ---- sky (ref 3: periwinkle zenith -> pale horizon, never white) ---- */
-  skyZenith: 0x3f7fe0,
-  skyMid: 0x74b3ee,
-  skyHorizon: 0xb6dcf5,
+  skyZenith: 0x4a90e2, // brighter sky blue
+  skyMid: 0x8cc3f0,
+  skyHorizon: 0xcdebf9,
   skyHaze: 0xd6ecfa,
 
   /* ---- ocean ---- */
-  oceanDeep: 0x1a6aa8, // [17]
-  oceanDeepAlt: 0x1f74b3, // derived: the second blue of the open-water checker
-  oceanMid: 0x2b8fd4, // [17]
-  oceanShallow: 0x4cc4dd, // [17] deepened a step: the first pass read as neon
+  oceanDeep: 0x1e86c0, // [17] brighter blue
+  oceanDeepAlt: 0x2a90c8, // derived: the second blue of the open-water checker
+  oceanMid: 0x3fa4e0, // [17]
+  oceanShallow: 0x5acde5, // [17]
   oceanLagoon: 0x86e2ea, // derived: innermost lagoon ring
   oceanSurf: 0xa9eef2, // derived: the last ring before the foam line
   foam: 0xffffff, // [17]
 
   /* ---- terrain ---- */
-  sand: 0xf2e2b8, // [17]
-  sandDark: 0xdfc894, // derived: sand side band
-  grassTop: 0x7ec850, // [17]
-  grassDark: 0x4a9e3f, // [17]
+  sand: 0xf4e8c4, // [17] brighter sand
+  sandDark: 0xe8d8a8, // derived: sand side band
+  grassTop: 0x8dd35e, // [17] brighter green
+  grassDark: 0x5bb04d, // [17]
   rockSide: 0x7e6fd6, // [17]
   rockSideDark: 0x5b4fb8, // [17]
 
   /* ---- timber ---- */
-  wood: 0xa06a44, // [17]
-  woodDark: 0x7a4c30, // [17]
+  wood: 0xb87a50, // [17] brighter warm wood
+  woodDark: 0x9c5e40, // [17]
   woodLight: 0xc08a5c, // derived: deck planks
 
   /* ---- architecture ---- */
-  wallCream: 0xf5e6c8, // [17]
-  wallCreamDark: 0xe3d0ab, // derived: wall shading / base course
-  roofBlue: 0x3f7fd0, // [17]
-  roofBlueDark: 0x2f63a8, // derived: roof ridge
+  wallCream: 0xf8ecdc, // [17]
+  wallCreamDark: 0xe8d8c0, // derived: wall shading / base course
+  roofBlue: 0x4a90e2, // [17]
+  roofBlueDark: 0x3a70c2, // derived: roof ridge
   roofTerracotta: 0xd8703e, // [17]
   roofTerracottaDark: 0xb25428, // derived: roof ridge
-  stone: 0x9a9a9a, // [17]
-  stoneDark: 0x7c7c7c, // derived
+  stone: 0xb0b0b0, // [17]
+  stoneDark: 0x8c8c8c, // derived
   glass: 0x8ec8e8,
   glassDark: 0x4a7fa8,
 
@@ -78,6 +78,11 @@ export const C = {
   awningTerracotta: 0xd8564a,
   cargoGreen: 0x3f9e6a,
   cargoRust: 0xa8523a,
+
+  /* ---- skill stall themes ---- */
+  fishOrange: 0xff8c42, // pufferfish → AWS
+  pipeGrey: 0x7a8794,   // pipe → CI/CD
+  fishBlue: 0x4a90c8,   // blue whale fish → Docker
 } as const;
 
 export type ColorToken = keyof typeof C;

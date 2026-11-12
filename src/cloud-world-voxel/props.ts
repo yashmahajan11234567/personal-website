@@ -244,3 +244,48 @@ export function dinghy(c: Chunk, x: number, y: number, z: number, hue: number): 
   c.put(x, y + 0.9, z, C.woodDark);
   c.put(x + 1.4, y + 1.4, z, C.foam);
 }
+
+/**
+ * Skill stall — counter, awning, themed goods, and a signpost slot for the
+ * skill name. Callers register a hotspot + HTML sign via `buildSigns` in world.ts.
+ * `facing` rotates the whole stall (0 = front faces +z).
+ */
+export function skillStall(
+  c: Chunk,
+  x: number,
+  y: number,
+  z: number,
+  accent: number,
+  goodsColor: number,
+  facing: 0 | 1 | 2 | 3 = 0,
+): void {
+  // counter (3 wide, 1 deep)
+  c.putBox(x, y + 0.55, z, 3, 0.5, 0.94, C.wood);
+  c.putBox(x, y + 0.82, z, 3.02, 0.1, 0.98, C.woodLight);
+
+  // corner posts
+  const hx = 1.6, hz = 1.1;
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      for (let i = 0; i < 3; i++) c.put(x + sx * hx, y + i, z + sz * hz, C.woodDark);
+    }
+  }
+
+  // awning
+  for (let dx = -2; dx <= 2; dx++) {
+    for (let dz = -2; dz <= 1; dz++) {
+      if (Math.abs(dz) === 2 && Math.abs(dx) === 2) continue;
+      c.putBox(x + dx, y + 3.15, z + dz, 1, 0.3, 1, (dx + dz) & 1 ? accent : C.wallCream);
+    }
+  }
+
+  // themed goods on the counter
+  c.putBox(x - 0.8, y + 0.98, z + 0.4, 0.4, 0.4, 0.4, goodsColor);
+  c.putBox(x + 0.2, y + 0.98, z - 0.3, 0.4, 0.4, 0.4, goodsColor);
+  c.putBox(x + 0.9, y + 0.98, z + 0.3, 0.35, 0.35, 0.35, C.flowerYellow);
+
+  // signpost BEHIND the counter: in front of it the board blocked the visitor's
+  // approach (and the proximity line-of-sight) at head height. The sign faces
+  // back toward the counter's front (the approach side).
+  signpost(c, 0, 0, 2.2, ((facing + 2) % 4) as 0 | 1 | 2 | 3, 3, accent);
+}

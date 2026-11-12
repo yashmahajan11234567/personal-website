@@ -37,6 +37,7 @@ import {
   flagpole,
   bollard,
   marketStall,
+  skillStall,
   dinghy,
 } from './props';
 import { dock, gateway, house, lighthouse, welcomeHall } from './buildings';
@@ -197,19 +198,102 @@ function buildStructures(): VoxelList {
     placements.push({ chunk: c, cx: harbour.cx + 26, cz: harbour.cz + 6, quarter: 3, fx: 7, fz: 5 });
   }
 
-  /* ---------------- market stalls (harbour square) ---------------- */
+  /* ---------------- market stalls (harbour square) ----------------
+   * Same per-stall placement rule as the skill row: narrow footprints keep
+   * every foundation within one step of the ground it stands on. */
+  const marketRow: { x: number; z: number; a: number; b: number }[] = [
+    // westmost stall sits clear of the ramp corridor (x 16–18): its east
+    // posts used to pinch the pier exit against the ramp steps
+    { x: 13, z: 39, a: C.awningBlue, b: C.wallCream },
+    { x: 20, z: 36, a: C.awningTerracotta, b: C.wallCream },
+    { x: 25, z: 36, a: C.awningBlue, b: C.wallCream },
+  ];
+  for (const m of marketRow) {
+    const c = new Chunk();
+    marketStall(c, 0, 0, 0, m.a, m.b);
+    placements.push({
+      chunk: c,
+      cx: m.x,
+      cz: m.z,
+      quarter: 0,
+      fx: 2,
+      fz: 2,
+      base: (topLayerAt(m.x, m.z) ?? 0) + 1,
+    });
+  }
+  // harbour clutter in narrow strips, each pinned to its own ground layer so
+  // no strip straddling a slope grows an unclimbable foundation wall
   {
     const c = new Chunk();
-    marketStall(c, -5, 0, 0, C.awningBlue, C.wallCream);
-    marketStall(c, 1, 0, 5, C.awningTerracotta, C.wallCream);
-    marketStall(c, 5, 0, -3, C.awningBlue, C.wallCream);
-    // harbour clutter
-    for (let i = 0; i < 5; i++) crate(c, -6 + i * 3, 0, -7);
-    for (let i = 0; i < 4; i++) barrel(c, 7, 0, 1 + i * 2);
-    lampsAlong(c, -6, 6, 7);
-    // footprint kept tight to the stalls: a wider rect would pave the whole
-    // harbour slope with foundation stone for no visual gain
-    placements.push({ chunk: c, cx: harbour.cx - 16, cz: harbour.cz + 3, quarter: 0, fx: 7, fz: 7 });
+    for (let i = 0; i < 5; i++) crate(c, -6 + i * 3, 0, 0);
+    placements.push({
+      chunk: c,
+      cx: harbour.cx - 16,
+      cz: harbour.cz - 4,
+      quarter: 0,
+      fx: 7,
+      fz: 1,
+      base: (topLayerAt(harbour.cx - 16, harbour.cz - 4) ?? 0) + 1,
+    });
+  }
+  {
+    const c = new Chunk();
+    // three barrels beside the gateway — clear of its 5-block passage
+    for (let i = 0; i < 3; i++) barrel(c, 0, 0, -2 + i * 2);
+    placements.push({
+      chunk: c,
+      cx: harbour.cx - 11,
+      cz: harbour.cz,
+      quarter: 0,
+      fx: 2,
+      fz: 2,
+      base: (topLayerAt(harbour.cx - 11, harbour.cz) ?? 0) + 1,
+    });
+  }
+  {
+    const c = new Chunk();
+    // behind the stalls, so no lamp post lands inside a stall footprint
+    lampsAlong(c, -6, 6, 0);
+    placements.push({
+      chunk: c,
+      cx: harbour.cx - 16,
+      cz: harbour.cz + 13,
+      quarter: 0,
+      fx: 7,
+      fz: 1,
+      base: (topLayerAt(harbour.cx - 16, harbour.cz + 13) ?? 0) + 1,
+    });
+  }
+
+  /* ---------------- skill stalls (harbour front: exactly six, locked) ----------------
+   * Locked product decision: Docker, CI/CD, Cloud & Infrastructure, Kubernetes,
+   * Programming (Python), Data & AI (SQL). Linux is NOT a stall. Spacing is 8
+   * blocks on the same z row the market has always occupied.
+   * Each stall is its OWN placement so its foundation hugs the LOCAL ground:
+   * one shared 45-block footprint would raise the whole row onto the highest
+   * column's layer, building an unclimbable terrace across the harbour floor. */
+  const stallRow: { x: number; accent: number; goods: number }[] = [
+    { x: 8, accent: C.fishBlue, goods: C.fishBlue },          // Docker Fish Market
+    { x: 16, accent: C.pipeGrey, goods: C.pipeGrey },         // CI/CD Workshop
+    { x: 24, accent: C.roofTerracotta, goods: C.cargoGreen }, // Cloud & Infrastructure
+    { x: 32, accent: C.roofBlue, goods: C.whaleBlue },        // Kubernetes / Container Orchestration
+    { x: 40, accent: C.flowerYellow, goods: C.flowerYellow }, // Programming Workshop
+    { x: 48, accent: C.cargoGreen, goods: C.containerCyan },  // Data & AI Laboratory
+  ];
+  for (const s of stallRow) {
+    const c = new Chunk();
+    skillStall(c, 0, 0, 2, s.accent, s.goods, 0);
+    // base = this stall's OWN ground layer, so the counter sits one step above
+    // the local ground no matter what the corners of the footprint do
+    placements.push({
+      chunk: c,
+      cx: s.x,
+      cz: harbour.cz + 8,
+      quarter: 0,
+      fx: 2,
+      fz: 4,
+      base: (topLayerAt(s.x, harbour.cz + 8) ?? 0) + 1,
+    });
   }
 
   /* ---------------- Lighthouse (seaward headland) ---------------- */
@@ -226,76 +310,42 @@ function buildStructures(): VoxelList {
     placements.push({ chunk: c, cx: harbour.cx - 9, cz: harbour.cz + 6, quarter: 1, fx: 3, fz: 1 });
   }
 
-  /* ---------------- village: the five portfolio buildings ----------------
-   * Each house gets its own identity so the village reads at a glance:
-   * a distinct roof silhouette, a saturated accent (plaque + signpost + path
-   * strip + floating label) and a rooftop landmark. Roof colours stay within
-   * the two adopted roof tokens; variety comes from shape, not new hues. */
+  /* ---------------- village: the three project houses (locked) ----------------
+   * Locked product decision D1: exactly three verified project houses —
+   * Go Microservices, RxVerify, DevOps Masterclass. Each keeps a distinct
+   * silhouette (roof shape, landmark, interior dressing, accent) and opens the
+   * project's own panel projected from `projects.cloud.ts`. */
   const village: { panel: string; lx: number; lz: number; quarter: number; opts: Parameters<typeof house>[1] }[] =
     [
       {
-        panel: 'skills',
+        panel: 'go-microservices',
         lx: 4,
         lz: -4,
         quarter: 0,
         opts: { w: 9, d: 7, wallH: 4, roof: C.roofBlue, roofShape: 'gable', landmark: 'flag', decor: 'shelves', accent: C.containerCyan, chimney: true },
       },
       {
-        panel: 'projects',
+        panel: 'rxverify',
         lx: 20,
         lz: -4,
         quarter: 0,
         opts: { w: 9, d: 7, wallH: 4, roof: C.roofTerracotta, roofDark: C.roofTerracottaDark, roofShape: 'hip', landmark: 'antenna', decor: 'stands', accent: C.flowerYellow, chimney: true },
       },
       {
-        panel: 'experience',
-        lx: -2,
-        lz: 6,
-        quarter: 1,
-        opts: {
-          w: 9,
-          d: 7,
-          wallH: 5,
-          roof: C.roofTerracotta,
-          roofDark: C.roofTerracottaDark,
-          roofShape: 'flat',
-          decor: 'boards',
-          accent: C.flowerPink,
-          columns: true,
-          chimney: true,
-        },
-      },
-      {
-        panel: 'cloud',
+        panel: 'devops-masterclass',
         lx: 4,
         lz: 16,
         quarter: 2,
-        opts: { w: 9, d: 7, wallH: 4, roof: C.roofBlue, roofShape: 'hip', landmark: 'flag', decor: 'racks', accent: C.flowerPurple, chimney: false },
-      },
-      {
-        panel: 'data',
-        lx: 20,
-        lz: 16,
-        quarter: 2,
-        opts: {
-          w: 9,
-          d: 7,
-          wallH: 4,
-          roof: C.roofTerracotta,
-          roofDark: C.roofTerracottaDark,
-          roofShape: 'gable',
-          landmark: 'antenna',
-          decor: 'benches',
-          accent: C.cargoGreen,
-          chimney: true,
-        },
+        opts: { w: 9, d: 7, wallH: 4, roof: C.roofBlue, roofShape: 'hip', landmark: 'flag', decor: 'racks', accent: C.cargoGreen, chimney: false },
       },
     ];
   for (const v of village) {
     const c = new Chunk();
     house(c, v.opts);
-    // an accent-coloured signpost at the front, facing out toward the plaza
-    signpost(c, 0, 0, (v.opts.d - 1) / 2 + 2, 0, 3, v.opts.accent);
+    // an accent-coloured signpost beside the front corner, facing out toward
+    // the plaza: directly in front of the door its board hung at head height
+    // across the entrance approach
+    signpost(c, v.opts.w / 2 + 1, 0, (v.opts.d - 1) / 2 + 2, 0, 3, v.opts.accent);
     placements.push({
       chunk: c,
       cx: harbour.cx + v.lx,
@@ -325,11 +375,9 @@ function buildStructures(): VoxelList {
     // accent-coloured path strips from the cross to each house front, so the
     // way to every house is visible on the ground, not just on the label
     const paths: { tx: number; tz: number; accent: number }[] = [
-      { tx: -8, tz: -4, accent: C.containerCyan }, // Skills House
-      { tx: 8, tz: -4, accent: C.flowerYellow }, // Projects House
-      { tx: -6, tz: 0, accent: C.flowerPink }, // Experience House
-      { tx: -8, tz: 5, accent: C.flowerPurple }, // Cloud / DevOps House
-      { tx: 8, tz: 5, accent: C.cargoGreen }, // Data / AI House
+      { tx: -8, tz: -4, accent: C.containerCyan }, // Go Microservices House front
+      { tx: 8, tz: -4, accent: C.flowerYellow }, // RxVerify House front
+      { tx: -8, tz: 5, accent: C.cargoGreen }, // DevOps Masterclass House front
     ];
     for (const p of paths) {
       c.putBox((p.tx / 2), 0.06, 0, Math.abs(p.tx) + 1, 0.12, 1.6, p.accent);
@@ -541,11 +589,9 @@ export const VILLAGE_LABELS: VillageLabel[] = [];
 
 /** Each house's accent colour, keyed by panel id (single source of truth). */
 export const ACCENT_BY_PANEL: Record<string, number> = {
-  skills: C.containerCyan,
-  projects: C.flowerYellow,
-  experience: C.flowerPink,
-  cloud: C.flowerPurple,
-  data: C.cargoGreen,
+  'go-microservices': C.containerCyan,
+  rxverify: C.flowerYellow,
+  'devops-masterclass': C.cargoGreen,
 };
 
 function buildSigns(): { blocks: VoxelList; hotspots: Hotspot[] } {
@@ -569,7 +615,9 @@ function buildSigns(): { blocks: VoxelList; hotspots: Hotspot[] } {
   /* ---- starting island ---- */
   put(-44, -45, 0, 'welcome', 'Welcome to Cloud World', 7);
   put(-46, -51, 1, 'controls', 'How to Play', 6);
-  put(-37, -47, 1, 'whale', 'The Docker Whale', 6);
+  // beside the dock, never on it: a sign in the dock corridor (z=-47) plus its
+  // 3-wide board used to wall off the pier from the spawn shore
+  put(-39, -44, 1, 'whale', 'The Docker Whale', 6);
 
   /* ---- the whale's home berth, at the end of the arrival dock ---- */
   hotspots.push({
@@ -606,13 +654,11 @@ function buildSigns(): { blocks: VoxelList; hotspots: Hotspot[] } {
   /* ---- the village gateway ---- */
   put(H - 9, H + 13, 0, 'village', 'Portfolio Village', 8);
 
-  /* ---- the five buildings: a hotspot in front of each open front ---- */
+  /* ---- the three project houses: a hotspot in front of each open front ---- */
   const fronts: { panel: string; x: number; z: number; label: string }[] = [
-    { panel: 'skills', x: H + 4, z: H + 2, label: 'Skills House' },
-    { panel: 'projects', x: H + 20, z: H + 2, label: 'Projects House' },
-    { panel: 'experience', x: H + 6, z: H + 6, label: 'Experience House' },
-    { panel: 'cloud', x: H + 4, z: H + 11, label: 'Cloud / DevOps House' },
-    { panel: 'data', x: H + 20, z: H + 11, label: 'Data / AI House' },
+    { panel: 'go-microservices', x: H + 4, z: H + 2, label: 'Go Microservices — Real-Time Balance Visibility' },
+    { panel: 'rxverify', x: H + 20, z: H + 2, label: 'RxVerify — Digital Prescription Verification' },
+    { panel: 'devops-masterclass', x: H + 4, z: H + 11, label: 'Full-Stack AI DevOps Masterclass' },
   ];
   for (const f of fronts) {
     const g = islandSurfaceY(f.x, f.z);
@@ -630,6 +676,21 @@ function buildSigns(): { blocks: VoxelList; hotspots: Hotspot[] } {
   /* ---- beacon islet ---- */
   put(65, -38, 2, 'whale', 'The Docker Whale', 6);
 
+  /* ---- skill stalls (harbour front: exactly six, locked decision) ---- */
+  const skillStalls: { id: string; panel: string; label: string; x: number; z: number }[] = [
+    { id: 'hs_skill_docker', panel: 'docker', label: 'Docker Fish Market', x: 8, z: 44 },
+    { id: 'hs_skill_cicd', panel: 'cicd', label: 'CI/CD Workshop', x: 16, z: 44 },
+    { id: 'hs_skill_cloudinfra', panel: 'terraform', label: 'Cloud & Infrastructure', x: 24, z: 44 },
+    { id: 'hs_skill_k8s', panel: 'k8s', label: 'Kubernetes / Container Orchestration', x: 32, z: 44 },
+    { id: 'hs_skill_python', panel: 'python', label: 'Programming Workshop', x: 40, z: 44 },
+    { id: 'hs_skill_sql', panel: 'sql', label: 'Data & AI Laboratory', x: 48, z: 44 },
+  ];
+  for (const s of skillStalls) {
+    const g = islandSurfaceY(s.x, s.z);
+    const y = g === null ? 2 : g + 1;
+    hotspots.push({ id: s.id, panel: s.panel, label: s.label, x: s.x, y, z: s.z, r: 4 });
+  }
+
   return { blocks, hotspots };
 }
 
@@ -639,6 +700,7 @@ function buildSigns(): { blocks: VoxelList; hotspots: Hotspot[] } {
 
 let cachedWorld: VoxelList | null = null;
 let cachedHotspots: Hotspot[] | null = null;
+let cachedCollision: VoxelList | null = null;
 
 /**
  * The entire static world as one block list.
@@ -694,11 +756,51 @@ export function staticWorld(): VoxelList {
 
   push(structures, false);
   push(signs.blocks, false);
-  push(veg, false);
+  // vegetation is tracked separately so the collision index can exclude it:
+  // greenery stays walk-through (as it has always been), buildings do not.
+  const vegKeys = new Set<string>();
+  for (const b of veg) {
+    const k = `${b.x},${b.y},${b.z}`;
+    if (terrainMap.has(k)) continue;
+    vegKeys.add(k);
+    map.set(k, b);
+  }
 
   cachedWorld = Array.from(map.values());
+  cachedCollision = cachedWorld.filter(
+    (b) => !vegKeys.has(`${b.x},${b.y},${b.z}`) && !terrainMap.has(`${b.x},${b.y},${b.z}`),
+  );
   cachedHotspots = signs.hotspots;
   return cachedWorld;
+}
+
+/**
+ * Solid collision blocks: every rendered block that is neither terrain nor
+ * vegetation. Terrain stays a pure heightfield (`walkableHeight`); buildings,
+ * docks, stalls, signs and plaza props are the solid geometry the character
+ * physically collides with. Derived from the same map that renders the world,
+ * so collision can never drift from what the player sees.
+ */
+export function staticCollisionBlocks(): VoxelList {
+  staticWorld();
+  return cachedCollision ?? [];
+}
+
+export interface StructureFootprint {
+  x0: number;
+  x1: number;
+  z0: number;
+  z1: number;
+}
+
+/**
+ * Placement footprints (including foundation margins) reserved during
+ * structure assembly. Read-only copy — used by the world validator to detect
+ * overlapping structures.
+ */
+export function structureFootprints(): StructureFootprint[] {
+  staticWorld();
+  return OCCUPIED.map((r) => ({ ...r }));
 }
 
 /** Terrain blocks for one island (cached). */

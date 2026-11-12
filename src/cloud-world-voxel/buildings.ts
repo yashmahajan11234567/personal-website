@@ -132,19 +132,21 @@ export function house(c: Chunk, o: HouseOptions): void {
   // threshold step
   for (let x = -openHalf; x <= openHalf; x++) c.put(x, 0, hz + 1, C.stone);
 
-  // decoration above the entrance: the building's sign plaque
+  // decoration above the entrance: the building's sign plaque, hung one course
+  // higher than the wall top so a visitor stepping onto the interior floor
+  // keeps head clearance under it (the floor is one block above the plinth)
   for (let x = -openHalf; x <= openHalf; x++) {
-    for (let y = o.wallH - 1; y <= o.wallH; y++) {
+    for (let y = o.wallH; y <= o.wallH + 1; y++) {
       c.put(x, y, hz, C.wallCream);
     }
   }
   for (let x = -openHalf + 1; x <= openHalf - 1; x++) {
-    c.put(x, o.wallH - 1, hz, o.accent);
+    c.put(x, o.wallH, hz, o.accent);
   }
   // little voxel "letters" so the plaque reads as a sign at distance
-  c.put(-openHalf + 1, o.wallH, hz, C.woodDark);
-  c.put(openHalf - 1, o.wallH, hz, C.woodDark);
-  if (openHalf > 2) c.put(0, o.wallH, hz, C.woodDark);
+  c.put(-openHalf + 1, o.wallH + 1, hz, C.woodDark);
+  c.put(openHalf - 1, o.wallH + 1, hz, C.woodDark);
+  if (openHalf > 2) c.put(0, o.wallH + 1, hz, C.woodDark);
 
   // dark eave line: the roof overhangs one block, so a dark ring at the wall
   // top reads as a shadow line and separates roof from walls at distance

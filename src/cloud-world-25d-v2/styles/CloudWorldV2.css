@@ -1,0 +1,13 @@
+/* Cloud World V2 — wrapper styles */
+.cloud-world-wrapper {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.cloud-world-wrapper canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #3a8fd8; /* fallback sky color when WebGL alpha=true */
+}

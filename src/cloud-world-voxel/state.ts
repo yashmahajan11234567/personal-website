@@ -38,6 +38,20 @@ export interface Pilot {
   landImpact: number;
   /** click-to-move destination in the ground plane; null when not pathing */
   moveTarget: { x: number; z: number } | null;
+  /** planned A* route for click-to-move, consumed waypoint-by-waypoint */
+  path: { x: number; z: number }[] | null;
+  /** index of the waypoint currently being walked toward */
+  pathIndex: number;
+  /** seconds the route has made no progress (triggers a re-plan) */
+  pathStuck: number;
+  /** consecutive no-progress re-plans (triggers a retreat) */
+  replanCount: number;
+  /** original destination preserved while the character backs out of a pinch */
+  retreatGoal: { x: number; z: number } | null;
+  /** completed backing-out manoeuvres for the current order (caps the cycle) */
+  retreatCount: number;
+  /** distance to the active waypoint at the previous physics step */
+  lastPathDist: number | null;
   /** seconds of simulated time elapsed — lets tests measure speed independent of frame rate */
   simTime: number;
 }
@@ -61,6 +75,13 @@ export const pilot: Pilot = {
   coyote: 0,
   landImpact: 0,
   moveTarget: null,
+  path: null,
+  pathIndex: 0,
+  pathStuck: 0,
+  replanCount: 0,
+  retreatGoal: null,
+  retreatCount: 0,
+  lastPathDist: null,
   simTime: 0,
 };
 
@@ -88,6 +109,8 @@ export const view = {
   /** camera ground-plane forward/right (unit vectors in xz), refreshed by CameraRig */
   camFwd: { x: 0, z: -1 },
   camRight: { x: 1, z: 0 },
+  /** true while the pointer is locked (first-person look active) */
+  pointerLocked: false,
   /** set by the loader once the first frame has rendered */
   ready: false,
 };

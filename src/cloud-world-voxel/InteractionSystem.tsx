@@ -23,6 +23,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { BERTHS, HOTSPOTS, deckAt, nearestBerth, walkableHeight } from './world';
 import { islandAt, nearestShoreIsland } from './terrain';
+import { findPath, lineWalkable } from './navigation';
 import { pilot } from './state';
 import { useInteraction } from './interactionStore';
 
@@ -84,7 +85,21 @@ export function InteractionSystem() {
       // re-project onto the real terrain so clicking a hillside aims at its top
       const surface = walkableHeight(hitPoint.x, hitPoint.z);
       if (surface === null) return;
-      pilot.moveTarget = { x: hitPoint.x, z: hitPoint.z };
+      if (d <= 1.5) {
+        // very short hop: walk straight there
+        pilot.moveTarget = { x: hitPoint.x, z: hitPoint.z };
+        pilot.path = null;
+        pilot.pathIndex = 0;
+        return;
+      }
+      // longer orders follow a planned route that respects walls; an
+      // unreachable destination places no order at all instead of grinding
+      const route = findPath({ x: pilot.pos.x, z: pilot.pos.z }, { x: hitPoint.x, z: hitPoint.z });
+      if (!route.ok) return;
+      pilot.path = route.points;
+      pilot.pathIndex = 0;
+      const last = route.points[route.points.length - 1];
+      pilot.moveTarget = { x: last.x, z: last.z };
     };
     el.addEventListener('click', onClick);
     return () => el.removeEventListener('click', onClick);
@@ -200,12 +215,20 @@ export function InteractionSystem() {
     // proximity
     let nearest: string | null = null;
     let bestD = Infinity;
+    const px = pilot.pos.x;
+    const pz = pilot.pos.z;
     for (const h of HOTSPOTS) {
-      const d = Math.hypot(h.x - pilot.pos.x, h.z - pilot.pos.z);
-      if (d <= h.r && d < bestD) {
-        bestD = d;
-        nearest = h.id;
+      const d = Math.hypot(h.x - px, h.z - pz);
+      if (d > h.r || d >= bestD) continue;
+      // never offer an interaction through a solid wall: the approach line
+      // must be physically walkable. Over open water (whale berths) the
+      // distance rule alone applies, as it always has.
+      const overWater = walkableHeight(px, pz) === null || walkableHeight(h.x, h.z) === null;
+      if (!overWater && pilot.mode === 'walk' && !lineWalkable({ x: px, z: pz }, { x: h.x, z: h.z })) {
+        continue;
       }
+      bestD = d;
+      nearest = h.id;
     }
     if (nearest !== nearRef.current) {
       nearRef.current = nearest;

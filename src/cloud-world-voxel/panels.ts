@@ -12,6 +12,8 @@
  * portfolio's contents.
  */
 import { PORTFOLIO, projectsForWorld, skillsForWorld } from '../content';
+import { CLOUD_PROJECTS } from '../content/projects.cloud';
+import { DATA_SKILLS } from '../content/skills.data';
 import { DESTINATIONS, DEST_ORDER } from '../experience/experience.data';
 import type { Skill, SkillCategory } from '../content/types';
 import { C } from './palette';
@@ -74,6 +76,67 @@ function projectSection(p: (typeof PORTFOLIO.projects)[string]): PanelSection {
     bullets: (p.results ?? []).slice(0, 3),
     chips,
     links: links.length ? links : undefined,
+  };
+}
+
+/** Build a stall panel from an audited `skills.data.ts` entry — no invented facts. */
+function skillStallPanel(id: string, title: string, subtitle: string, accent: number, skillId: string): PanelDef {
+  const skill = DATA_SKILLS.find((s) => s.id === skillId) as Skill | undefined;
+  const links: PanelLink[] = (skill?.experience.repositories ?? []).map((r) => ({
+    label: r.name,
+    url: r.url,
+  }));
+  return {
+    id,
+    title,
+    subtitle,
+    accent,
+    sections: [
+      {
+        heading: 'What it is',
+        body: skill?.summary ?? '',
+        bullets: (skill?.experience.evidence ?? []).slice(0, 6),
+        links: links.length ? links : undefined,
+      },
+    ],
+  };
+}
+
+const AUTHORSHIP_SUBTITLE: Record<string, string> = {
+  'extended-existing': 'Productionized an existing Flask application — the original author is credited, not replaced.',
+  course: 'College open-elective coursework — practice material, never presented as production experience.',
+  collaborative: 'Collaborative college project — designed and implemented jointly with a partner.',
+};
+
+/** Build a project house panel from an audited `projects.cloud.ts` entry. */
+function projectPanel(id: string, accent: number, projectId: string, subtitle: string): PanelDef {
+  const p = CLOUD_PROJECTS.find((x) => x.id === projectId);
+  if (!p) {
+    // Content missing is a build-time-visible failure, not a silent empty panel.
+    throw new Error(`projectPanel: no content entry for '${projectId}'`);
+  }
+  const links: PanelLink[] = p.github ? [{ label: 'Repository', url: p.github }] : [];
+  const collab = (p.collaborators ?? []).map((c) => `${c.name} — ${c.role}`).join('; ');
+  return {
+    id,
+    title: p.title,
+    subtitle: subtitle || AUTHORSHIP_SUBTITLE[p.authorship] || undefined,
+    accent,
+    sections: [
+      { heading: 'What it is', body: p.description },
+      {
+        heading: 'My contribution',
+        body: p.contribution,
+        bullets: (p.results ?? []).slice(0, 4),
+      },
+      { heading: 'Limitations', bullets: [...p.limitations] },
+      {
+        heading: 'Built with',
+        ...(collab ? { body: `With ${collab}.` } : {}),
+        chips: [...p.technologies].slice(0, 12),
+        links: links.length ? links : undefined,
+      },
+    ],
   };
 }
 
@@ -168,17 +231,15 @@ export const PANELS: Record<string, PanelDef> = {
   village: {
     id: 'village',
     title: 'Portfolio Village',
-    subtitle: 'Five houses, one life’s work, on the plateau above the harbour.',
+    subtitle: 'Three project houses, one life’s work, on the plateau above the harbour.',
     accent: C.roofBlue,
     sections: [
       {
         heading: 'What is up here',
         bullets: [
-          'Skills House — every skill on the record, in learning order.',
-          'Projects House — completed work with its real results and limits.',
-          'Experience House — roles, dates and responsibilities.',
-          'Cloud / DevOps House — containers, pipelines, infrastructure, observability.',
-          'Data / AI House — analytics, modelling, pipelines and dashboards.',
+          'Go Microservices House — Real-Time Balance Visibility, a collaborative college project.',
+          'RxVerify House — Digital Prescription Verification, productionized end to end.',
+          'DevOps Masterclass House — Full-Stack AI DevOps coursework, presented as coursework.',
         ],
       },
       {
@@ -254,6 +315,212 @@ export const PANELS: Record<string, PanelDef> = {
     accent: C.cargoGreen,
     sections: [],
   },
+
+  /* ---- skill stall panels (harbour front: DevOps skills) ---- */
+  docker: {
+    id: 'docker',
+    title: 'Docker Fish Market',
+    subtitle: 'Multi-stage builds with non-root runtime users.',
+    accent: C.fishBlue,
+    sections: [
+      {
+        heading: 'What it is',
+        body:
+          'Containerising applications with multi-stage builds, non-root runtime users, and pinned base images.',
+        bullets: [
+          'Multi-stage build: node:18-alpine builder to nginx:alpine runtime',
+          'npm ci for reproducible installs; COPY --from=builder for the built assets',
+          'Non-root appuser (uid/gid 1001) in all four Dockerfiles',
+          'OpenCV shared libraries installed as real runtime dependencies',
+        ],
+        chips: ['Docker'],
+        links: [
+          { label: 'Repository', url: 'https://github.com/yashmahajan11234567/Medigen' },
+        ],
+      },
+    ],
+  },
+  cicd: {
+    id: 'cicd',
+    title: 'CI/CD Workshop',
+    subtitle: 'Three-job GitHub Actions pipeline: lint/test, security scan, GHCR build.',
+    accent: C.pipeGrey,
+    sections: [
+      {
+        heading: 'What it is',
+        body:
+          'Build, test, and security-gated deployment pipelines across three syntaxes: GitHub Actions, Jenkins, and GitLab CI.',
+        bullets: [
+          'RxVerify .github/workflows/ci.yml — three jobs: Test & Lint (ruff, pytest), Security Scan (pip-audit, Trivy on CRITICAL/HIGH), Build & Push (Buildx to GHCR with GHA cache)',
+          'Jenkinsfile declarative pipeline and .gitlab-ci.yml implementing the same stages — one logic, three syntaxes',
+          'AWS credentials come from secrets, never hardcoded',
+        ],
+        chips: ['CI/CD'],
+        links: [
+          { label: 'Repository', url: 'https://github.com/yashmahajan11234567/digital-prescription-verification-devops' },
+        ],
+      },
+    ],
+  },
+  terraform: {
+    id: 'terraform',
+    title: 'Cloud & Infrastructure',
+    subtitle: 'Terraform + Ansible — eight real AWS resources, validated.',
+    accent: C.roofTerracotta,
+    sections: [
+      {
+        heading: 'What it is',
+        body:
+          'Infrastructure as code declaring eight AWS resources, validated with terraform validate, plus Ansible provisioning of the target host.',
+        bullets: [
+          'Eight AWS resources: aws_vpc, aws_subnet, aws_security_group, aws_internet_gateway, aws_route_table, aws_route, aws_route_table_association, aws_instance',
+          'terraform validate passes — executed during the audit, not assumed',
+          'Six declared variables with provider and required_providers configuration',
+          'Ansible playbook (ansible/deploy.yml): Docker install, image build, container run on EC2, health-check final step',
+        ],
+        chips: ['Terraform', 'Ansible', 'AWS'],
+        links: [
+          { label: 'Repository', url: 'https://github.com/yashmahajan11234567/digital-prescription-verification-devops' },
+        ],
+      },
+    ],
+  },
+  aws: {
+    id: 'aws',
+    title: 'AWS',
+    subtitle: 'Eight AWS resources provisioned via Terraform.',
+    accent: C.fishOrange,
+    sections: [
+      {
+        heading: 'What it is',
+        body:
+          'AWS infrastructure provisioned through Terraform — VPC, subnets, security groups, internet gateway, route tables, and EC2.',
+        bullets: [
+          'Eight AWS resources declared: aws_vpc, aws_subnet, aws_security_group, aws_internet_gateway, aws_route_table, aws_route, aws_route_table_association, aws_instance',
+          'terraform validate passes — executed during the audit, not assumed',
+          'Six declared variables with provider and required_providers configuration',
+          'Covered under the Terraform / AWS skill stall; AWS is provisioned by Terraform, not separately',
+        ],
+        chips: ['AWS', 'Terraform'],
+        links: [
+          { label: 'Repository', url: 'https://github.com/yashmahajan11234567/digital-prescription-verification-devops' },
+        ],
+      },
+    ],
+  },
+  k8s: {
+    id: 'k8s',
+    title: 'Kubernetes / Container Orchestration',
+    subtitle: 'Manifests, Minikube deployment with probes, rolling updates and rollback.',
+    accent: C.roofBlue,
+    sections: [
+      {
+        heading: 'What it is',
+        body:
+          'Kubernetes manifests deployed on Minikube: rolling updates, health probes, resource limits, secrets, and persistent volume claims.',
+        bullets: [
+          'RxVerify k8s/ tree: Deployment with RollingUpdate (maxSurge 1 / maxUnavailable 0), readiness and liveness probes on /health, resource requests/limits, Secret, PVC, Service and ServiceMonitor',
+          'Deployed to Minikube; pods verified Running',
+          'Rolling update and rollback exercised: bad image forced CrashLoopBackOff, kubectl rollout undo restored health',
+          'SQLite persistence across pod restarts via a PersistentVolumeClaim',
+          'Also practised in DevOps coursework (K8s/ tree) — marked as training, not production',
+        ],
+        chips: ['Kubernetes', 'Minikube'],
+        links: [
+          { label: 'Repository', url: 'https://github.com/yashmahajan11234567/digital-prescription-verification-devops' },
+          { label: 'Course repo', url: 'https://github.com/yashmahajan11234567/Full-Stack-AI-DevOps-Masterclass' },
+        ],
+      },
+    ],
+  },
+  prometheus: {
+    id: 'prometheus',
+    title: 'Prometheus',
+    subtitle: 'Metrics scraping and alerting within the observability stack.',
+    accent: C.cargoGreen,
+    sections: [
+      {
+        heading: 'What it is',
+        body:
+          'Prometheus metrics collection, scraping, and alerting — part of the Prometheus/Grafana/Loki observability stack.',
+        bullets: [
+          'RxVerify exposes /metrics via prometheus-flask-exporter; ServiceMonitor (job=rxverify, port 5000) scrapes it',
+          'Prometheus alert rules with runbooks in the collaborative Go microservices project',
+          'Live-verified: up{job="rxverify"}=1 recorded during the audit',
+        ],
+        chips: ['Prometheus'],
+        links: [
+          { label: 'Repository', url: 'https://github.com/yashmahajan11234567/digital-prescription-verification-devops' },
+        ],
+      },
+    ],
+  },
+  grafana: {
+    id: 'grafana',
+    title: 'Grafana',
+    subtitle: 'Dashboards and visualisation within the observability stack.',
+    accent: C.flowerPurple,
+    sections: [
+      {
+        heading: 'What it is',
+        body:
+          'Grafana dashboards provisioned via ConfigMap — visualising Prometheus metrics and Loki logs.',
+        bullets: [
+          'Grafana dashboards provisioned via ConfigMap — 5-panel RxVerify DevOps dashboard',
+          'Grafana/Prometheus/Loki pods verified Running on Minikube',
+          'Loki + Promtail DaemonSet aggregate logs with job=rxverify labels',
+        ],
+        chips: ['Grafana'],
+        links: [
+          { label: 'Repository', url: 'https://github.com/yashmahajan11234567/digital-prescription-verification-devops' },
+        ],
+      },
+    ],
+  },
+  linux: {
+    id: 'linux',
+    title: 'Linux',
+    subtitle: 'Command-line and server environment used across the stack.',
+    accent: C.wallCream,
+    sections: [
+      {
+        heading: 'What it is',
+        body:
+          'Linux is the runtime under every container, every EC2 instance, and every Minikube node in this portfolio — but it is not catalogued as a standalone skill in the content yet.',
+        bullets: [
+          'Docker containers run Linux (node:18-alpine, nginx:alpine, postgres:15-alpine)',
+          'EC2 instances provisioned by Terraform run Amazon Linux',
+          'Minikube nodes run Linux; kubectl operates against Linux pods',
+          'Not yet a standalone skill entry — add it to src/content/skills.cloud.ts to give it its own stall panel',
+        ],
+        chips: ['Linux'],
+        links: [],
+      },
+    ],
+  },
+
+  /* ---- the two content-backed stalls added by the locked six-stall decision ---- */
+  python: skillStallPanel(
+    'python',
+    'Programming Workshop',
+    'Python / pandas — analysis applied to validated data.',
+    C.flowerYellow,
+    'python',
+  ),
+  sql: skillStallPanel(
+    'sql',
+    'Data & AI Laboratory',
+    'SQL / T-SQL — schema design, medallion pipelines and star-schema modelling.',
+    C.cargoGreen,
+    'sql',
+  ),
+
+  /* ---- the three project house panels (locked decision D1) ----
+   * Every fact is projected from `projects.cloud.ts`; authorship framing is
+   * taken from the audited AUTHORSHIP cases at the top of that file. */
+  rxverify: projectPanel('rxverify', C.flowerYellow, 'rxverify', 'Productionized an existing Flask application — the original author is credited, not replaced.'),
+  'devops-masterclass': projectPanel('devops-masterclass', C.cargoGreen, 'devops-masterclass', 'College open-elective coursework — practice material, never presented as production experience.'),
+  'go-microservices': projectPanel('go-microservices', C.containerCyan, 'go-microservices', 'Collaborative college project — designed and implemented jointly with a partner.'),
 };
 
 /* ---- fill the content-backed panels from the audited modules ---- */
@@ -319,10 +586,14 @@ export const PANEL_ORDER = [
   'controls',
   'harbour',
   'village',
-  'skills',
-  'experience',
-  'projects',
-  'cloud',
-  'data',
+  'go-microservices',
+  'rxverify',
+  'devops-masterclass',
+  'docker',
+  'cicd',
+  'terraform',
+  'k8s',
+  'python',
+  'sql',
   'whale',
 ];
