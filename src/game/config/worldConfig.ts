@@ -469,14 +469,19 @@ export const CAMERA = {
    * flush with the top of the frame, `groundY - b + viewH` must equal `560`, i.e.
    * `b = viewH` exactly — a ratio of 1.0, which is just "centre on the floor line".
    *
-   * `0.47` is chosen instead of 1.0 for one reason: it keeps a sliver of the lit
-   * floor rim and a few px of sub-floor in frame, which is what makes the landing
-   * plane read as a surface rather than as the bottom edge of the screen. Measured
-   * at the recording viewport this puts the content band top at canvas y=-9 and
-   * the floor line at canvas y=551 of 568 — the band fills the frame and the floor
-   * sits at the bottom, with a visible lip below it.
+  /*
+   * 0.40, not 0.47, to put the ground line at ~90% of the viewport height.
+   *
+   * The visible band is `[groundY - (b + viewH), groundY - b + viewH]` with
+   * `b = ratio * viewH`. At ratio 0.40 the floor line lands at
+   * `(0.5 + 0.40) = 90%` down the frame, leaving the remaining ~10% as the lit
+   * floor rim and sub-floor, which is what makes the landing plane read as a
+   * surface rather than as the bottom edge of the screen.
+   *
+   * The camera's lower scroll bound is the world bottom (`world.height`), so the
+   * whole world height stays available for the reveal below the floor line.
    */
-  verticalBiasRatio: 0.47,
+  verticalBiasRatio: 0.4,
 } as const;
 
 /**

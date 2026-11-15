@@ -212,6 +212,23 @@ function App() {
     destroyActiveTimeline();
   }
 
+  /*
+   * Lock page scroll while any world is open. The rule lives in
+   * WorldShell.css (`html.game-world-active, body.game-world-active`); applying
+   * the class here is what makes the full-screen stage safe — with the world
+   * route rendering nothing else, the document is exactly one viewport tall,
+   * and this belt-and-braces lock keeps it that way on any browser.
+   */
+  useEffect(() => {
+    const active = currentWorld !== 'hero';
+    document.documentElement.classList.toggle('game-world-active', active);
+    document.body.classList.toggle('game-world-active', active);
+    return () => {
+      document.documentElement.classList.remove('game-world-active');
+      document.body.classList.remove('game-world-active');
+    };
+  }, [currentWorld]);
+
   const syncUrl = (hash: string) => {
     if (window.location.hash !== hash) window.location.hash = hash;
   };

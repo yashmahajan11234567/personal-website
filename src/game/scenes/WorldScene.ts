@@ -375,7 +375,7 @@ export class WorldScene extends Phaser.Scene {
      * otherwise reads as the camera flying across the level as you arrive.
      */
     if (this.cameraTarget) {
-      this.cameras.main.centerOn(this.cameraTarget.x, world.groundY - 100);
+      this.snapCameraTo(this.cameraTarget.x, world.groundY - 100);
       this.cameraTarget = null;
     }
 
@@ -1153,8 +1153,12 @@ export class WorldScene extends Phaser.Scene {
         positionDestinationCamera: (world) => {
           const cam = this.cameras.main;
           cam.setBounds(0, 0, world.width, world.height);
+          // setBounds sets `useBounds = true`, which re-arms Phaser's
+          // zoom-broken clamp (see setupCamera) and would overwrite the
+          // scroll updateCamera computes every frame — disable it again.
+          cam.useBounds = false;
           if (this.cameraTarget) {
-            cam.centerOn(this.cameraTarget.x, world.groundY - 100);
+            this.snapCameraTo(this.cameraTarget.x, world.groundY - 100);
             cam.stopFollow();
           }
           this.lastFrameAt = this.time.now;
@@ -1179,10 +1183,30 @@ export class WorldScene extends Phaser.Scene {
           this.player.setDepth(10);
           this.travelOverlay?.setVisible(false);
           this.travelBand?.setVisible(false);
-          // Snap the camera to the player rather than letting it lerp in from the
-          // previous chapter's position.
-          this.cameras.main.centerOn(this.player.x, this.player.y - 100);
-          this.cameras.main.startFollow(this.player, true, 1, 1);
+          /*
+           * Snap the camera to the player rather than letting it lerp in from the
+           * previous chapter's position.
+           *
+           * NO `startFollow` HERE — MEASURED, NOT ASSUMED.
+           *
+           * `updateCamera` is the scene's ONLY follow implementation: `setupCamera`
+           * deliberately calls `stopFollow()` because Phaser's follow+clamp clamps
+           * the follow CENTRE without the half-viewport inset, so under zoom the view
+           * hangs off the world edge. `updateCamera` then drives scroll every frame
+           * with frame-rate-corrected easing, the vertical bias and the look-ahead.
+           *
+           * Calling `startFollow(player, true, 1, 1)` here re-enabled Phaser's
+           * follow on top of that, and Phaser's follower runs in the camera's
+           * preRender AFTER `updateCamera`, so it overwrote the scene's framing
+           * every frame. The snap below uses `snapCameraTo` (the same clamp
+           * `updateCamera` applies) instead of `centerOn`, which subtracts the
+           * half-height in screen px and is off under zoom.
+           */
+          this.snapCameraTo(this.player.x, this.player.y - 100);
+          // Re-seed the smoothed target from the snapped scroll so updateCamera
+          // eases from the arrival position instead of flying in from zero.
+          this.camTargetX = this.cameras.main.scrollX;
+          this.camTargetY = this.cameras.main.scrollY;
 
           /*
            * RESTORE EVERY PIPE IN THE CHAPTER — this used to hide all but one.
@@ -1226,10 +1250,24 @@ export class WorldScene extends Phaser.Scene {
            * the map belongs to a chapter that is not on screen and is asserted
            * hidden, because a stopped scene must leave nothing renderable behind.
            */
-          const entryId = world.entryPipe.id;
+          /*
+           * SHOW EVERY PIPE THAT BELONGS TO THIS CHAPTER.
+           *
+           * This was `setVisible(id === world.entryPipe.id)`, which made ONLY the
+           * entry pipe visible and hid the exit pipe. Measured on arrival in
+           * Skills: the exit pipe (skills-to-projects, the ONLY way forward) was
+           * `visible = false` while still armed, so walking right teleported the
+           * player into Projects with nothing on screen to have walked into.
+           *
+           * The correct rule is per-CHAPTER, not per-arrival: a chapter's own
+           * pipes are exactly the ones its geometry contains, so every skin in
+           * `world.pipes` is shown and every other skin (belonging to a chapter
+           * whose display list `scene.stop()` already destroyed) stays hidden.
+           */
+          const chapterPipeIds = new Set(world.pipes.map((p) => p.id));
 
           for (const [id, built] of this.pipeSkins) {
-            built.mouth.setVisible(id === entryId);
+            built.mouth.setVisible(chapterPipeIds.has(id));
             /*
              * NOT `built.setActive(false)` here — measured, and it is a trap.
              *
@@ -1399,6 +1437,18 @@ export class WorldScene extends Phaser.Scene {
     cam.setZoom(this.zoomForViewport(cam.height));
     // Integer zoom only; `setRoundPixels` keeps the 2x2 pixel blocks aligned.
     cam.setRoundPixels(true);
+    /*
+     * Phaser's camera matrix is `screen = zoom * (world - scroll) + originPx *
+     * (1 - zoom)`. With the default origin (0.5, 0.5) the `originPx * (1 - zoom)`
+     * term is non-zero at zoom != 1 (at zoom 2 on a 900px-tall canvas it shifts
+     * the view down by height/2 = 450 screen px), so `scrollY` no longer means
+     * "top of the visible world" — measured: scrollY=155 rendered the ground
+     * (world y=560) at 40% of the viewport instead of 90%. Origin (0, 0) removes
+     * the term, making `scroll` exactly the view's top-left in world units at any
+     * zoom, which is what `updateCamera`'s clamps and the diagnostics probe
+     * already assume. The camera never rotates, so the origin change is safe.
+     */
+    cam.setOrigin(0, 0);
 
     /*
      * Clamp the camera so it can never frame below `groundY + floorMargin`, which
@@ -1423,6 +1473,17 @@ export class WorldScene extends Phaser.Scene {
      * `[0, worldWidth - visibleWidth]`.
      */
     cam.stopFollow();
+    /*
+     * Phaser's OWN bounds clamp is WRONG under zoom: `clampX` mixes world-unit
+     * `displayWidth` (width / zoom) with screen-px `width`, so at zoom 2 it
+     * clamps scroll into `[-viewW/2, worldW - 3*viewW/2]` instead of
+     * `[0, worldW - viewW]`. Measured full-screen at 1280x800: scrollX forced to
+     * -60 with the player at x=120 — void left of the world edge. `updateCamera`
+     * clamps explicitly and correctly at any zoom, so the engine's clamp is
+     * disabled here. `create()` calls `setBounds` earlier in the same boot (which
+     * sets `useBounds = true`); this runs after it, before the first frame.
+     */
+    cam.useBounds = false;
     this.camTargetX = 0;
     this.camTargetY = 0;
     void world;
@@ -1450,6 +1511,30 @@ export class WorldScene extends Phaser.Scene {
     const maxByHeight = height / CONTENT_BAND;
     const zoom = Math.min(CAMERA.zoom, maxByHeight);
     return Math.max(1, Math.floor(zoom * 4) / 4);
+  }
+
+  /**
+   * Snap the camera so world point (x, y) sits at the same framing `updateCamera`
+   * would settle on (no look-ahead), and re-seed the smoothed target so the next
+   * frames ease from here instead of flying in.
+   *
+   * NOT `cam.centerOn(x, y)`: `centerOnY` subtracts `height * 0.5` in SCREEN
+   * pixels without dividing by zoom, so at zoom 2 it is off by `height/2 *
+   * (1 - 1/zoom)` world units. With origin (0, 0) the scroll IS the view top-left,
+   * so the snap is the same clamp `updateCamera` applies.
+   */
+  private snapCameraTo(x: number, y: number): void {
+    const cam = this.cameras.main;
+    const zoom = cam.zoom || 1;
+    const world = this.world;
+    const viewW = cam.width / zoom;
+    const viewH = cam.height / zoom;
+    const focusY = y - viewH * CAMERA.verticalBiasRatio;
+    const scrollX = Phaser.Math.Clamp(x - viewW / 2, 0, Math.max(0, world.width - viewW));
+    const scrollY = Phaser.Math.Clamp(focusY - viewH / 2, 0, Math.max(0, world.height - viewH));
+    cam.setScroll(scrollX, scrollY);
+    this.camTargetX = scrollX;
+    this.camTargetY = scrollY;
   }
 
   /**
@@ -1517,12 +1602,15 @@ export class WorldScene extends Phaser.Scene {
      * `[0, worldWidth - viewW]`; anything less shows void past the world edge, and
      * Phase 1 asserts exactly that (`camScrollX >= 0` and `<= worldWidth`).
      *
-     * Vertical: the view may look UP into the new ceiling structure freely, but
-     * must not scroll DOWN past the floor line, or the frame fills with the ground
-     * slab. `floorMargin` allows a little of the sub-floor as a base.
+     * Vertical: the view may scroll over the FULL world height. The lower bound
+     * is `world.height - viewH`, so the camera can frame all the way to the
+     * bottom of the world. Combined with `verticalBiasRatio` 0.40 this puts the
+     * ground line at ~90% of the viewport with the sub-floor lip below it,
+     * instead of the old `groundY + floorMargin` clamp that cut the frame off
+     * just under the floor and pinned the ground to ~98% of the frame.
      */
     const maxScrollX = Math.max(0, world.width - viewW);
-    const maxScrollY = Math.max(0, world.groundY + CAMERA.floorMargin - viewH);
+    const maxScrollY = Math.max(0, world.height - viewH);
 
     let wantedX = focusX - viewW / 2;
     let wantedY = focusY - viewH / 2;
