@@ -25,24 +25,18 @@
   background: linear-gradient(to bottom, #101d4a 0%, #233a78 25%, #46619e 45%, #b595a0 65%, #eec39a 85%, #f7dfc4 100%);
 }
 
-/*
- * FULL-SCREEN STAGE.
- *
- * The Data World owns the whole viewport while it is open, so the canvas can
- * fill the window instead of sitting in a centred column with page beneath it.
- * `fixed` + `inset: 0` takes it out of flow; `100dvh` (not `vh`) so a mobile
- * browser's collapsing URL bar cannot crop the canvas.
- */
 .placeholder-world {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100dvh;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-mono);
-  overflow: hidden;
-  z-index: 100;
+  padding: 2rem;
+  text-align: center;
 }
 
 .placeholder-world[data-theme="dark"] {

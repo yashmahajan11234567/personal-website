@@ -9,44 +9,44 @@
  */
 
 .world-canvas {
-  /*
-   * FULL-SCREEN. Phaser RESIZEs the canvas to this box, so the box must be the
-   * whole viewport for the game to be full-screen. It must also have a real size
-   * before the engine measures it, otherwise the canvas boots at 0x0.
-   *
-   * No border and no radius: the world IS the screen, so a frame around it would
-   * read as a window onto the game rather than the game itself. The overlays
-   * (exit control, contents toggle, entry plate) are positioned against this box.
-   */
-  width: 100vw;
-  height: 100dvh;
+  /* Phaser RESIZEs the canvas to this box. It must have a real size before the
+     engine measures it, otherwise the canvas boots at 0x0. */
+  width: min(100%, 1100px);
+  height: clamp(280px, 58vh, 620px);
   background: #070b14;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  /*
+   * `position: relative` so the information panel can position itself against
+   * this box. Phase 1 had no absolutely-positioned child here, so this is purely
+   * additive.
+   */
   position: relative;
   /*
-   * `overflow: hidden` keeps gameplay and overlays clipped to the viewport.
+   * Phase 1 set `overflow: hidden` here. It is RETAINED on purpose: the canvas
+   * must be clipped to its rounded frame so the game never bleeds past the
+   * border. The panel is therefore NOT a child that overflows — it is centred
+   * inside this box, and `overflow: hidden` clips it to the stage, which is what
+   * "the panel opens over the world" should look like.
+   *
    * `line-height: 0` was for the canvas only (an inline canvas adds baseline
-   * space). It must NOT apply to overlay text, so overlays reset it themselves.
+   * space). It must NOT apply to the panel's text, so the panel resets it below.
    */
   overflow: hidden;
   line-height: 0;
 }
 
-/* The canvas tracks the full-screen box; Phaser owns its pixel size. */
 .world-canvas canvas {
   display: block;
-  width: 100%;
-  height: 100%;
+  max-width: 100%;
 }
 
 /* The engine reports status on the container; a failed load must be visible
-   rather than leaving an empty box. */
+   rather than leaving an empty bordered box. */
 .world-canvas[data-status='unplayable']::after {
   content: 'World unavailable';
-  position: absolute;
-  inset: 0;
-  z-index: 100;
+  display: block;
   padding: 2rem 1rem;
-  background: #070b14;
   color: var(--color-text-light);
   font-family: var(--font-mono);
   line-height: 1.5;
@@ -95,6 +95,14 @@
   border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 0.8rem;
+}
+
+/* On a narrow viewport the stage and the mirror stack without the page ever
+   scrolling sideways — checked at 390, 375, and 412. */
+@media (max-width: 640px) {
+  .world-canvas {
+    height: clamp(240px, 46vh, 420px);
+  }
 }
 
 /* ------------------------------------------------------------------------ *
@@ -350,7 +358,24 @@
   margin-bottom: 1.1rem;
 }
 
-/* --- Page scroll lock while the world is open ---------------------------- */
+/* --- The stage fills the viewport ---------------------------------------- */
+
+.world-canvas {
+  /*
+   * Full viewport height minus the world's own header, so the game occupies the
+   * screen instead of leaving a band of page beneath it. `dvh` rather than `vh`
+   * so a mobile browser's collapsing URL bar cannot crop the canvas.
+   */
+  height: min(calc(100dvh - 132px), 900px);
+  max-height: calc(100dvh - 96px);
+}
+
+@media (max-width: 640px) {
+  .world-canvas {
+    height: min(calc(100dvh - 108px), 640px);
+    max-height: calc(100dvh - 84px);
+  }
+}
 
 /*
  * Page scroll is locked while the world is open, and released when the visitor
