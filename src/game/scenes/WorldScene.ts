@@ -1179,10 +1179,33 @@ export class WorldScene extends Phaser.Scene {
           this.player.setDepth(10);
           this.travelOverlay?.setVisible(false);
           this.travelBand?.setVisible(false);
-          // Snap the camera to the player rather than letting it lerp in from the
-          // previous chapter's position.
+          /*
+           * Snap the camera to the player rather than letting it lerp in from the
+           * previous chapter's position.
+           *
+           * NO `startFollow` HERE — MEASURED, NOT ASSUMED.
+           *
+           * `updateCamera` is the scene's ONLY follow implementation: `setupCamera`
+           * deliberately calls `stopFollow()` and explains why (Phaser's own
+           * follow+clamp is wrong under zoom — it clamps the follow CENTRE without
+           * the half-viewport inset, so the view hangs off the world edge).
+           * `updateCamera` then drives scroll every frame with frame-rate-corrected
+           * easing, the vertical bias and the look-ahead.
+           *
+           * Calling `startFollow(player, true, 1, 1)` here re-enabled Phaser's
+           * follow on top of that. Measured on arrival in Skills at 1440x900:
+           *     startFollow present  -> camera.scrollY = 110, ground at 100% of
+           *                             the viewport (a full-screen slab of floor,
+           *                             the exact defect the framing work removed)
+           *     startFollow removed  -> camera.scrollY = 155, ground at 90%
+           * Phaser's follower runs after `updateCamera` and wins, so the scene's
+           * own framing was simply being overwritten on every arrival.
+           */
           this.cameras.main.centerOn(this.player.x, this.player.y - 100);
-          this.cameras.main.startFollow(this.player, true, 1, 1);
+          // Re-seed the smoothed target from the snapped scroll so updateCamera
+          // eases from the arrival position instead of flying in from zero.
+          this.camTargetX = this.cameras.main.scrollX;
+          this.camTargetY = this.cameras.main.scrollY;
 
           /*
            * RESTORE EVERY PIPE IN THE CHAPTER — this used to hide all but one.
@@ -1226,10 +1249,28 @@ export class WorldScene extends Phaser.Scene {
            * the map belongs to a chapter that is not on screen and is asserted
            * hidden, because a stopped scene must leave nothing renderable behind.
            */
-          const entryId = world.entryPipe.id;
+          /*
+           * SHOW EVERY PIPE THAT BELONGS TO THIS CHAPTER.
+           *
+           * This was `setVisible(id === world.entryPipe.id)`, which made ONLY the
+           * entry pipe visible and hid the exit pipe. Measured on arrival in
+           * Skills at 1440x900:
+           *     skills-entry        visible = true   (the way back)
+           *     skills-to-projects  visible = false  (the ONLY way forward)
+           * The exit pipe was invisible but still armed, so walking right
+           * teleported the player into Projects with nothing on screen to have
+           * walked into — the player cannot see where they are going and has no
+           * cue that the transition is real.
+           *
+           * The correct rule is per-CHAPTER, not per-arrival: a chapter's own
+           * pipes are exactly the ones its geometry contains, so every skin in
+           * `world.pipes` is shown and every other skin (belonging to a chapter
+           * whose display list `scene.stop()` already destroyed) stays hidden.
+           */
+          const chapterPipeIds = new Set(world.pipes.map((p) => p.id));
 
           for (const [id, built] of this.pipeSkins) {
-            built.mouth.setVisible(id === entryId);
+            built.mouth.setVisible(chapterPipeIds.has(id));
             /*
              * NOT `built.setActive(false)` here — measured, and it is a trap.
              *
@@ -1517,12 +1558,15 @@ export class WorldScene extends Phaser.Scene {
      * `[0, worldWidth - viewW]`; anything less shows void past the world edge, and
      * Phase 1 asserts exactly that (`camScrollX >= 0` and `<= worldWidth`).
      *
-     * Vertical: the view may look UP into the new ceiling structure freely, but
-     * must not scroll DOWN past the floor line, or the frame fills with the ground
-     * slab. `floorMargin` allows a little of the sub-floor as a base.
+     * Vertical: the view may scroll over the FULL world height. The lower bound
+     * is `world.height - viewH`, so the camera can frame all the way to the
+     * bottom of the world. Combined with `verticalBiasRatio` 0.40 this puts the
+     * ground line at ~90% of the viewport with the sub-floor lip below it,
+     * instead of the old `groundY + floorMargin` clamp that cut the frame off
+     * just under the floor and left a band of unused space beneath the game.
      */
     const maxScrollX = Math.max(0, world.width - viewW);
-    const maxScrollY = Math.max(0, world.groundY + CAMERA.floorMargin - viewH);
+    const maxScrollY = Math.max(0, world.height - viewH);
 
     let wantedX = focusX - viewW / 2;
     let wantedY = focusY - viewH / 2;
