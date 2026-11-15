@@ -54,7 +54,7 @@ import {
   drawSubFloor,
 } from '../art/facilityArt';
 import { drawSkillStation, drawProjectStation } from '../art/worldObjects';
-import { registerPlayerTextures, PLAYER_FRAME_HEIGHT } from '../art/playerSprite';
+import { ROBOT_FRAMES, ROBOT_FRAME_WIDTH, ROBOT_FRAME_HEIGHT } from '../assets/robot/manifest';
 import { emitInteraction } from './interactionBus';
 import { PipeTransport } from './pipeTransport';
 import { createDataPipeSkin, chapterLabelTexture } from './dataPipeSkin';
@@ -74,7 +74,17 @@ const colour = (hex: string): number => Phaser.Display.Color.HexStringToColor(he
 export const WORLD_SCENE_KEY = 'world';
 
 /** Sprite key prefix for the character frames. */
-const PLAYER_TEXTURE_PREFIX = 'player-hoodie';
+const PLAYER_TEXTURE_PREFIX = 'player-robot';
+
+/** Robot strip frames played across the pipe-transport phases (see pipeTransport). */
+const TUBE_ENTER_FRAMES = [
+  'tubeEnter0', 'tubeEnter1', 'tubeEnter2', 'tubeEnter3',
+  'tubeEnter4', 'tubeEnter5', 'tubeEnter6', 'tubeEnter7',
+];
+const TUBE_EXIT_FRAMES = [
+  'tubeExit0', 'tubeExit1', 'tubeExit2', 'tubeExit3', 'tubeExit4', 'tubeExit5',
+];
+const WALK_FRAMES = ['walkA', 'walkB', 'walkC', 'walkD', 'walkE', 'walkF', 'walkG', 'walkH'];
 
 export interface WorldSceneConfig {
   /**
@@ -321,6 +331,13 @@ export class WorldScene extends Phaser.Scene {
     this.reducedMotion = config.reducedMotion;
   }
 
+  /** Load the robot character frames (bundled PNGs, see assets/robot/manifest.ts). */
+  preload(): void {
+    for (const [name, url] of Object.entries(ROBOT_FRAMES)) {
+      this.load.image(`${PLAYER_TEXTURE_PREFIX}-${name}`, url);
+    }
+  }
+
   create(): void {
     /*
      * DIAGNOSTIC HANDLE.
@@ -351,10 +368,10 @@ export class WorldScene extends Phaser.Scene {
     this.lastFrameAt = this.time.now;
 
     // --- Procedural textures. No files, no loaders, no network. ---
-    // Phase 1's placeholder textures are still registered so any code path that
-    // referenced them keeps working; the character now uses the 32x48 frames.
+    // Phase 1's placeholder texture is still registered so any code path that
+    // referenced it keeps working; the character uses the loaded robot frames
+    // (preload) in a uniform 56x62 cell, bottom-anchored.
     drawPlayer(this);
-    registerPlayerTextures(this, PLAYER_TEXTURE_PREFIX);
     drawInteractionGem(this);
 
     this.buildEnvironment();
@@ -831,8 +848,8 @@ export class WorldScene extends Phaser.Scene {
      */
     body.setSize(PLAYER.bodyWidth, PLAYER.bodyHeight);
     body.setOffset(
-      (PLAYER_FRAME_HEIGHT - PLAYER.bodyWidth) / 2,
-      PLAYER_FRAME_HEIGHT - PLAYER.bodyHeight
+      (ROBOT_FRAME_WIDTH - PLAYER.bodyWidth) / 2,
+      ROBOT_FRAME_HEIGHT - PLAYER.bodyHeight
     );
     body.setMaxVelocity(PLAYER.speed, 520);
     body.setDragX(PLAYER.drag);
@@ -969,7 +986,7 @@ export class WorldScene extends Phaser.Scene {
      */
     const labelKey = chapterLabelTexture(this, world.chapter, this.chapterLabel);
     this.add
-      .image(40, this.world.groundY - PLAYER_FRAME_HEIGHT - 46, labelKey)
+      .image(40, this.world.groundY - ROBOT_FRAME_HEIGHT - 46, labelKey)
       .setOrigin(0, 0.5)
       .setDepth(5);
   }
@@ -1046,20 +1063,23 @@ export class WorldScene extends Phaser.Scene {
         placePlayerForClimb: (x, y, t, climbing) => {
           if (!this.player) return;
           const sinking = climbing === 'in';
-          // Shrink to 45% at full depth, and slide down into the mouth.
-          const scale = sinking ? 1 - t * 0.55 : 0.45 + t * 0.55;
-          // While entering, drop below the ground line so the pipe lip covers them.
-          const offset = sinking ? t * PLAYER_FRAME_HEIGHT * 0.42 : -(1 - t) * PLAYER_FRAME_HEIGHT * 0.42;
-
-          this.player.setTexture(
-            `${PLAYER_TEXTURE_PREFIX}-${sinking ? 'tubeEnter' : 'tubeExit'}`,
-          );
-          this.player.setScale(scale);
-          this.player.setPosition(x, y + offset);
-          this.player.setDepth(sinking ? 2 : 10);
+          /*
+           * The robot strips already animate the sink / climb-out relative to the
+           * ground line (frames are bottom-anchored, pipe art removed), so the
+           * sprite itself is NOT scaled or offset here — playing the strip frame
+           * indexed by the phase progress is the whole animation. Depth 2 keeps
+           * the robot behind the pipe skin (depth 4) so it is occluded by the
+           * rim while inside the mouth; `settle` restores depth 10.
+           */
+          const frames = sinking ? TUBE_ENTER_FRAMES : TUBE_EXIT_FRAMES;
+          const idx = Math.min(frames.length - 1, Math.floor(t * frames.length));
+          this.player.setTexture(`${PLAYER_TEXTURE_PREFIX}-${frames[idx]}`);
+          this.player.setScale(1);
+          this.player.setPosition(x, y);
+          this.player.setDepth(2);
           // Physics is already locked; keep the body pinned so nothing drifts.
           const body = this.player.body as Phaser.Physics.Arcade.Body;
-          body.reset(x, y + offset);
+          body.reset(x, y);
         },
 
         /*
@@ -1748,7 +1768,9 @@ export class WorldScene extends Phaser.Scene {
    */
   private updateAnimation(): void {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
-    const moving = Math.abs(body.velocity.x) > 8;
+    // Horizontal motion is integrated manually (intentVelocityX); Arcade's
+    // body.velocity.x is zeroed every frame, so it can never drive the walk cycle.
+    const moving = Math.abs(this.intentVelocityX) > 8;
     const airborne = !body.onFloor();
 
     if (airborne) {
@@ -1769,8 +1791,8 @@ export class WorldScene extends Phaser.Scene {
     }
 
     // Walk cycle, paced by speed so a slower walk does not look like fast steps.
-    const frame = Math.floor(this.time.now / 110) % 4;
-    this.setAnimationFrame(['walkA', 'walkB', 'walkC', 'walkD'][frame] ?? 'walkA');
+    const frame = Math.floor(this.time.now / 90) % WALK_FRAMES.length;
+    this.setAnimationFrame(WALK_FRAMES[frame] ?? 'walkA');
   }
 
   /**
@@ -1938,9 +1960,11 @@ export class WorldScene extends Phaser.Scene {
        * Keep the frame clock ticking even while locked. Returning without it would
        * make the first frame after the transport apply the WHOLE travel duration
        * as one delta — the player would be flung across the chapter on arrival.
+       * The transport owns the sprite during a ride (placePlayerForClimb plays the
+       * tube strip), so updateAnimation must NOT run here — it would overwrite the
+       * climb frame with idle on the same tick.
        */
       this.lastFrameAt = now;
-      this.updateAnimation();
       return;
     }
 
