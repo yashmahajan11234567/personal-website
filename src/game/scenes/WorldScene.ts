@@ -336,6 +336,10 @@ export class WorldScene extends Phaser.Scene {
     for (const [name, url] of Object.entries(ROBOT_FRAMES)) {
       this.load.image(`${PLAYER_TEXTURE_PREFIX}-${name}`, url);
     }
+    // Surface level artwork assets
+    this.load.image('surface-entry', '/assets/data-world/surface-entry.png');
+    this.load.image('surface-platform', '/assets/data-world/surface-platform.png');
+    this.load.image('surface-skills-portal', '/assets/data-world/surface-skills-portal.png');
   }
 
   create(): void {
@@ -749,6 +753,7 @@ export class WorldScene extends Phaser.Scene {
    */
   private buildTerrain(): void {
     const world = this.world;
+    const isCliff = world.chapter === 'cliff';
 
     this.platforms = this.physics.add.staticGroup();
 
@@ -803,10 +808,14 @@ export class WorldScene extends Phaser.Scene {
 
     // A lighter rim along the ground surface: a pixel edge that makes the landing
     // plane unambiguous at a glance.
+    const rimColor = isCliff ? '#CF31AD' : world.palette.groundTop;
     this.add
-      .rectangle(world.width / 2, world.groundY + 1, world.width, 2, colour(world.palette.groundTop))
+      .rectangle(world.width / 2, world.groundY + 1, world.width, 2, colour(rimColor))
       .setDepth(1);
 
+    // Platform ledges: physics bodies stay EXACTLY as configured (Phase 1 contracts).
+    // Visuals: on cliff, we use the platform artwork asset instead of individual ledge rects;
+    // on other chapters, keep the existing simple rect + rim for now.
     for (const p of world.platforms) {
       const rect = this.add.rectangle(
         p.x + p.width / 2,
@@ -818,9 +827,144 @@ export class WorldScene extends Phaser.Scene {
       this.physics.add.existing(rect, true);
       this.platforms.add(rect);
 
-      this.add.rectangle(p.x + p.width / 2, p.y + 1, p.width, 2, colour(world.palette.groundTop)).setDepth(1);
+      if (isCliff) {
+        // Cliff: the full-width platform artwork replaces the individual ledge
+        // visuals. The rect object stays as the invisible static physics body —
+        // collision is unchanged (Arcade bodies collide regardless of
+        // visibility); only the dark fill rectangle is hidden.
+        rect.setVisible(false);
+      } else {
+        // Other chapters: keep existing simple rim visual.
+        this.add.rectangle(p.x + p.width / 2, p.y + 1, p.width, 2, colour(world.palette.groundTop)).setDepth(1);
+      }
+      // Cliff rim on the physics body is also suppressed since the platform
+      // artwork provides the ground line.
     }
 
+    // Surface-only: platform artwork + entry + portal visuals
+    if (isCliff) {
+      this.buildSurfaceArtwork();
+    }
+  }
+
+  /**
+   * Draw the Surface (cliff) subfloor with dark violet base + magenta/cyan neon.
+   * Creates a canvas texture `surface-subfloor-${depth}` tiled at 64px bays.
+   * This is used for the physics ground body texture.
+   */
+  private drawSurfaceSubFloor(depth: number): void {
+    const key = `surface-subfloor-${depth}`;
+    if (this.textures.exists(key)) return;
+
+    const BAY = 64;
+    const texture = this.textures.createCanvas(key, BAY, depth);
+    if (!texture) return;
+    const ctx = texture.getContext();
+    if (!ctx) return;
+    ctx.imageSmoothingEnabled = false;
+
+    // Dark violet base (#211735 from reference analysis)
+    ctx.fillStyle = '#211735';
+    ctx.fillRect(0, 0, BAY, depth);
+
+    // Magenta neon upper edge (#CF31AD)
+    ctx.fillStyle = '#CF31AD';
+    ctx.fillRect(0, 0, BAY, 2);
+
+    // Vertical bay seams with cyan edge (#17D3F4)
+    ctx.fillStyle = '#1A0D23'; // dark seam
+    ctx.fillRect(0, 4, 2, depth - 4);
+    ctx.fillStyle = '#17D3F4';
+    ctx.fillRect(2, 4, 1, depth - 6);
+
+    // Horizontal seam across the bay
+    ctx.fillStyle = '#1A0D23';
+    ctx.fillRect(0, Math.floor(depth * 0.58), BAY, 2);
+
+    // Structural ribs with magenta lit edges
+    for (let rx = 10; rx < BAY - 4; rx += 22) {
+      ctx.fillStyle = '#CF31AD';
+      ctx.fillRect(rx, 8, 6, depth - 12);
+      ctx.fillStyle = '#0A0410';
+      ctx.fillRect(rx + 2, 12, 2, depth - 20);
+    }
+
+    // Dim conduit run (magenta)
+    const cy = Math.floor(depth * 0.58) - 8;
+    ctx.fillStyle = '#8B2270'; // dim magenta
+    ctx.fillRect(4, cy, BAY - 8, 2);
+    // Lit magenta segment
+    ctx.fillStyle = '#CF31AD';
+    ctx.fillRect(8, cy, 10, 2);
+
+    // Cyan accent line along bottom of subfloor
+    ctx.fillStyle = '#17D3F4';
+    ctx.fillRect(0, depth - 1, BAY, 1);
+
+    texture.refresh();
+  }
+
+  /**
+   * Build the Surface (cliff) visual artwork: platform, entry structure, and portal.
+   * Uses the three PNG assets loaded in preload(). Physics bodies are created
+   * separately in the main buildTerrain() and are unchanged.
+   */
+  private buildSurfaceArtwork(): void {
+    const world = this.world;
+
+    // Platform artwork: 1266x617 source, scaled to full world width (900)
+    // Walkable surface in source is at y≈563 (lower band center), image bottom at y=687
+    // Offset from walkable surface to bottom = 124px
+    // Scale factor = world.width / 1266
+    const platformScale = world.width / 1266;
+    const platformDisplayHeight = 617 * platformScale;
+    const walkableToBottom = 124 * platformScale;
+    const platformBottomY = world.groundY + walkableToBottom;
+
+    if (this.textures.exists('surface-platform')) {
+      this.add
+        .image(world.width / 2, platformBottomY, 'surface-platform')
+        .setOrigin(0.5, 1)
+        .setDisplaySize(world.width, platformDisplayHeight)
+        .setDepth(2); // Above subfloor (1), below robot (10)
+    }
+
+    // Entry structure: 428x589 source, visible artwork 417x517.
+    // Stage M2 approved scale: 0.4295 (= reference entry width 432px on the
+    // 2172px reference strip mapped to the 900px world: 432*900/2172/417).
+    // Bottom anchored at groundY (walkable surface), left margin 10.
+    const entryScale = 0.4295;
+    const entryDisplayWidth = 428 * entryScale; // ≈183.8
+    const entryDisplayHeight = 589 * entryScale; // ≈253.0
+    const entryBottomY = world.groundY;
+    const entryLeftX = 10;
+
+    if (this.textures.exists('surface-entry')) {
+      this.add
+        .image(entryLeftX, entryBottomY, 'surface-entry')
+        .setOrigin(0, 1)
+        .setDisplaySize(entryDisplayWidth, entryDisplayHeight)
+        .setDepth(3); // Above platform
+    }
+
+    // Portal to Skills: 427x621 source, visible artwork 423x385.
+    // Stage M2 approved scale: 0.4144 (= reference portal width 423px on the
+    // 2172px strip mapped to 900: 423*900/2172/423). Position x=662.35 centers
+    // the visible portal artwork on the exit pipe trigger at world X=750
+    // (750 - 423*0.4144/2 ≈ 662.35). Bottom anchored at groundY.
+    const portalScale = 0.4144;
+    const portalDisplayWidth = 427 * portalScale; // ≈176.9
+    const portalDisplayHeight = 621 * portalScale; // ≈257.3
+    const portalBottomY = world.groundY;
+    const portalLeftX = 662.35;
+
+    if (this.textures.exists('surface-skills-portal')) {
+      this.add
+        .image(portalLeftX, portalBottomY, 'surface-skills-portal')
+        .setOrigin(0, 1)
+        .setDisplaySize(portalDisplayWidth, portalDisplayHeight)
+        .setDepth(3); // Above platform
+    }
   }
 
   private buildPlayer(): void {
@@ -983,12 +1127,16 @@ export class WorldScene extends Phaser.Scene {
      *
      * Chapters are separate worlds now, so the only chapter that can be labelled is
      * the one being played, and its label sits near its own spawn.
+     * On cliff, the entry artwork already carries "DATA WORLD / ENTRY" signage,
+     * so we suppress the procedural chapter label to avoid duplication.
      */
-    const labelKey = chapterLabelTexture(this, world.chapter, this.chapterLabel);
-    this.add
-      .image(40, this.world.groundY - ROBOT_FRAME_HEIGHT - 46, labelKey)
-      .setOrigin(0, 0.5)
-      .setDepth(5);
+    if (world.chapter !== 'cliff') {
+      const labelKey = chapterLabelTexture(this, world.chapter, this.chapterLabel);
+      this.add
+        .image(40, this.world.groundY - ROBOT_FRAME_HEIGHT - 46, labelKey)
+        .setOrigin(0, 0.5)
+        .setDepth(5);
+    }
   }
 
   /** Build each configured pipe and its skin. */
@@ -996,6 +1144,16 @@ export class WorldScene extends Phaser.Scene {
     for (const pipe of this.world.pipes) {
       const built = createDataPipeSkin(this, pipe, this.reducedMotion);
       this.pipeSkins.set(pipe.id, built);
+    }
+
+    // On cliff chapter, hide the procedural pipe visuals (entry + exit)
+    // since they are replaced by the surface artwork (entry structure + skills portal).
+    // Physics triggers and hover/proximity logic remain active.
+    if (this.world.chapter === 'cliff') {
+      const entryPipe = this.pipeSkins.get('cliff-entry');
+      const exitPipe = this.pipeSkins.get('cliff-to-skills');
+      entryPipe?.mouth.setVisible(false);
+      exitPipe?.mouth.setVisible(false);
     }
   }
 
@@ -1287,7 +1445,16 @@ export class WorldScene extends Phaser.Scene {
           const chapterPipeIds = new Set(world.pipes.map((p) => p.id));
 
           for (const [id, built] of this.pipeSkins) {
-            built.mouth.setVisible(chapterPipeIds.has(id));
+            /*
+             * On cliff the procedural entry/exit pipe visuals are replaced by the
+             * approved surface artwork (entry structure + skills portal), so they
+             * must stay hidden here too — not just in buildPipes. This loop runs
+             * on every arrival, so without this guard the artwork-hidden pipes
+             * reappeared after each chapter return.
+             */
+            const hiddenBySurfaceArtwork =
+              world.chapter === 'cliff' && (id === 'cliff-entry' || id === 'cliff-to-skills');
+            built.mouth.setVisible(chapterPipeIds.has(id) && !hiddenBySurfaceArtwork);
             /*
              * NOT `built.setActive(false)` here — measured, and it is a trap.
              *
