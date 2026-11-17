@@ -54,7 +54,17 @@ const alive = await page.evaluate(() => { const c = document.querySelector('canv
 check('canvas alive after boundary hold', alive, '');
 
 // Panel: Tab to station-index buttons, Enter to open, Escape to close
+// First dismiss entry plate, then open the contents drawer, then tab to station buttons.
 let panelOpened = false;
+// Dismiss entry plate
+await page.keyboard.press('Enter');
+await page.waitForTimeout(300);
+// Open the drawer
+const drawerToggle = await page.$('[data-testid="world-index-toggle"]');
+if (drawerToggle) {
+  await drawerToggle.click();
+  await page.waitForTimeout(300);
+}
 for (let i = 0; i < 15 && !panelOpened; i++) {
   await page.keyboard.press('Tab');
   await page.waitForTimeout(120);

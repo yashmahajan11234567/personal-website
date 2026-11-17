@@ -700,8 +700,13 @@ const CLIFF_PLATFORMS: WorldPlatform[] = [
 ];
 
 const SKILLS_PLATFORMS: WorldPlatform[] = [
-  { x: 300, y: 420, width: 120, height: 16 },
-  { x: 520, y: 350, width: 96, height: 16, oneWay: true },
+  // Stage K visual correction pass: the two floating ledges that used to sit
+  // at (300,420,120) and (520,350,96,oneWay) were removed together with their
+  // artwork. Their only gameplay purpose was optional jumping — every portal,
+  // station and the robot share the ground line at y=560, so nothing required
+  // them, and in screenshots they read as isolated floating platforms in the
+  // upper playable area. Traversal and collision on the flat floor are
+  // unchanged (covered by accept-dataworld-traversal / -gameplay / -stagek).
 ];
 
 const PROJECTS_PLATFORMS: WorldPlatform[] = [
@@ -762,7 +767,13 @@ const DATA_CHAPTERS: WorldChapter[] = [
     id: 'skills',
     label: 'SKILLS',
     width: SKILLS_WIDTH,
-    spawn: { x: 60 + EMERGE_OFFSET, y: GROUND_Y },
+    // Spawn 90: right of the entry-pipe trigger zone (38..82) so arrival never
+    // re-triggers, and far enough left that the mobile arrival camera window
+    // (~scrollX 40..50 at 390px/zoom 2) still shows the whole portal art.
+    spawn: { x: 90, y: GROUND_Y },
+    // The transport trigger stays at x=60 — the recording shows the return
+    // transition firing there, and the trigger position is authoritative. The
+    // portal ARTWORK was moved left to sit around it (art spans 60..225).
     entryPipe: pipe('skills-entry', 60, 'skills', 'START', 'ARRIVAL'),
     exitPipe: pipe('skills-to-projects', SKILLS_WIDTH - 150, 'projects', 'NEXT: PROJECTS', 'NEXT CHAPTER'),
   },
@@ -801,11 +812,11 @@ export const DATA_WORLD: WorldConfig = {
   height: WORLD_HEIGHT,
   groundY: GROUND_Y,
   palette: {
-    background: '#04060a',
-    far: '#0c111a',
-    ground: '#1a2230',
-    groundTop: '#6e7f96',
-    grid: '#2b3646',
+    background: '#04060e',
+    far: '#0d1526',
+    ground: '#141c30',
+    groundTop: '#22d3ee',
+    grid: '#1d2a47',
   },
   chapters: DATA_CHAPTERS,
   entryChapter: 'cliff',

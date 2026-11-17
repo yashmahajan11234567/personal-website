@@ -9,7 +9,7 @@
  */
 
 .world-canvas {
-  /*
+  /* 
    * FULL-SCREEN. Phaser RESIZEs the canvas to this box, so the box must be the
    * whole viewport for the game to be full-screen. It must also have a real size
    * before the engine measures it, otherwise the canvas boots at 0x0.
@@ -18,22 +18,24 @@
    * so the in-flow h1 above it cannot push the canvas down and leave a band of
    * clipped game at the bottom of the screen. No border and no radius: the
    * world IS the screen, so a frame around it would read as a window onto the
-   * game rather than the game itself. `z-index: auto` keeps this box out of
-   * stacking-context play so the info panel's own z-index still orders it
-   * against the sibling drawer.
+   * game rather than the game itself. `z-index: 1` puts it above the video
+   * background layer (z-index: 0).
    */
   position: absolute;
   inset: 0;
   width: 100vw;
   height: 100dvh;
-  background: #070b14;
-  /*
+  /* Transparent background so the video layer shows through.
+     Fallback #070b14 is set on the video layer itself. */
+  background: transparent;
+  /* 
    * `overflow: hidden` keeps gameplay and overlays clipped to the viewport.
    * `line-height: 0` was for the canvas only (an inline canvas adds baseline
    * space). It must NOT apply to overlay text, so overlays reset it themselves.
    */
   overflow: hidden;
   line-height: 0;
+  z-index: 1;
 }
 
 /* The canvas tracks the full-screen box; Phaser owns its pixel size. */
@@ -561,10 +563,10 @@ body.game-world-active {
    * from whichever ancestor happens to change.
    */
   line-height: 1.2;
-  border: 1px solid #2c556f;
+  border: 1px solid #17D3F4;
   border-radius: 4px;
-  background: #0c1620;
-  color: #dbeafe;
+  background: #0A0E1A;
+  color: #8CEAFF;
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
@@ -572,7 +574,7 @@ body.game-world-active {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 /* The arrow is decorative; the accessible name comes from the button's text. */
@@ -580,17 +582,18 @@ body.game-world-active {
   content: '\2190';
   font-size: 14px;
   line-height: 1;
-  color: #8ceaff;
+  color: #17D3F4;
 }
 
 .placeholder-world[data-theme='dark'] button.world-exit:hover {
-  background: #14293a;
-  border-color: #8ceaff;
-  color: #ffffff;
+  background: #101828;
+  border-color: #44EEFF;
+  color: #FFFFFF;
+  box-shadow: 0 0 12px rgba(23, 211, 244, 0.4);
 }
 
 .world-exit:focus-visible {
-  outline: 2px solid #8ceaff;
+  outline: 2px solid #17D3F4;
   outline-offset: 2px;
 }
 

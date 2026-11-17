@@ -60,6 +60,8 @@ async function travelTo(targetX, chapterWanted, maxMs = 25000) {
   const t0 = Date.now();
   const key = targetX > (await P()).x ? 'd' : 'a';
   await page.keyboard.down(key);
+  let keyHeld = true;
+  let lastFired = null;
   const seen = { enter: new Set(), exit: new Set(), phases: new Set() };
   let shotEnter = false, shotExit = false;
   try {
@@ -72,15 +74,27 @@ async function travelTo(targetX, chapterWanted, maxMs = 25000) {
       if (/tubeExit/.test(s.tex)) seen.exit.add(s.tex);
       if (s.phase === 'entering' && !shotEnter) { shotEnter = true; await page.screenshot({ path: `${OUT}/r4-entering.png` }); }
       if (s.phase === 'emerging' && !shotExit) { shotExit = true; await page.screenshot({ path: `${OUT}/r5-emerging.png` }); }
-      if (pr.travelling) continue;
-      if (pr.armedPipeId) {
+      if (pr.travelling) {
+        // Ride started: release the key so arrival cannot overshoot into the
+        // destination's return-pipe trigger zone.
         await page.keyboard.up(key);
-        await page.keyboard.press('Enter');
-        await page.waitForTimeout(300);
-        await page.keyboard.down(key);
+        keyHeld = false;
         continue;
       }
-      if (pr.chapter === chapterWanted) return { ok: true, seen, p: pr };
+      if (pr.armedPipeId && pr.armedPipeId !== lastFired) {
+        // Keep the movement key held: at the skills spawn the probe can report a
+        // STALE armed pipe from the previous chapter, and releasing the key here
+        // would strand the player. The pipe auto-fires on arm; Enter is just a
+        // belt-and-braces nudge.
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(300);
+        lastFired = pr.armedPipeId;
+        continue;
+      }
+      if (pr.chapter === chapterWanted) {
+        if (keyHeld) await page.keyboard.up(key);
+        return { ok: true, seen, p: pr };
+      }
       if (Math.abs(pr.x - targetX) < 30 && !pr.armedPipeId) {
         // close but not armed: keep nudging
       }

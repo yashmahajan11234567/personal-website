@@ -57,6 +57,12 @@ export interface InfoPanelProps {
   /** Called when the visitor closes the panel. Escape and the button both use it. */
   onClose: () => void;
   /**
+   * True while the close animation runs: the parent keeps the panel mounted for
+   * the animation's duration and passes this flag so the panel can play the
+   * exit transition instead of vanishing instantly.
+   */
+  closing?: boolean;
+  /**
    * Pre-select a gallery entry when the panel opens.
    *
    * Set by the world so pressing Enter on the Data Analytics Dashboards screen
@@ -73,14 +79,6 @@ const AUTHORSHIP_LABEL: Record<Project['authorship'], string> = {
   collaborative: 'Joint work',
   'extended-existing': 'Took over an existing application',
   course: 'Coursework',
-};
-
-/** Human label for an experience type. */
-const EXPERIENCE_LABEL: Record<Skill['experience']['experienceType'], string> = {
-  PROJECT: 'Shown in a project',
-  TRAINING: 'Training only',
-  BOTH: 'Coursework and project',
-  UNCERTAIN: 'Evidence too thin to classify',
 };
 
 /**
@@ -146,74 +144,60 @@ const DashboardGallery = ({
 };
 
 const SkillPanel = ({ skill }: { skill: Skill }) => {
-  const { experience, visual } = skill;
-  // TRAINING and BOTH claims must carry their context, or the claim is
-  // unsupported. The content model enforces this; rendering it again here means
-  // a future data edit cannot quietly drop it from the panel.
-  const needsContext =
-    experience.experienceType === 'TRAINING' || experience.experienceType === 'BOTH';
+  const { experience } = skill;
 
   return (
     <>
-      <h3 className="info-panel__title">{skill.name}</h3>
+      {/*
+        TITLE ROW: station icon + skill name.
+
+        The icon lives INSIDE the h3 so `.info-panel__body` keeps exactly three
+        children (title + two sections) — the cards-portal QA asserts
+        bodyChildren === 3 and reads the title via textContent, which an
+        aria-hidden <img alt=""> does not affect.
+      */}
+      <h3 className="info-panel__title">
+        <img
+          className="info-panel__skill-icon"
+          src={`/assets/data-world/skills-station-${skill.id}.png`}
+          alt=""
+          aria-hidden="true"
+        />
+        <span className="info-panel__title-text">{skill.name}</span>
+      </h3>
 
       {/*
-        The one-line summary is the whole point of the panel: a recruiter should
-        understand the skill in three to five seconds. It is `Skill.summary`,
-        which the content model states is one line of plain description and never
-        a metric.
+        HOW I USED IT — one paragraph of applied practice from the content
+        model (`experience.usage`), rendered verbatim.
       */}
-      <p className="info-panel__summary">{skill.summary}</p>
-
-      <dl className="info-panel__facts">
-        <dt>Experience</dt>
-        <dd>{EXPERIENCE_LABEL[experience.experienceType]}</dd>
-        {needsContext && experience.trainingContext && (
-          <>
-            <dt>Context</dt>
-            <dd>{experience.trainingContext}</dd>
-          </>
-        )}
-        <dt>Drawn as</dt>
-        <dd>{visual.treatment === 'scaffold' ? 'Scaffolding' : 'A built station'}</dd>
-      </dl>
-
-      {/*
-        Evidence, only when the content model records it. These are repository
-        facts already vetted by the audit, so they are shown verbatim rather than
-        summarised.
-      */}
-      {experience.evidence.length > 0 && (
-        <div className="info-panel__section">
-          <h4>Evidence</h4>
-          <ul>
-            {experience.evidence.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
+      {experience.usage && (
+        <div className="info-panel__section info-panel__section--skill">
+          <h4>How I used it</h4>
+          <p className="info-panel__body-text">{experience.usage}</p>
         </div>
       )}
 
       {/*
-        Repositories, one link per entry. These are absolute URLs - the content
-        model validates that and `validateContent()` reports a
-        `bad-repository-url` issue otherwise. The previous bare `repository: string`
-        put `"Bluestock_fintech, Sql-data-warehouse"` straight into an `href`,
-        which is why every skill link in the old build was dead.
+        PROJECT APPLICATION — the projects the skill was actually applied in
+        (`experience.applications`). The project name links to its repository
+        when the model records one; the contribution states only verified work.
       */}
-      {experience.repositories && experience.repositories.length > 0 && (
-        <div className="info-panel__section">
-          <h4>Repositories</h4>
-          <ul className="info-panel__links">
-            {experience.repositories.map((repo) => (
-              <li key={repo.url}>
-                <a href={repo.url} target="_blank" rel="noreferrer noopener">
-                  {repo.name}
-                  <span className="visually-hidden">
-                    {' '}
-                    for {skill.name} (opens in a new tab)
-                  </span>
-                </a>
+      {experience.applications && experience.applications.length > 0 && (
+        <div className="info-panel__section info-panel__section--skill">
+          <h4>Project application</h4>
+          <ul className="info-panel__apps">
+            {experience.applications.map((app) => (
+              <li key={app.project}>
+                <span className="info-panel__app-name">
+                  {app.repository ? (
+                    <a href={app.repository.url} target="_blank" rel="noreferrer noopener">
+                      {app.project}
+                    </a>
+                  ) : (
+                    app.project
+                  )}
+                </span>
+                <span className="info-panel__app-contrib">{app.contribution}</span>
               </li>
             ))}
           </ul>
@@ -382,7 +366,7 @@ const ProjectPanel = ({
   </>
 );
 
-export const InfoPanel = ({ kind, id, onClose, initialDashboardId }: InfoPanelProps) => {
+export const InfoPanel = ({ kind, id, onClose, initialDashboardId, closing }: InfoPanelProps) => {
   /*
    * Resolve from the content model by id.
    *
@@ -467,7 +451,11 @@ export const InfoPanel = ({ kind, id, onClose, initialDashboardId }: InfoPanelPr
 
   return (
     <aside
-      className="info-panel"
+      className={
+        'info-panel' +
+        (kind === 'skill' ? ' info-panel--skill' : '') +
+        (closing ? ' info-panel--closing' : '')
+      }
       data-testid="info-panel"
       data-panel-kind={kind}
       data-panel-id={id}

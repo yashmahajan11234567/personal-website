@@ -72,7 +72,9 @@ export const mountWorld = ({ world, reducedMotion, parent }: MountOptions): Game
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent,
-    backgroundColor: config.palette.background,
+    // Transparent canvas so the React video background shows through.
+    // backgroundColor is intentionally omitted; the scene sets camera alpha to 0.
+    transparent: true,
     // `pixelArt` keeps nearest-neighbour scaling so the 16px art stays crisp.
     pixelArt: true,
     // RESIZE makes the canvas track its container, which is what lets the same

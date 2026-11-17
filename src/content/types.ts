@@ -146,11 +146,38 @@ export interface RepositoryRef {
   readonly url: string;
 }
 
+/**
+ * One project where a skill was applied, with what the skill actually did there.
+ *
+ * Lives inside `SkillExperience.applications` so a skill card can list its
+ * PROJECT APPLICATION entries. `contribution` must describe only verified work;
+ * if a connection cannot be verified the whole entry is omitted.
+ */
+export interface SkillApplication {
+  /** Project name as the portfolio states it. */
+  readonly project: string;
+  /** The skill's actual contribution to that project. Evidence-backed. */
+  readonly contribution: string;
+  /** Repository backing the project, when one maps to it. */
+  readonly repository?: RepositoryRef;
+}
+
 /** Evidence backing a skill claim, plus training context where relevant. */
 export interface SkillExperience {
   readonly experienceType: ExperienceType;
   /** Implementation facts. Every line traces to the evidence audit. */
   readonly evidence: readonly string[];
+  /**
+   * "HOW I USED IT" — one paragraph of applied practice, in the author's words.
+   * Optional because older entries predate the card structure; every line must
+   * still trace to the evidence audit, never to aspiration.
+   */
+  readonly usage?: string;
+  /**
+   * "PROJECT APPLICATION" — the projects where the skill was actually applied.
+   * Optional for the same reason as `usage`. Omit a project rather than guess.
+   */
+  readonly applications?: readonly SkillApplication[];
   /**
    * Required when `experienceType` is TRAINING or BOTH — the context that makes
    * the claim honest ("practised via Docker Desktop in DevOps coursework").

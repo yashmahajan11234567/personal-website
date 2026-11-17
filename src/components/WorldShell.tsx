@@ -34,6 +34,7 @@ import { WORLD_CONFIGS } from '../game/config/worldConfig';
 import type { WorldId } from '../game/config/worldConfig';
 import { InfoPanel } from './InfoPanel';
 import type { PanelKind } from './InfoPanel';
+import { BackgroundVideoLayer } from './BackgroundVideoLayer';
 import './WorldShell.css';
 
 /**
@@ -66,6 +67,14 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
   const [status, setStatus] = useState<'loading' | 'ready' | 'unplayable'>('loading');
   const [lastInteraction, setLastInteraction] = useState<string | null>(null);
   const [panel, setPanel] = useState<OpenPanel | null>(null);
+  /**
+   * Key of the panel currently playing its close animation. The panel stays
+   * mounted for the 170ms exit transition, then unmounts — an instant unmount
+   * would make the open animation feel asymmetric.
+   */
+  const [closingKey, setClosingKey] = useState<string | null>(null);
+  const panelRef = useRef<OpenPanel | null>(null);
+  panelRef.current = panel;
   const [chapter, setChapter] = useState<string | null>(null);
 
   /*
@@ -126,7 +135,14 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
   }, []);
 
   const closePanel = useCallback(() => {
-    setPanel(null);
+    const current = panelRef.current;
+    if (!current) return;
+    const key = `${current.kind}:${current.id}`;
+    setClosingKey(key);
+    window.setTimeout(() => {
+      setClosingKey((c) => (c === key ? null : c));
+      setPanel((cur) => (cur && `${cur.kind}:${cur.id}` === key ? null : cur));
+    }, 170);
   }, []);
 
   /**
@@ -423,6 +439,15 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
       <div className="placeholder-world" data-theme="dark" data-world={world}>
         <h1>{config.name}</h1>
 
+        {/* Video background layer — sits behind the Phaser canvas.
+            Only rendered for the Data World where video backgrounds exist. */}
+        {world === 'data' && (
+          <BackgroundVideoLayer
+            chapter={chapter as 'cliff' | 'skills' | 'projects' || 'cliff'}
+            reducedMotion={prefersReducedMotion()}
+          />
+        )}
+
         {/* The canvas container. Phaser appends its canvas here and removes it on
             unmount; the container itself is React-owned and always empty of the
             canvas itself. The panel is rendered here so it overlays the game. */}
@@ -432,7 +457,14 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
           data-testid="world-canvas"
           data-status={status}
         >
-          {panel && <InfoPanel kind={panel.kind} id={panel.id} onClose={closePanel} />}
+          {panel && (
+            <InfoPanel
+              kind={panel.kind}
+              id={panel.id}
+              onClose={closePanel}
+              closing={closingKey === `${panel.kind}:${panel.id}`}
+            />
+          )}
         </div>
 
         {/*
@@ -455,7 +487,7 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
           onClick={handleExit}
           data-testid="world-exit"
         >
-          Back to portfolio
+          RETURN TO PORTFOLIO
           <span className="visually-hidden"> — leave the Data World and return to the site</span>
         </button>
 

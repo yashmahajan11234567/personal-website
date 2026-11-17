@@ -36,23 +36,22 @@ import {
   PLAYER,
   PIPE_HALF_WIDTH,
   CAMERA,
-  CEILING_FROM,
   CONTENT_BAND,
   chapterViaPipe,
   chapterWorld,
   pipeNearX,
 } from '../config/worldConfig';
 import type { ChapterId, ChapterWorld, WorldConfig, WorldPipe, WorldStation } from '../config/worldConfig';
-import { drawFarBand, drawInteractionGem, drawPlayer } from '../art/pixelArt';
+import { drawInteractionGem, drawPlayer } from '../art/pixelArt';
 import {
   DATA_PALETTE,
   SUB_FLOOR_DEPTH,
   canvasTexture,
-  drawCeiling,
-  drawFarSkyline,
-  drawMidground,
   drawSubFloor,
 } from '../art/facilityArt';
+import {
+  generateAllForChapter,
+} from '../art/neonCity';
 import { drawSkillStation, drawProjectStation } from '../art/worldObjects';
 import { ROBOT_FRAMES, ROBOT_FRAME_WIDTH, ROBOT_FRAME_HEIGHT } from '../assets/robot/manifest';
 import { emitInteraction } from './interactionBus';
@@ -75,6 +74,16 @@ export const WORLD_SCENE_KEY = 'world';
 
 /** Sprite key prefix for the character frames. */
 const PLAYER_TEXTURE_PREFIX = 'player-robot';
+
+/**
+ * Deliberate small overlap of foreground object bases into the platform top
+ * (world px). Foreground objects are grounded by their OPAQUE bounds at
+ * groundY + pad, then shifted down by this amount so the base visibly presses
+ * into the floor instead of reading as floating. Portals (depth 3) and
+ * stations (depth 6) render in front of the platform tiles (depth 2), so the
+ * overlap shows the object on top of the platform, never covered by it.
+ */
+const GROUND_OVERLAP_PX = 3;
 
 /** Robot strip frames played across the pipe-transport phases (see pipeTransport). */
 const TUBE_ENTER_FRAMES = [
@@ -259,15 +268,64 @@ export class WorldScene extends Phaser.Scene {
   private stations: StationView[] = [];
   /** Parallax layers, kept as fields so the RESIZE handler can re-tile them. */
   private farLayer: Phaser.GameObjects.TileSprite | null = null;
+  private midSkyLayer: Phaser.GameObjects.TileSprite | null = null;
   private midLayer: Phaser.GameObjects.TileSprite | null = null;
-  private hazeLayer: Phaser.GameObjects.TileSprite | null = null;
-
-  /** The 260px of ceiling structure the taller world added. See `buildEnvironment`. */
-  private ceilingLayer: Phaser.GameObjects.TileSprite | null = null;
-  /** The station currently within interaction range, if any. */
-  private focused: WorldStation | null = null;
+  private fgLayer: Phaser.GameObjects.TileSprite | null = null;
+  /** Sky image (screen-fixed, scrollFactor 0,0). */
+  private skyImage: Phaser.GameObjects.Image | null = null;
+  /** Neon glow behind player (additive blend). */
+  private playerGlow: Phaser.GameObjects.Image | null = null;
+  /** Shadow ellipse at player feet. */
+  private playerShadow: Phaser.GameObjects.Image | null = null;
   /** True while a panel is open in React; blocks world input. */
   private panelOpen = false;
+
+  /** The station currently within interaction range, if any. */
+  private focused: WorldStation | null = null;
+
+  /** Cached bottom transparent-pad fraction per texture key (station grounding). */
+  private bottomPadCache = new Map<string, number>();
+
+  /**
+   * Fraction of a texture's height that is fully transparent along its bottom
+   * edge. Sprite-sheet cells carry padding below the object, so a
+   * bottom-anchored sprite would visibly hover above the floor; the caller
+   * shifts the sprite down by pad * displayHeight to ground it.
+   */
+  private textureBottomPad(key: string): number {
+    const cached = this.bottomPadCache.get(key);
+    if (cached !== undefined) return cached;
+    let frac = 0;
+    try {
+      const img = this.textures.get(key)?.getSourceImage() as
+        | { width: number; height: number }
+        | undefined;
+      if (img && img.width > 0 && img.height > 0) {
+        const c = document.createElement('canvas');
+        c.width = img.width;
+        c.height = img.height;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        if (ctx) {
+          ctx.drawImage(img as CanvasImageSource, 0, 0);
+          const data = ctx.getImageData(0, 0, img.width, img.height).data;
+          let pad = 0;
+          for (let y = img.height - 1; y >= 0; y--) {
+            let rowEmpty = true;
+            for (let x = 0; x < img.width; x++) {
+              if (data[(y * img.width + x) * 4 + 3] > 8) { rowEmpty = false; break; }
+            }
+            if (!rowEmpty) break;
+            pad++;
+          }
+          frac = pad / img.height;
+        }
+      }
+    } catch {
+      frac = 0;
+    }
+    this.bottomPadCache.set(key, frac);
+    return frac;
+  }
 
   /** Transport instance. Owns pipe timing only. */
   private transport!: PipeTransport;
@@ -318,7 +376,7 @@ export class WorldScene extends Phaser.Scene {
   /** Called by the engine before the scene starts. */
   setConfig(config: WorldSceneConfig): void {
     this.config = config.world;
-    /*
+    /* 
      * Resolve exactly ONE chapter here.
      *
      * `chapterWorld` returns only this chapter's width, spawn, platforms, stations
@@ -328,6 +386,7 @@ export class WorldScene extends Phaser.Scene {
     const chapter = config.chapter ?? config.world.entryChapter;
     this.world = chapterWorld(config.world, chapter);
     this.chapterLabel = config.world.chapters.find((c) => c.id === chapter)?.label ?? '';
+    this.currentChapter = chapter;
     this.reducedMotion = config.reducedMotion;
   }
 
@@ -340,6 +399,22 @@ export class WorldScene extends Phaser.Scene {
     this.load.image('surface-entry', '/assets/data-world/surface-entry.png');
     this.load.image('surface-platform', '/assets/data-world/surface-platform.png');
     this.load.image('surface-skills-portal', '/assets/data-world/surface-skills-portal.png');
+    // Skills chapter artwork assets (Stage K): 2 portals x 8 frames, 6 stations
+    // x idle/lit, and the modular platform tileset pieces.
+    for (let i = 0; i < 8; i++) {
+      this.load.image(`skills-portal-return-f${i}`, `/assets/data-world/skills-portal-return-f${i}.png`);
+      this.load.image(`skills-portal-forward-f${i}`, `/assets/data-world/skills-portal-forward-f${i}.png`);
+    }
+    for (const id of ['sql', 'python', 'excel', 'power-bi', 'tableau', 'streamlit']) {
+      this.load.image(`skills-station-${id}`, `/assets/data-world/skills-station-${id}.png`);
+      this.load.image(`skills-station-${id}-lit`, `/assets/data-world/skills-station-${id}-lit.png`);
+    }
+    for (const piece of [
+      'ground-left', 'ground-mid', 'ground-mid-alt', 'ground-right',
+      'util-vent', 'util-support', 'util-pipe-v', 'util-pipe-h',
+    ]) {
+      this.load.image(`skills-${piece}`, `/assets/data-world/skills-${piece}.png`);
+    }
   }
 
   create(): void {
@@ -378,13 +453,19 @@ export class WorldScene extends Phaser.Scene {
     drawPlayer(this);
     drawInteractionGem(this);
 
-    this.buildEnvironment();
+    // Skip procedural sky/parallax when video backgrounds are available (Data World).
+    // The React layer handles video playback; procedural background remains as fallback.
+    if (this.config.id !== 'data') {
+      this.buildEnvironment();
+    }
 
     // --- World + camera bounds ---
     this.physics.world.setBounds(0, 0, world.width, world.height);
     this.cameras.main.setBounds(0, 0, world.width, world.height);
     this.cameras.main.setRoundPixels(true);
-    this.cameras.main.setBackgroundColor(world.palette.background);
+    // Transparent camera background so the React video layer shows through.
+    // The procedural sky/parallax is skipped when video backgrounds are active.
+    this.cameras.main.setBackgroundColor('rgba(0,0,0,0)');
 
     /*
      * Honour a pending camera placement BEFORE anything is built or rendered.
@@ -548,111 +629,60 @@ export class WorldScene extends Phaser.Scene {
    */
   private buildEnvironment(): void {
       const world = this.world;
+      const cam = this.cameras.main;
 
-      drawFarSkyline(this, {
-        worldWidth: world.width,
-        worldHeight: world.height,
-        groundY: world.groundY,
-      });
-      drawMidground(this, {
-        worldWidth: world.width,
-        worldHeight: world.height,
-        groundY: world.groundY,
-      });
-      // Phase 1's band, kept as a faint haze behind the midground so the two
-      // implementations cannot disagree about where the ground line is.
-      drawFarBand(this, {
-        width: world.width,
-        height: world.height,
-        bandTop: world.groundY - 180,
-        colour: world.palette.far,
-      });
+      // Generate all neon textures for this chapter (idempotent, seeded)
+      generateAllForChapter(
+        this,
+        world.id,
+        world.width,
+        world.groundY,
+        cam.width,
+        cam.height,
+      );
 
-      /*
-       * THE CEILING LAYER — what makes the 2x camera reveal rather than crop.
-       *
-       * The world grew from 640 to 900 tall specifically so that zooming in would
-       * show structure instead of black. `drawCeiling` fills everything above the
-       * old 640 ceiling with beams, cable trays, risers and plant lights. Without
-       * it the upper half of a zoomed frame is void, which is the single thing
-       * the visual direction forbids.
-       *
-       * It scrolls at 0.30: slower than the midground's 0.45 so it sits clearly
-       * behind, and faster than the far layer's 0.15 so it still parallaxes.
-       */
-      drawCeiling(this, {
-        worldWidth: world.width,
-        worldHeight: world.height,
-        groundY: world.groundY,
-        ceilingFrom: CEILING_FROM,
-      });
+      /* --- Layer stack (back → front), all horizontal parallax only --- */
 
-      /*
-       * LAYER HEIGHT IS `groundY`, NOT `world.height` — and this is the fix for the
-       * measured 27 -> 21 FPS regression.
-       *
-       * The world is 900 tall, but nothing is ever drawn or seen below the floor
-       * line at y=560: the camera's vertical clamp never frames it. Sizing each
-       * layer to `world.height` therefore allocated 340px of every 900px strip
-       * that is either transparent or hidden behind the floor slab — 38% wasted
-       * fill and wasted texture memory, paid every frame.
-       *
-       * The ceiling layer is the important case for correctness, not just speed:
-       * its art lives in the band y=280..540, which is entirely ABOVE `groundY`,
-       * so sizing it to `groundY` still contains all of it. Nothing visible is
-       * lost by this change — the camera literally cannot reach the rows removed.
-       */
-      const layerHeight = world.groundY;
+      // 1. Sky — screen-fixed gradient + stars + moon
+      const skyKey = `neon-sky-${world.id}-${cam.width}x${cam.height}`;
+      this.skyImage = this.add
+        .image(0, 0, skyKey)
+        .setOrigin(0, 0)
+        .setScrollFactor(0, 0)
+        .setDepth(-40);
+      this.skyImage.setDisplaySize(cam.width, cam.height);
+
+      // 2. Far skyline (scroll 0.12)
       this.farLayer = this.buildParallaxLayer(
-        `facility-far-${world.width}-${world.groundY}`,
-        layerHeight,
-        this.reducedMotion ? 1 : 0.15,
-        -30
+        `neon-far-${world.id}-${world.width}x${world.groundY}`,
+        world.groundY,
+        this.reducedMotion ? 1 : 0.12,
+        -30,
       );
+
+      // 3. Mid skyline (scroll 0.25)
+      this.midSkyLayer = this.buildParallaxLayer(
+        `neon-midsky-${world.id}-${world.width}x${world.groundY}`,
+        world.groundY,
+        this.reducedMotion ? 1 : 0.25,
+        -28,
+      );
+
+      // 4. Midground buildings (scroll 0.45) — variant A stored, B for flicker
       this.midLayer = this.buildParallaxLayer(
-        `facility-mid-${world.width}-${world.groundY}`,
-        layerHeight,
+        `neon-mid-${world.id}-${world.width}x${world.groundY}-v0`,
+        world.groundY,
         this.reducedMotion ? 1 : 0.45,
-        -20
+        -20,
       );
-      this.ceilingLayer = this.buildParallaxLayer(
-        `facility-ceiling-${world.width}-${CEILING_FROM}-${world.groundY}`,
-        layerHeight,
-        this.reducedMotion ? 1 : 0.3,
-        -25
-      );
-      this.hazeLayer = this.buildParallaxLayer(
-        `far-${world.groundY - 180}`,
-        180,
-        this.reducedMotion ? 1 : 0.2,
-        -15
-      );
-      this.hazeLayer?.setAlpha(0.55);
 
-      /*
-       * Depth separation, enforced rather than hoped for.
-       *
-       * With the world now 900 tall and the camera zoomed to 2x, all three layers
-       * can be on screen at once and the frame flattens into grey mush unless
-       * their VALUES are pushed apart. Measured intent, brightest to darkest:
-       *   far      ~#0c111a  near-black silhouettes, distant lit windows
-       *   ceiling  ~#0c111a  dim structure above, lit only by its own plant lights
-       *   mid      ~#1a2230 with #6e7f96 rims — the only layer with bright metal
-       *   near     the floor and everything interactive, fully lit
-       *
-       * The ceiling is dimmed a further 15% on top of its already-dark palette so
-       * it never competes with the midground runs it hangs behind.
-       */
-      this.ceilingLayer?.setAlpha(0.85);
-
-      /*
-       * The grid is drawn procedurally and is mostly transparent, but it was a
-       * FULL-WORLD Image in Phase 1. It is dropped from the render entirely and
-       * its role — marking world units and giving the midground scale — is now
-       * carried by the conduit runs and gantry lattice that are already part of the
-       * midground art. A world-unit grid was also the most "debug overlay"-looking
-       * element in the frame, so this is an improvement as well as a saving.
-       */
+      // 5. Foreground rooftop/street (scroll 0.7)
+      this.fgLayer = this.buildParallaxLayer(
+        `neon-fg-${world.id}-${world.width}x${world.groundY}`,
+        world.groundY,
+        this.reducedMotion ? 1 : 0.7,
+        -10,
+      );
     }
 
     /**
@@ -777,28 +807,36 @@ export class WorldScene extends Phaser.Scene {
      *     as a flat rectangle, for the same reason the ceiling got beams: a large
      *     flat area reads as "unfinished" no matter how well the rest of the scene
      *     is drawn. The collision geometry is unchanged, so physics is untouched.
+     *
+     * For the Surface (cliff) chapter, the floor visual is replaced by the
+     * `surface-platform` artwork asset. The procedural subfloor is still created
+     * for physics but not rendered visually.
      */
     const subFloorDepth = Math.min(SUB_FLOOR_DEPTH, world.height - world.groundY);
 
-    drawSubFloor(this, subFloorDepth);
+    if (isCliff) {
+      // Surface: create procedural subfloor for physics only (not rendered)
+      this.drawSurfaceSubFloor(subFloorDepth);
+    } else {
+      drawSubFloor(this, subFloorDepth);
+    }
 
-    /*
-     * `add.image` + `physics.add.existing(..., true)`, NOT `physics.add.staticImage`.
-     *
-     * `staticImage` was tried first and it broke collision: the player fell straight
-     * through the floor and came to rest at y=900, the bottom of the world, which
-     * put the sprite 660px below the bottom of the frame — invisible. The texture is
-     * a single 64px tileable bay, so the sprite must be scaled to 3840px wide, and
-     * a scaled `staticImage` body does not line up with the scaled sprite.
-     *
-     * The explicit `existing` form sizes the body in unscaled world units, so the
-     * collision surface is exactly the drawn slab regardless of display scale. This
-     * is the same pattern the Phase 1 rectangles below use, which is why they work.
-     */
+    /* Neon ground slab — visual only, drawn on top of the physics ground. */
+    const groundKey = `neon-ground-${world.id}-${world.width}`;
+    if (this.textures.exists(groundKey)) {
+      const groundImg = this.add
+        .image(0, world.groundY, groundKey)
+        .setOrigin(0, 0)
+        .setScrollFactor(1, 1)
+        .setDepth(1);
+      groundImg.setDisplaySize(world.width, subFloorDepth);
+    }
+
+    /* Physics ground body for collision (unchanged from Phase 1). */
     const ground = this.add.image(
       world.width / 2,
       world.groundY + subFloorDepth / 2,
-      `data-subfloor-${subFloorDepth}`
+      isCliff ? `surface-subfloor-${subFloorDepth}` : `data-subfloor-${subFloorDepth}`
     );
     ground.setDisplaySize(world.width, subFloorDepth);
     this.physics.add.existing(ground, true);
@@ -815,7 +853,8 @@ export class WorldScene extends Phaser.Scene {
 
     // Platform ledges: physics bodies stay EXACTLY as configured (Phase 1 contracts).
     // Visuals: on cliff, we use the platform artwork asset instead of individual ledge rects;
-    // on other chapters, keep the existing simple rect + rim for now.
+    // on skills, the tileset ledge pieces replace them the same way.
+    const artCoveredLedges = isCliff || world.chapter === 'skills';
     for (const p of world.platforms) {
       const rect = this.add.rectangle(
         p.x + p.width / 2,
@@ -827,9 +866,8 @@ export class WorldScene extends Phaser.Scene {
       this.physics.add.existing(rect, true);
       this.platforms.add(rect);
 
-      if (isCliff) {
-        // Cliff: the full-width platform artwork replaces the individual ledge
-        // visuals. The rect object stays as the invisible static physics body —
+      if (artCoveredLedges) {
+        // The rect object stays as the invisible static physics body —
         // collision is unchanged (Arcade bodies collide regardless of
         // visibility); only the dark fill rectangle is hidden.
         rect.setVisible(false);
@@ -844,6 +882,10 @@ export class WorldScene extends Phaser.Scene {
     // Surface-only: platform artwork + entry + portal visuals
     if (isCliff) {
       this.buildSurfaceArtwork();
+    } else if (world.chapter === 'skills') {
+      // Skills (Stage K): modular tileset ground + ledge platforms + utilities
+      // + the two animated portals.
+      this.buildSkillsArtwork();
     }
   }
 
@@ -967,6 +1009,115 @@ export class WorldScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Build the Skills chapter artwork (Stage K): modular platform tileset for the
+   * ground and both ledges, utility props, and the two animated portals.
+   *
+   * Mirrors buildSurfaceArtwork: physics bodies are created separately in
+   * buildTerrain() and are unchanged; this only adds visuals on top.
+   *
+   * Placement contract (world 1500x900, groundY 560):
+   *  - Ground: the 4 tiles are assembled edge-to-edge at ONE uniform scale
+   *    across x 0..1500 with their top edge at groundY — never one chunk
+   *    stretched across the world, so the authored seams stay seamless.
+   *  - No floating ledges or sky platforms: the former elevated tiles and
+   *    their collision bodies were removed in the Stage K visual correction
+   *    pass (nothing required them; all portals and stations sit on groundY).
+   *  - Return portal: origin (0,1) at (60,560+pad), 165 wide -> spans x
+   *    60..225, centred on the entry trigger at x=60 (zone 38..82): the
+   *    artwork now sits around the actual transport trigger, so the player
+   *    activates the return while standing inside the visible opening.
+   *    Spawn x=90 stays right of the zone (arrival never re-triggers) and the
+   *    zone stays left of spawn, so the walk right toward the stations never
+   *    crosses it. The span stays fully inside the mobile-arrival viewport
+   *    window (~x 40..245 at 390px wide / zoom 2), so the complete portal is
+   *    on screen on arrival, on desktop and mobile, and never clipped at the
+   *    left edge.
+   *  - Forward portal: origin (0.5,1) at (1350,560+pad), 180 wide -> spans
+   *    1260..1440, centred on the exit trigger x=1350.
+   *  - "560+pad": every foreground object is grounded by its OPAQUE bounds —
+   *    sprite y = groundY + transparentBottomPad * displayHeight — so the
+   *    bottom-most visible pixel physically meets the platform top, with no
+   *    transparent-padding gap and no sinking into the floor.
+   *  - Portals play all 8 extracted frames at 10 fps = 0.8 s loop; under
+   *    reduced motion the sprite stays on frame 0 (static portal).
+   */
+  private buildSkillsArtwork(): void {
+    const world = this.world;
+    const srcSize = (key: string): { w: number; h: number } | null => {
+      if (!this.textures.exists(key)) return null;
+      const img = this.textures.get(key).getSourceImage() as { width: number; height: number } | null;
+      return img ? { w: img.width, h: img.height } : null;
+    };
+
+    // --- Ground platform: assemble the 4 tiles across the full world width ---
+    const groundKeys = ['skills-ground-left', 'skills-ground-mid', 'skills-ground-mid-alt', 'skills-ground-right'];
+    const groundSrc = groundKeys.map((k) => srcSize(k));
+    const totalSrcW = groundSrc.reduce((s, d) => s + (d?.w ?? 0), 0);
+    if (totalSrcW > 0) {
+      const scale = world.width / totalSrcW;
+      let x = 0;
+      groundKeys.forEach((key, i) => {
+        const d = groundSrc[i];
+        if (!d) return;
+        const w = d.w * scale;
+        const h = d.h * scale;
+        this.add.image(x, world.groundY, key).setOrigin(0, 0).setDisplaySize(w, h).setDepth(2);
+        x += w;
+      });
+    }
+
+    // --- Utility props (decor only, no collision, behind stations/portals) ---
+    // Stage K visual correction: the foreground ladder was removed — it
+    // obstructed the playable area and had no interaction or physics body.
+    const utils: Array<{ key: string; x: number; y: number; ox: number; s: number }> = [
+      { key: 'skills-util-pipe-h', x: 430, y: world.groundY, ox: 0, s: 0.8 },
+      { key: 'skills-util-vent', x: 660, y: world.groundY, ox: 0, s: 0.5 },
+      { key: 'skills-util-support', x: 1150, y: world.groundY, ox: 0, s: 0.6 },
+      { key: 'skills-util-pipe-v', x: 1495, y: world.groundY, ox: 1, s: 0.8 },
+    ];
+    for (const u of utils) {
+      const d = srcSize(u.key);
+      if (!d) continue;
+      this.add.image(u.x, u.y, u.key).setOrigin(u.ox, 1).setDisplaySize(d.w * u.s, d.h * u.s).setDepth(2);
+    }
+
+    // --- Portals: 8-frame vortex animation, 10 fps -> 0.8 s loop ---
+    const portal = (prefix: string, x: number, originX: number, dispW: number): void => {
+      const d = srcSize(`${prefix}-f0`);
+      if (!d) return;
+      const dispH = d.h * (dispW / d.w);
+      // Ground alignment by OPAQUE bounds (final artwork pass): the extracted
+      // frames carry transparent padding below the artwork (5px on every
+      // frame), so anchoring the canvas bottom at groundY left the portal
+      // visibly floating. Anchor the VISIBLE bottom at groundY instead:
+      // y = groundY + bottomPad * dispH, re-applied per animation frame.
+      const groundedY = (key: string): number => world.groundY + this.textureBottomPad(key) * dispH + GROUND_OVERLAP_PX;
+      const sprite = this.add
+        .sprite(x, groundedY(`${prefix}-f0`), `${prefix}-f0`)
+        .setOrigin(originX, 1)
+        .setDisplaySize(dispW, dispH)
+        .setDepth(3);
+      sprite.on('animationupdate', () => {
+        const key = sprite.texture?.key ?? `${prefix}-f0`;
+        sprite.setY(groundedY(key));
+      });
+      const animKey = `${prefix}-anim`;
+      if (!this.anims.exists(animKey)) {
+        this.anims.create({
+          key: animKey,
+          frames: Array.from({ length: 8 }, (_, i) => ({ key: `${prefix}-f${i}` })),
+          frameRate: 10, // 8 frames at 10 fps = 0.8 s per loop
+          repeat: -1,
+        });
+      }
+      if (!this.reducedMotion) sprite.play(animKey);
+      // Reduced motion: the sprite stays on frame 0 — a static portal.
+    };
+    portal('skills-portal-return', 0, 0, 165); // art spans 0..165, glowing opening ~31.5..141, so the entry fire zone 38..82 sits INSIDE the visible opening: the player fires while standing in the portal. Fully inside the mobile arrival window (scrollX 0 + 195px view at 390px/zoom 2), left edge exactly at the world boundary x=0.
+    portal('skills-portal-forward', 1350, 0.5, 180); // exit trigger x=1350
+  }
+
   private buildPlayer(): void {
     const world = this.world;
 
@@ -1001,6 +1152,28 @@ export class WorldScene extends Phaser.Scene {
 
     this.physics.add.collider(this.player, this.platforms);
 
+    /* Neon glow disc behind player (additive) + shadow at feet.
+     * Created here so they exist for every chapter; update() positions them.
+     */
+    if (this.textures.exists('neon-glow')) {
+      this.playerGlow = this.add
+        .image(0, 0, 'neon-glow')
+        .setOrigin(0.5, 0.5)
+        .setDepth(9)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setScale(2.2)
+        .setAlpha(0.5)
+        .setVisible(false);
+    }
+    if (this.textures.exists('neon-shadow')) {
+      this.playerShadow = this.add
+        .image(0, 0, 'neon-shadow')
+        .setOrigin(0.5, 0.5)
+        .setDepth(2)
+        .setAlpha(0.5)
+        .setVisible(false);
+    }
+
     /*
      * A chapter swap builds a brand new player sprite, which Phaser creates
      * visible. Without this, the player would be plainly standing at the
@@ -1032,8 +1205,15 @@ export class WorldScene extends Phaser.Scene {
 
     for (const station of world.stations) {
       const keyBase = `station-${station.kind}-${station.id}`;
-      const idleKey = `${keyBase}-idle`;
-      const litKey = `${keyBase}-lit`;
+      // Stage K: on the skills chapter use the supplied per-skill PNG pair when
+      // present; the procedural canvas below stays as the missing-asset
+      // fallback so a missing file can never soft-lock the chapter.
+      const pngIdle = `skills-station-${station.id}`;
+      const pngLit = `${pngIdle}-lit`;
+      const usePng =
+        world.chapter === 'skills' && this.textures.exists(pngIdle) && this.textures.exists(pngLit);
+      const idleKey = usePng ? pngIdle : `${keyBase}-idle`;
+      const litKey = usePng ? pngLit : `${keyBase}-lit`;
 
       if (!this.textures.exists(idleKey) || !this.textures.exists(litKey)) {
         const size =
@@ -1065,6 +1245,20 @@ export class WorldScene extends Phaser.Scene {
         .image(station.x, station.y, idleKey)
         .setOrigin(0.5, 1)
         .setDepth(6);
+
+      // PNG stations are authored on square sheet cells; fit them to the same
+      // 96x104 display rect the procedural texture used, so the sprite-rect
+      // hitbox (x±48, top 104px above station.y) is unchanged in size.
+      if (usePng && station.kind === 'skill') {
+        sprite.setDisplaySize(96, 104);
+        // Stage K visual correction: sheet cells carry transparent padding
+        // below the object, which made the stations float above the floor.
+        // Ground by OPAQUE bounds (visible bottom at the floor line), plus a
+        // small deliberate overlap into the platform so the base presses in.
+        // The rect hitbox moves with the sprite and stays a plain rectangle —
+        // independent of the alpha silhouette.
+        sprite.setY(station.y + this.textureBottomPad(idleKey) * 104 + GROUND_OVERLAP_PX);
+      }
 
       /*
        * POINTER INTERACTION.
@@ -1116,7 +1310,7 @@ export class WorldScene extends Phaser.Scene {
       this.stations.push({ station, idleKey, litKey, sprite, lit: false });
     }
 
-    /*
+    /**
      * ONE chapter label, for the chapter being played.
      *
      * The previous version looped over every chapter and drew a label for each,
@@ -1129,8 +1323,11 @@ export class WorldScene extends Phaser.Scene {
      * the one being played, and its label sits near its own spawn.
      * On cliff, the entry artwork already carries "DATA WORLD / ENTRY" signage,
      * so we suppress the procedural chapter label to avoid duplication.
+     * On skills, the label sat on the return portal's lower section (the
+     * portal spans x 100..280 and the label was drawn at x=40), so it is
+     * suppressed there too — the portal keeps its own destination signage.
      */
-    if (world.chapter !== 'cliff') {
+    if (world.chapter !== 'cliff' && world.chapter !== 'skills') {
       const labelKey = chapterLabelTexture(this, world.chapter, this.chapterLabel);
       this.add
         .image(40, this.world.groundY - ROBOT_FRAME_HEIGHT - 46, labelKey)
@@ -1155,6 +1352,14 @@ export class WorldScene extends Phaser.Scene {
       entryPipe?.mouth.setVisible(false);
       exitPipe?.mouth.setVisible(false);
     }
+    // Skills (Stage K): the animated portal artwork replaces both pipe
+    // containers — same guard pattern as cliff, which also removes the entry
+    // sign board that used to clip off the left world edge. The pipe triggers
+    // are independent of container visibility and stay armed.
+    if (this.world.chapter === 'skills') {
+      this.pipeSkins.get('skills-entry')?.mouth.setVisible(false);
+      this.pipeSkins.get('skills-to-projects')?.mouth.setVisible(false);
+    }
   }
 
   /**
@@ -1166,6 +1371,9 @@ export class WorldScene extends Phaser.Scene {
    * still emits the same event with the same id.
    */
   private buildInteractionProbe(): void {
+    // Stage K (approved safe cleanup from the design plan): the probe belongs to
+    // the cliff chapter only — it was rendering as a leftover in every chapter.
+    if (this.world.chapter !== 'cliff') return;
     const gem = this.add.sprite(480, this.world.groundY - 6, 'gem').setDepth(5);
     gem.setData('interactive', true);
     gem.setData('interactionId', 'foundation-probe');
@@ -1454,7 +1662,9 @@ export class WorldScene extends Phaser.Scene {
              */
             const hiddenBySurfaceArtwork =
               world.chapter === 'cliff' && (id === 'cliff-entry' || id === 'cliff-to-skills');
-            built.mouth.setVisible(chapterPipeIds.has(id) && !hiddenBySurfaceArtwork);
+            const hiddenBySkillsArtwork =
+              world.chapter === 'skills' && (id === 'skills-entry' || id === 'skills-to-projects');
+            built.mouth.setVisible(chapterPipeIds.has(id) && !hiddenBySurfaceArtwork && !hiddenBySkillsArtwork);
             /*
              * NOT `built.setActive(false)` here — measured, and it is a trap.
              *
@@ -1993,6 +2203,12 @@ export class WorldScene extends Phaser.Scene {
       if (view.lit === shouldLight) continue;
       view.lit = shouldLight;
       view.sprite.setTexture(shouldLight ? view.litKey : view.idleKey);
+      // Re-apply the ground offset for the swapped texture (lit cells have a
+      // slightly different transparent bottom pad than idle cells).
+      if (view.station.kind === 'skill' && this.world.chapter === 'skills') {
+        const padKey = shouldLight ? view.litKey : view.idleKey;
+        view.sprite.setY(view.station.y + this.textureBottomPad(padKey) * view.sprite.displayHeight + GROUND_OVERLAP_PX);
+      }
     }
 
     if (nearest?.id === this.focused?.id) return;
@@ -2246,6 +2462,16 @@ export class WorldScene extends Phaser.Scene {
     this.updateAnimation();
     this.updateStations();
 
+    /* Neon glow + shadow track the player every frame (created in buildPlayer). */
+    if (this.playerGlow) {
+      this.playerGlow.setPosition(player.x, player.y - ROBOT_FRAME_HEIGHT / 2);
+      this.playerGlow.setVisible(true);
+    }
+    if (this.playerShadow) {
+      this.playerShadow.setPosition(player.x, this.world.groundY + 6);
+      this.playerShadow.setVisible(true);
+    }
+
     /*
      * Camera last: it must read the position physics has just resolved, or the
      * view trails the jump by one frame. `dtSeconds` is the same elapsed time the
@@ -2304,66 +2530,54 @@ private handleResize(gameSize: Phaser.Structs.Size): void {
       return next;
     };
 
-    /*
-     * Layer heights are `groundY` (560), NOT `world.height` (900).
-     *
-     * This block previously passed `world.height` here while `buildEnvironment`
-     * passed `world.groundY`. Because `handleResize` fires immediately after
-     * `create`, the resize path was the one that actually applied — so the strips
-     * ended up 900 tall, restoring the exact waste the `buildEnvironment` fix had
-     * just removed. The live scene confirmed it: three TileSprites of h=900 where
-     * 560 was intended, and 340 rows of each were opaque sub-floor fill sitting
-     * over the transparent ceiling layer.
-     *
-     * The two call sites now agree, and the comment states why, because a
-     * disagreement between them is silent: nothing errors, the world just gets
-     * slow and flat again.
-     */
+    /* Layer heights are `groundY` (560), NOT `world.height` (900). */
     this.farLayer = reTile(
       this.farLayer,
-      `facility-far-${world.width}-${world.groundY}`,
+      `neon-far-${world.id}-${world.width}x${world.groundY}`,
       world.groundY,
-      this.reducedMotion ? 1 : 0.15,
-      -30
+      this.reducedMotion ? 1 : 0.12,
+      -30,
+    );
+    this.midSkyLayer = reTile(
+      this.midSkyLayer,
+      `neon-midsky-${world.id}-${world.width}x${world.groundY}`,
+      world.groundY,
+      this.reducedMotion ? 1 : 0.25,
+      -28,
     );
     this.midLayer = reTile(
       this.midLayer,
-      `facility-mid-${world.width}-${world.groundY}`,
+      `neon-mid-${world.id}-${world.width}x${world.groundY}-v0`,
       world.groundY,
       this.reducedMotion ? 1 : 0.45,
-      -20
+      -20,
     );
-    this.ceilingLayer = reTile(
-      this.ceilingLayer,
-      `facility-ceiling-${world.width}-${CEILING_FROM}-${world.groundY}`,
+    this.fgLayer = reTile(
+      this.fgLayer,
+      `neon-fg-${world.id}-${world.width}x${world.groundY}`,
       world.groundY,
-      this.reducedMotion ? 1 : 0.3,
-      -25,
-      0.85
-    );
-    this.hazeLayer = reTile(
-      this.hazeLayer,
-      `far-${world.groundY - 180}`,
-      180,
-      this.reducedMotion ? 1 : 0.2,
-      -15,
-      0.55
+      this.reducedMotion ? 1 : 0.7,
+      -10,
     );
 
-    const cam = this.cameras.main;
-
-    /*
-     * Re-derive the zoom on resize. A window shortened by dragging (or a phone
-     * rotating) reduces the view height; without this the zoom would stay at the
-     * value chosen for the old, taller window and crop the content band.
+    /* Sky image — screen-fixed, resize display size.
+     * Guarded on `.active`: a resize event can fire while the scene is being
+     * torn down for a chapter swap, after Phaser has destroyed the display list
+     * but before shutdown() removes this listener. Calling setTexture on that
+     * dead image throws `Cannot read properties of undefined (reading 'sys')`
+     * out of Phaser's Image.setTexture — the same trap documented at onArrive.
      */
+    const cam = this.cameras.main;
+    const skyKey = `neon-sky-${world.id}-${cam.width}x${cam.height}`;
+    if (this.skyImage && this.skyImage.active && this.textures.exists(skyKey)) {
+      this.skyImage.setTexture(skyKey);
+      this.skyImage.setDisplaySize(cam.width, cam.height);
+    }
+
+    /* Re-derive zoom on resize. */
     cam.setZoom(this.zoomForViewport(cam.height));
 
-    /*
-     * The travel overlay is screen-space, so on resize it must be resized too or it
-     * would stop covering the viewport and the teleport at the midpoint of a pipe
-     * travel would become visible.
-     */
+    /* Travel overlay is screen-space, resize it too. */
     const vw = Math.ceil(cam.width);
     const vh = Math.ceil(cam.height);
     this.travelBand?.setSize(vw, vh);
