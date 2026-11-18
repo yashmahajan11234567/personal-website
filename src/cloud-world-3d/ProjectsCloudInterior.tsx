@@ -9,10 +9,15 @@ import {
   CLOUD_INTERIOR_CAM_R,
   CLOUD_SHELL_DOOR_HALF,
   CLOUD_SHELL_DOOR_TOP,
+  CLOUD_SHELL_Y,
+  CLOUD_DOOR_CUT_DEPTH,
+  CLOUD_DOOR_Z,
+  CLOUD_SCALE,
+  CLOUD_R_INT,
   displacedSphereGeometry,
   terrainHeight,
 } from './world';
-import { PORTFOLIO } from '../content';
+import { PORTFOLIO, projectsForWorld } from '../content';
 
 // ============================================================
 // ProjectsCloudInterior — the walkable gallery inside the cloud.
@@ -34,24 +39,7 @@ import { PORTFOLIO } from '../content';
 //     empty walking space.
 // ============================================================
 
-// Display order matches the brief: Go Microservices (left),
-// RxVerify (center), Full-Stack AI DevOps Masterclass (right).
-const DISPLAYS: { id: string; short: string; icon: 'server' | 'shield' | 'infinity' }[] = [
-  { id: 'go-microservices', short: 'Go Microservices', icon: 'server' },
-  { id: 'rxverify', short: 'RxVerify', icon: 'shield' },
-  { id: 'devops-masterclass', short: 'DevOps Masterclass', icon: 'infinity' },
-];
 
-// Display layout: a balanced arc on the back half of the room, all facing
-// the door (-z). [x, z, rotY]. r ≈ 16 for every display so each is equally
-// approachable and none sits outside the player's walkable radius.
-const DISPLAY_POS: [number, number, number][] = [
-  [-10.5, 12.0, Math.PI + 0.32],
-  [0, 16.0, Math.PI],
-  [10.5, 12.0, Math.PI - 0.32],
-];
-
-const DISPLAY_R = Math.hypot(-10.5, 12.0); // ≈ 15.95 — used by tests
 
 function drawIcon(ctx: CanvasRenderingContext2D, icon: string, cx: number, cy: number, s: number, color: string) {
   ctx.strokeStyle = color;
@@ -259,9 +247,10 @@ export function ProjectsCloudInterior({
 
     // Cut the doorway: drop every triangle whose centroid falls inside the
     // door prism (front of the shell, within the door width, below the top).
-    // The shell mesh is positioned at y=1.5 in group space, so the cut's top
-    // edge sits at local y = CLOUD_SHELL_DOOR_TOP − 1.5.
-    const cutTopLocal = CLOUD_SHELL_DOOR_TOP - 1.5;
+    // The shell mesh is positioned at y=CLOUD_SHELL_Y in group space, so the cut's top
+    // edge sits at local y = CLOUD_SHELL_DOOR_TOP − CLOUD_SHELL_Y.
+    const cutTopLocal = CLOUD_SHELL_DOOR_TOP - CLOUD_SHELL_Y;
+    const cutFrontZ = -CLOUD_INTERIOR_R + CLOUD_DOOR_CUT_DEPTH;
     const pos = g.getAttribute('position') as THREE.BufferAttribute;
     const index = g.getIndex()!;
     const kept: number[] = [];
@@ -273,7 +262,7 @@ export function ProjectsCloudInterior({
       const cyy = (pos.getY(a) + pos.getY(b) + pos.getY(c)) / 3;
       const czz = (pos.getZ(a) + pos.getZ(b) + pos.getZ(c)) / 3;
       const inDoor =
-        czz < -14 && Math.abs(cxx) < CLOUD_SHELL_DOOR_HALF && cyy < cutTopLocal;
+        czz < cutFrontZ && Math.abs(cxx) < CLOUD_SHELL_DOOR_HALF && cyy < cutTopLocal;
       if (!inDoor) kept.push(a, b, c);
     }
     g.setIndex(kept);
@@ -366,52 +355,82 @@ export function ProjectsCloudInterior({
     lanternMat.emissiveIntensity = 1.35 + Math.sin(t * 1.6) * 0.25;
   });
 
+  const S = CLOUD_SCALE;
   // Hanging lanterns: high on the back half so they light the displays and the
   // shell without dangling into the walk lane or the camera's path.
   const lanterns: [number, number, number][] = [
-    [-11, 13.0, 13.5],
-    [0, 14.5, 8.0],
-    [11, 13.0, 13.5],
-    [0, 13.0, -3.0],
+    [-11 * S, 13.0 * S, 13.5 * S],
+    [0, 14.5 * S, 8.0 * S],
+    [11 * S, 13.0 * S, 13.5 * S],
+    [0, 13.0 * S, -3.0 * S],
   ];
 
+  // ---- Data-driven project displays ----
+  const projectMeta: Record<string, { short: string; icon: 'server' | 'shield' | 'infinity' }> = {
+    'rxverify': { short: 'RxVerify', icon: 'shield' },
+    'devops-masterclass': { short: 'DevOps Masterclass', icon: 'infinity' },
+    'go-microservices': { short: 'Go Microservices', icon: 'server' },
+  };
+
+  const projects = projectsForWorld('cloud');
+  const displayData = useMemo(() => {
+    const ringRadii = [16, 30, 42].map(r => r * S);
+    const minSpacing = 8 * S;
+    const positions: [number, number, number][] = [];
+    for (const ringR of ringRadii) {
+      const capacity = Math.max(1, Math.floor(2 * Math.PI * ringR / minSpacing));
+      const take = Math.min(capacity, projects.length - positions.length);
+      for (let i = 0; i < take; i++) {
+        const angle = -Math.PI / 2 + (i / take) * Math.PI * 2;
+        const x = ringR * Math.cos(angle);
+        const z = ringR * Math.sin(angle);
+        positions.push([x, z, angle + Math.PI]);
+      }
+      if (positions.length >= projects.length) break;
+    }
+    return projects.map((p, i) => {
+      const meta = projectMeta[p.id] ?? { short: p.title.split(' ')[0], icon: 'server' as const };
+      const pos = positions[i] ?? [0, 0, Math.PI];
+      return { id: p.id, short: meta.short, icon: meta.icon, position: pos };
+    });
+  }, [S]);
+
+  // QA mirror
   if (typeof window !== 'undefined') {
     (window as any).__cwProjectsCloudInterior = true;
     (window as any).__cwInterior = {
       shellR: CLOUD_INTERIOR_R,
       camR: CLOUD_INTERIOR_CAM_R,
-      displayR: DISPLAY_R,
-      displays: DISPLAYS.map((d, i) => ({
+      displayR: CLOUD_R_INT,
+      displays: displayData.map((d) => ({
         id: d.id,
-        x: PROJECTS_CLOUD_X + DISPLAY_POS[i][0],
-        z: PROJECTS_CLOUD_Z + DISPLAY_POS[i][1],
+        x: PROJECTS_CLOUD_X + d.position[0],
+        z: PROJECTS_CLOUD_Z + d.position[1],
       })),
     };
   }
 
   // Doorway opening in group space (the shell cut + the tunnel both use it).
-  const doorZLocal = -21; // CLOUD_DOOR_Z − PROJECTS_CLOUD_Z
-  const tunnelLen = 7.0;
-  // Spans ≈ −20.8 … −13.8: the front face sits just BEHIND the wooden door
-  // plane (−21) so no cream slab pokes out in front of the entrance, while the
-  // back end reaches past the shell cut so the opening is fully framed.
-  const tunnelCenterZ = doorZLocal + 3.2;
+  const doorZLocal = CLOUD_DOOR_Z - PROJECTS_CLOUD_Z; // derived: -CLOUD_INTERIOR_R + 0.5
+  const tunnelLen = CLOUD_DOOR_CUT_DEPTH;
+  // Spans from the door plane back through the shell cut so the opening is fully framed.
+  const tunnelCenterZ = doorZLocal + CLOUD_DOOR_CUT_DEPTH / 2;
 
   return (
     <group position={[PROJECTS_CLOUD_X, groundY, PROJECTS_CLOUD_Z]}>
       {/* wooden floor + lighter inlay ring */}
       <mesh receiveShadow material={floorMat} position={[0, -0.12, 0]}>
-        <cylinderGeometry args={[20.5, 20.5, 0.3, 44]} />
+        <cylinderGeometry args={[CLOUD_INTERIOR_R - 2.5, CLOUD_INTERIOR_R - 2.5, 0.3, 44]} />
       </mesh>
       <mesh material={inlayMat} position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[9.5, 11.0, 48]} />
+        <ringGeometry args={[ (9.5 / 20.5) * (CLOUD_INTERIOR_R - 2.5), (11.0 / 20.5) * (CLOUD_INTERIOR_R - 2.5), 48 ]} />
       </mesh>
       {/* round rug in the centre */}
-      <mesh material={rugMat} position={[0, 0.05, 2.0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[6.0, 32]} />
+      <mesh material={rugMat} position={[0, 0.05, 2.0 * CLOUD_SCALE]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[6.0 * CLOUD_SCALE, 32]} />
       </mesh>
       {/* faceted cloud shell (inside view) with the doorway cut out */}
-      <mesh geometry={shellGeo} material={shellMat} position={[0, 1.5, 0]} />
+      <mesh geometry={shellGeo} material={shellMat} position={[0, CLOUD_SHELL_Y, 0]} />
 
       {/* entrance tunnel: two jambs + lintel framing the shell opening */}
       {[-1, 1].map((s) => (
@@ -441,30 +460,30 @@ export function ProjectsCloudInterior({
       ))}
       {/* central skylight wash — lifts the whole gallery so the displays and
           the cream shell stay readable from any camera angle */}
-      <pointLight position={[0, 17.0, 2.0]} color="#FFF0D8" intensity={42} distance={46} decay={2} />
+      <pointLight position={[0, 17.0 * S, 2.0 * S]} color="#FFF0D8" intensity={42} distance={46 * S} decay={2} />
       {/* purple accent glow on the back wall (matches reference) */}
-      <pointLight position={[0, 10.0, 16.0]} color="#B48AE0" intensity={8} distance={28} decay={2} />
+      <pointLight position={[0, 10.0 * S, 16.0 * S]} color="#B48AE0" intensity={8} distance={28 * S} decay={2} />
 
-      {/* the three project displays */}
-      {DISPLAYS.map((d, i) => (
+      {/* the project displays (data-driven, supports 20+) */}
+      {displayData.map((d) => (
         <ProjectDisplay
           key={d.id}
           id={d.id}
           short={d.short}
           icon={d.icon}
-          position={DISPLAY_POS[i]}
+          position={d.position}
           onProjectClick={onProjectClick}
         />
       ))}
 
-      {/* decoration, pushed to the perimeter (r ≈ 18.5) so the centre of the
+      {/* decoration, pushed to the perimeter (r ≈ 18.5 * S) so the centre of the
           room stays clear walking space */}
       {[-1, 1].map((s) => (
-        <group key={`ip${s}`} position={[s * 17.0, 0, -2.0]}>
+        <group key={`ip${s}`} position={[s * 17.0 * S, 0, -2.0 * S]}>
           <mesh material={potMat}>
             <cylinderGeometry args={[0.8, 0.68, 1.0, 12]} />
           </mesh>
-          <mesh material={leafMat} position={[0, 2.0, 0]}>
+          <mesh material={leafMat} position={[0, 2.0 * S, 0]}>
             <icosahedronGeometry args={[1.4, 1]} />
           </mesh>
         </group>
@@ -474,7 +493,7 @@ export function ProjectsCloudInterior({
           key={`cr${s}`}
           receiveShadow
           material={floorMat}
-          position={[s * 17.5, 1.2, 8.0]}
+          position={[s * 17.5 * S, 1.2 * S, 8.0 * S]}
           rotation={[0, s * 0.7, 0]}
         >
           <boxGeometry args={[2.4, 2.4, 2.4]} />

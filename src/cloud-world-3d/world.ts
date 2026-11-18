@@ -35,29 +35,42 @@ export function pathHalfWidth(z: number): number {
 // placement, the player collision, the camera interior clamp
 // and every scatter/sign keep-out. The giant cloud building
 // sits on the path where the old mountain destination was.
+//
+// 2026-11-18 redesign: the building was enlarged ~2.5x. All
+// dimensions derive from CLOUD_SCALE so exterior, interior,
+// doorway, collision and camera stay consistent. The door plane
+// is DERIVED from the interior shell radius (it used to be a
+// hardcoded z-offset that silently assumed R=21.5).
 // ============================================================
+export const CLOUD_SCALE = 2.5;
 export const PROJECTS_CLOUD_Z = 170;
 export const PROJECTS_CLOUD_X = pathCenterX(PROJECTS_CLOUD_Z);
 /** Exterior collision radius (world units) around the cloud center. */
-export const CLOUD_R_EXT = 26;
+export const CLOUD_R_EXT = 26 * CLOUD_SCALE;
 /** Interior walkable radius once the player is through the door. */
-export const CLOUD_R_INT = 17;
+export const CLOUD_R_INT = 17 * CLOUD_SCALE;
 /** Visible interior shell radius (the cream gallery wall the player sees). */
-export const CLOUD_INTERIOR_R = 21.5;
+export const CLOUD_INTERIOR_R = 21.5 * CLOUD_SCALE;
 /** Vertical stretch of the interior shell — raises the gallery ceiling. */
 export const CLOUD_INTERIOR_YSCALE = 1.18;
+/** Y offset of the interior shell mesh above the cloud group origin. */
+export const CLOUD_SHELL_Y = 1.5 * CLOUD_SCALE;
 /** Max distance the interior camera may sit from the cloud center (spring arm). */
-export const CLOUD_INTERIOR_CAM_R = 15;
+export const CLOUD_INTERIOR_CAM_R = 15 * CLOUD_SCALE;
 /** Half-width / height of the opening cut through the interior shell. */
-export const CLOUD_SHELL_DOOR_HALF = 4.6;
-export const CLOUD_SHELL_DOOR_TOP = 11.4;
+export const CLOUD_SHELL_DOOR_HALF = 4.6 * CLOUD_SCALE;
+export const CLOUD_SHELL_DOOR_TOP = 11.4 * CLOUD_SCALE;
 /** Half-width of the door corridor cut into the -z face of the cloud. */
-export const CLOUD_DOOR_HALF = 3.6;
-/** World z of the door plane (front face of the cloud). */
-export const CLOUD_DOOR_Z = PROJECTS_CLOUD_Z - 21;
+export const CLOUD_DOOR_HALF = 3.6 * CLOUD_SCALE;
+/** Depth of the doorway tunnel cut through the shell (front face -> cut plane). */
+export const CLOUD_DOOR_CUT_DEPTH = 7.5 * CLOUD_SCALE;
+/** World z of the door plane, derived: 0.5u inside the shell's front face. */
+export const CLOUD_DOOR_Z = PROJECTS_CLOUD_Z - CLOUD_INTERIOR_R + 0.5;
+/** Scatter/sign keep-out margin beyond the collision radius. */
+export const CLOUD_KEEP_OUT_MARGIN = 6 * CLOUD_SCALE;
 /** Scatter/sign keep-out: nothing grows or stands this close to the cloud. */
 export function inProjectsCloudKeepOut(x: number, z: number): boolean {
-  return Math.hypot(x - PROJECTS_CLOUD_X, z - PROJECTS_CLOUD_Z) < CLOUD_R_EXT + 6;
+  return Math.hypot(x - PROJECTS_CLOUD_X, z - PROJECTS_CLOUD_Z) < CLOUD_R_EXT + CLOUD_KEEP_OUT_MARGIN;
 }
 
 // Analytic terrain height. The terrain mesh is DISPLACED from this function on
