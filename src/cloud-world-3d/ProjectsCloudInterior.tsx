@@ -363,10 +363,11 @@ export function ProjectsCloudInterior({
         vertexColors: true,
         roughness: 0.96,
         flatShading: false,
-        // DoubleSide: opaque from inside (the room's wall, and what hides the
-        // hollowed-out exterior lobes beyond it) and also visible from outside
-        // through the doorway cut.
-        side: THREE.DoubleSide,
+        // BackSide: from inside it renders the room's inner wall exactly like
+        // before; from outside its backface is culled so the (now solid)
+        // exterior cloud in ProjectsCloud shows instead of this shell's tan
+        // outer surface poking through the facade.
+        side: THREE.BackSide,
         // gentle self-lift so the interior reads warm cream under lantern light
         emissive: new THREE.Color('#4A3E30'),
         emissiveIntensity: 0.20,

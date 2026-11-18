@@ -11,11 +11,9 @@ import {
   CLOUD_DOOR_CUT_DEPTH,
   CLOUD_DOOR_HALF,
   CLOUD_INTERIOR_R,
-  CLOUD_INTERIOR_YSCALE,
   CLOUD_SCALE,
   CLOUD_SHELL_DOOR_HALF,
   CLOUD_SHELL_DOOR_TOP,
-  CLOUD_SHELL_Y,
   displacedSphereGeometry,
   mulberry32,
   terrainHeight,
@@ -101,18 +99,21 @@ function smax(a: number, b: number, k: number): number {
   return -smin(-a, -b, k);
 }
 
-// Signed distance to the hollow cloud body with the interior cavity and the
-// doorway corridor subtracted. All inputs are LOCAL units (world / CLOUD_SCALE).
+// Signed distance to the solid cloud body with the doorway corridor
+// subtracted. All inputs are LOCAL units (world / CLOUD_SCALE).
 function cloudBodySDF(x: number, y: number, z: number): number {
   const S = CLOUD_SCALE;
   const shellR = CLOUD_INTERIOR_R / S;
-  const shellY = CLOUD_SHELL_Y / S;
   let d = Infinity;
   for (const b of CLOUD_LOBES) {
     d = smin(d, ellipsoidSDF(x - b.x, y - b.y, z - b.z, b.r, b.r * b.sy, b.r), 1.2);
   }
-  // Hollow interior, matching ProjectsCloudInterior's shell.
-  d = smax(d, -ellipsoidSDF(x, y - shellY, z, shellR, shellR * CLOUD_INTERIOR_YSCALE, shellR), 0.8);
+  // NOTE: no interior-cavity subtraction here. The exterior cloud is a SOLID
+  // lobe union (the interior room is rendered by the shell mesh in
+  // ProjectsCloudInterior, which is what the player sees once inside). A
+  // cavity carve here would hollow the facade and let the shell's outer
+  // backface show through — that is what made the building read as a smooth
+  // tan mound instead of a fluffy white cloud.
   // Door corridor through the front (-z) face.
   const doorHalf = CLOUD_SHELL_DOOR_HALF / S;
   const doorTop = CLOUD_SHELL_DOOR_TOP / S;
@@ -403,7 +404,7 @@ export function ProjectsCloud({
       // lift so the cloud reads white/cream under the warm sunset sun
       // (reference artwork shows near-white clouds, not tan)
       emissive: new THREE.Color('#EEF2FF'),
-      emissiveIntensity: 0.5,
+      emissiveIntensity: 0.3,
     });
   }, []);
 
