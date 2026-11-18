@@ -43,7 +43,10 @@ const CLOUD_LOBES: CloudLobe[] = [
   { x: 13, y: 6, z: 0, r: 8.5, sy: 0.6 },
   { x: -8.5, y: 6.5, z: -7, r: 7.5, sy: 0.65 },
   { x: 8.5, y: 6.5, z: -7, r: 7.5, sy: 0.65 },
-  { x: 0, y: 6.5, z: -9, r: 8, sy: 0.6 }, // front base — frames the door
+  // front base — three bumps framing the door (scalloped front rim)
+  { x: -4.5, y: 6, z: -10, r: 5, sy: 0.7 },
+  { x: 0, y: 6.5, z: -11, r: 5.5, sy: 0.65 },
+  { x: 4.5, y: 6, z: -10, r: 5, sy: 0.7 },
   // ---- lower side bulges (wide facade) ----
   { x: -18, y: 10.5, z: -2, r: 8, sy: 0.75 },
   { x: 18, y: 10.5, z: -2, r: 8, sy: 0.75 },
@@ -394,13 +397,13 @@ export function ProjectsCloud({
       map: albedo,
       roughnessMap: rough,
       normalMap: normal,
-      normalScale: new THREE.Vector2(0.6, 0.6),
+      normalScale: new THREE.Vector2(1.0, 1.0),
       roughness: 0.92,
       metalness: 0.0,
-      // slight lift so the cloud reads white/cream under the warm sunset sun
+      // lift so the cloud reads white/cream under the warm sunset sun
       // (reference artwork shows near-white clouds, not tan)
-      emissive: new THREE.Color('#FFF6EA'),
-      emissiveIntensity: 0.22,
+      emissive: new THREE.Color('#EEF2FF'),
+      emissiveIntensity: 0.5,
     });
   }, []);
 
@@ -435,7 +438,7 @@ export function ProjectsCloud({
   const leafMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#4A7A33', roughness: 0.9 }), []);
   const doorTex = useMemo(generateDoorTexture, []);
   const doorMat = useMemo(() => new THREE.MeshStandardMaterial({ map: doorTex, roughness: 0.85 }), [doorTex]);
-  const knobMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#3A2E22', roughness: 0.35, metalness: 0.6 }), []);
+  const knobMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#C9A227', roughness: 0.3, metalness: 0.8 }), []);
   const rockGeo = useMemo(() => displacedSphereGeometry(1.2 * CLOUD_SCALE, 1, 0.28, 77), []);
   const doorLeafGeo = useMemo(
     () => roundedDoorLeafGeo(CLOUD_SHELL_DOOR_HALF - 0.2, CLOUD_SHELL_DOOR_TOP - 0.6),
@@ -527,10 +530,10 @@ export function ProjectsCloud({
 
       {/* Door frame: posts + arch, sized from the shared shell opening */}
       <mesh castShadow material={frameMat} position={[-(CLOUD_SHELL_DOOR_HALF + 0.9), CLOUD_SHELL_DOOR_TOP / 2, doorZ]}>
-        <boxGeometry args={[1.0, CLOUD_SHELL_DOOR_TOP + 1.0, 1.0]} />
+        <boxGeometry args={[0.6, CLOUD_SHELL_DOOR_TOP + 1.0, 0.8]} />
       </mesh>
       <mesh castShadow material={frameMat} position={[CLOUD_SHELL_DOOR_HALF + 0.9, CLOUD_SHELL_DOOR_TOP / 2, doorZ]}>
-        <boxGeometry args={[1.0, CLOUD_SHELL_DOOR_TOP + 1.0, 1.0]} />
+        <boxGeometry args={[0.6, CLOUD_SHELL_DOOR_TOP + 1.0, 0.8]} />
       </mesh>
       <mesh castShadow material={frameMat} position={[0, CLOUD_SHELL_DOOR_TOP - (CLOUD_SHELL_DOOR_HALF + 0.2), doorZ]}>
         <torusGeometry args={[CLOUD_SHELL_DOOR_HALF + 0.2, 0.38 * S, 12, 28, Math.PI]} />
@@ -553,8 +556,8 @@ export function ProjectsCloud({
           <group key={side} ref={side < 0 ? doorPivotLRef : doorPivotRRef} position={[side * leafW, 0, doorZ]}>
             <mesh castShadow material={doorMat} geometry={doorLeafGeo} position={[-side * leafW / 2, 0, 0.25]} />
             {side === 1 && (
-              <mesh material={knobMat} position={[-1.0, CLOUD_SHELL_DOOR_TOP * 0.5, 0.85]}>
-                <sphereGeometry args={[0.42 * S, 10, 8]} />
+              <mesh material={knobMat} position={[-1.0, CLOUD_SHELL_DOOR_TOP * 0.5, 0.95]}>
+                <sphereGeometry args={[0.5 * S, 12, 10]} />
               </mesh>
             )}
           </group>
