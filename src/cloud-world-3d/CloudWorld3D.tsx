@@ -181,9 +181,16 @@ function CameraTargetRig({
     const qaCam = typeof window !== 'undefined' ? (window as any).__cwQaCam : undefined;
     if (qaCam) {
       const cam = controls.object as THREE.Camera;
+      // A pinned QA pose may legitimately sit outside the gameplay orbit
+      // radius; lift maxDistance for this update so OrbitControls does not
+      // clamp the pose back inside the cloud shell.
+      const ud = (controls.userData ??= {} as any);
+      if (ud.qaMaxDist == null) ud.qaMaxDist = controls.maxDistance;
+      controls.maxDistance = 1e7;
       cam.position.set(qaCam.pos[0], qaCam.pos[1], qaCam.pos[2]);
       controls.target.set(qaCam.target[0], qaCam.target[1], qaCam.target[2]);
       controls.update();
+      controls.maxDistance = ud.qaMaxDist;
       return;
     }
     desired.copy(charPos);
