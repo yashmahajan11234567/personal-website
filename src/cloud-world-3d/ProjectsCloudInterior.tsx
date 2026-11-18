@@ -32,9 +32,10 @@ import { PORTFOLIO, projectsForWorld } from '../content';
 //   • A real opening is CUT through the shell at the door, framed by a
 //     cream entrance tunnel (side jambs + lintel) that hides the cut
 //     edges — the doorway is walkable and visible from inside.
-//   • Displays sit at r≈16 (inside the player's 17u walkable radius) so
-//     every project can be walked up to; the shell keeps ~5u of clear
-//     space behind them.
+//   • Displays sit in a centered horizontal row on the BACK wall (+z,
+//     opposite the door) so the player walks up to them from the entrance.
+//     The layout is data-driven and scales to 5–8 projects without
+//     touching the room geometry.
 //   • Decoration is pushed to the perimeter; the centre of the room is
 //     empty walking space.
 // ============================================================
@@ -460,26 +461,31 @@ export function ProjectsCloudInterior({
 
   const projects = projectsForWorld('cloud');
   const displayData = useMemo(() => {
-    const ringRadii = [16, 30, 42].map(r => r * S);
-    const minSpacing = 8 * S;
+    // Back wall (+z, opposite the door at -z): a centered row of displays,
+    // data-driven so 5–8 projects fit without rebuilding room geometry.
+    // Rows are added toward the room center only if one row would crowd
+    // (monitor hit box is 6.4 wide, so spacing below ~8 overlaps).
+    const zRow = CLOUD_R_INT - 3.2; // walk-up distance from the room center
+    const wallHalfAt = (z: number) =>
+      Math.sqrt(Math.max(1, CLOUD_INTERIOR_R * CLOUD_INTERIOR_R - z * z)) - 3.5;
+    const n = projects.length;
+    const perRow = Math.max(1, Math.min(n, Math.floor((wallHalfAt(zRow) * 2) / 8.0) + 1));
     const positions: [number, number, number][] = [];
-    for (const ringR of ringRadii) {
-      const capacity = Math.max(1, Math.floor(2 * Math.PI * ringR / minSpacing));
-      const take = Math.min(capacity, projects.length - positions.length);
-      for (let i = 0; i < take; i++) {
-        const angle = -Math.PI / 2 + (i / take) * Math.PI * 2;
-        const x = ringR * Math.cos(angle);
-        const z = ringR * Math.sin(angle);
-        positions.push([x, z, angle + Math.PI]);
+    for (let row = 0; row * perRow < n; row++) {
+      const zR = zRow - row * 8.5;
+      const count = Math.min(perRow, n - row * perRow);
+      const step = count > 1 ? Math.min(9.2, (wallHalfAt(zR) * 2) / (count - 1)) : 0;
+      for (let i = 0; i < count; i++) {
+        // rotation π faces the screen toward -z (the door / player camera)
+        positions.push([(i - (count - 1) / 2) * step, zR, Math.PI]);
       }
-      if (positions.length >= projects.length) break;
     }
     return projects.map((p, i) => {
       const meta = projectMeta[p.id] ?? { short: p.title.split(' ')[0], icon: 'server' as const };
-      const pos = positions[i] ?? [0, 0, Math.PI];
+      const pos = positions[i] ?? [0, zRow, Math.PI];
       return { id: p.id, short: meta.short, icon: meta.icon, position: pos };
     });
-  }, [S]);
+  }, []);
 
   // QA mirror
   if (typeof window !== 'undefined') {
@@ -520,8 +526,8 @@ export function ProjectsCloudInterior({
             <mesh material={inlayMat} position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
               <ringGeometry args={[(9.5 / 20.5) * floorR, (11.0 / 20.5) * floorR, 64]} />
             </mesh>
-            {/* round rug in the centre */}
-            <mesh material={rugMat} position={[0, 0.05, 2.0 * CLOUD_SCALE]} rotation={[-Math.PI / 2, 0, 0]}>
+            {/* round rug — the circular central floor decoration */}
+            <mesh material={rugMat} position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]}>
               <circleGeometry args={[6.0 * CLOUD_SCALE, 48]} />
             </mesh>
           </>
@@ -557,13 +563,17 @@ export function ProjectsCloudInterior({
           <pointLight position={[0, 0, 0]} color="#FFB45E" intensity={24} distance={32} decay={2} />
         </group>
       ))}
-      {/* warm perimeter fill lights so walls/floor transitions stay readable */}
+      {/* warm perimeter fill lights so walls/floor transitions stay readable.
+          Radius/height are derived from the shell so they stay INSIDE the room
+          at any CLOUD_SCALE (a hardcoded r=32 escapes the shell below S≈1.49). */}
       {[45, 135, 225, 315].map((deg) => {
         const a = (deg * Math.PI) / 180;
+        const fillR = 0.62 * CLOUD_INTERIOR_R;
+        const fillY = 0.45 * CLOUD_INTERIOR_R * CLOUD_INTERIOR_YSCALE;
         return (
           <pointLight
             key={`fill-${deg}`}
-            position={[32 * Math.cos(a), 20, 32 * Math.sin(a)]}
+            position={[fillR * Math.cos(a), fillY, fillR * Math.sin(a)]}
             color="#FFD9B0"
             intensity={18}
             distance={48}

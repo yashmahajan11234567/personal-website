@@ -9,43 +9,51 @@ import {
   PROJECTS_CLOUD_Z,
   CLOUD_DOOR_Z,
   CLOUD_DOOR_CUT_DEPTH,
+  CLOUD_DOOR_HALF,
   CLOUD_INTERIOR_R,
   CLOUD_INTERIOR_YSCALE,
   CLOUD_SCALE,
   CLOUD_SHELL_DOOR_HALF,
   CLOUD_SHELL_DOOR_TOP,
   CLOUD_SHELL_Y,
+  displacedSphereGeometry,
+  mulberry32,
   terrainHeight,
 } from './world';
 
 // ============================================================
-// ProjectsCloud — the giant enterable cloud building.
+// ProjectsCloud — the medium enterable cloud building.
 // Exterior: smooth metaball surface via MarchingCubes.
-// Interior doorway, sign, lanterns, steps, cobble, plants preserved.
-// All architecture derived from CLOUD_SCALE (≈2.5×).
+// Double wooden door, sign, lanterns, steps, cobble, plants,
+// rocks/flowers around the base — all preserved.
+// All architecture derived from CLOUD_SCALE.
 // ============================================================
 
 // Cloud lobes in LOCAL units (multiplied by CLOUD_SCALE on the mesh).
-// This list is the audited ~55.6 × 35.6 × 45.2 silhouette; smooth-union SDF
-// blends it into one continuous fluffy surface instead of intersecting balls.
+// Reference silhouette: one cohesive wide base, rounded side formations,
+// and a large central upper cloud — the smooth-union SDF blends the lobes
+// into a single continuous fluffy surface instead of intersecting balls.
 type CloudLobe = { x: number; y: number; z: number; r: number; sy: number };
 const CLOUD_LOBES: CloudLobe[] = [
-  { x: -8, y: 7.5, z: 5, r: 17, sy: 0.6 },
-  { x: 8, y: 7.5, z: 5, r: 17, sy: 0.6 },
-  { x: -14, y: 11, z: 3, r: 12, sy: 0.85 },
-  { x: 14, y: 11, z: -3, r: 12, sy: 0.85 },
-  { x: -8, y: 17, z: -3, r: 10, sy: 0.9 },
-  { x: 8, y: 17, z: 3, r: 10, sy: 0.9 },
-  { x: 0, y: 23.5, z: 0, r: 9.5, sy: 0.9 },
-  { x: -19, y: 8, z: -5, r: 8.5, sy: 0.8 },
-  { x: 19, y: 8, z: 5, r: 8.5, sy: 0.8 },
-  { x: 0, y: 13, z: 10, r: 11, sy: 0.8 },
-  { x: -10, y: 14.5, z: -8, r: 7.5, sy: 0.9 },
-  { x: 10, y: 14.5, z: 8, r: 7.5, sy: 0.9 },
-  { x: -11, y: 8, z: -13, r: 9, sy: 0.75 },
-  { x: 11, y: 8, z: -13, r: 9, sy: 0.75 },
-  { x: -13, y: 8, z: -13, r: 9.5, sy: 0.8 },
-  { x: 13, y: 8, z: -13, r: 9.5, sy: 0.8 },
+  // cohesive wide base — one low rounded mass, not separate balls
+  { x: 0, y: 4.5, z: 1, r: 17, sy: 0.42 },
+  { x: -15, y: 6, z: -1, r: 9, sy: 0.65 },
+  { x: 15, y: 6, z: -1, r: 9, sy: 0.65 },
+  { x: -10, y: 7, z: -8, r: 8.5, sy: 0.7 },
+  { x: 10, y: 7, z: -8, r: 8.5, sy: 0.7 },
+  { x: 0, y: 7.5, z: -10, r: 9, sy: 0.65 },
+  // rounded side formations
+  { x: -12, y: 13, z: 2, r: 9.5, sy: 0.85 },
+  { x: 12, y: 13, z: 2, r: 9.5, sy: 0.85 },
+  { x: -18, y: 11, z: -4, r: 7.5, sy: 0.8 },
+  { x: 18, y: 11, z: -4, r: 7.5, sy: 0.8 },
+  { x: -7, y: 15, z: -5, r: 7.5, sy: 0.85 },
+  { x: 7, y: 15, z: -5, r: 7.5, sy: 0.85 },
+  // large central upper cloud + crown tuft
+  { x: 0, y: 20, z: 0, r: 11, sy: 0.95 },
+  { x: -5.5, y: 16.5, z: 1, r: 8, sy: 0.9 },
+  { x: 5.5, y: 16.5, z: 1, r: 8, sy: 0.9 },
+  { x: 0, y: 27.5, z: -1, r: 6.5, sy: 0.9 },
 ];
 
 // Sampling domain in local units. MarchingCubes vertices live in normalized
@@ -248,6 +256,30 @@ function buildSignTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+// Rounded-top (arched) door leaf profile, extruded to thickness — the
+// reference double door has softly rounded leaf tops, not flat boxes.
+function roundedDoorLeafGeo(w: number, h: number): THREE.BufferGeometry {
+  const r = w / 2;
+  const s = new THREE.Shape();
+  s.moveTo(-r, 0);
+  s.lineTo(-r, h - r);
+  s.absarc(0, h - r, r, Math.PI, 0, true);
+  s.lineTo(r, 0);
+  s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, {
+    depth: 0.9,
+    bevelEnabled: true,
+    bevelThickness: 0.08,
+    bevelSize: 0.08,
+    bevelSegments: 3,
+    steps: 1,
+  });
+  g.translate(0, 0, -0.45);
+  return g;
+}
+
+const FLOWER_COLORS = ['#FF8FB1', '#FFD166', '#FFFFFF', '#C77DFF'];
+
 export function ProjectsCloud({
   insideRef,
   avatarPosRef,
@@ -353,11 +385,32 @@ export function ProjectsCloud({
     [],
   );
   const signTex = useMemo(buildSignTexture, []);
+  const leafMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#4A7A33', roughness: 0.9 }), []);
+  const rockGeo = useMemo(() => displacedSphereGeometry(1.2 * CLOUD_SCALE, 1, 0.28, 77), []);
+  const doorLeafGeo = useMemo(
+    () => roundedDoorLeafGeo(CLOUD_SHELL_DOOR_HALF - 0.2, CLOUD_SHELL_DOOR_TOP - 0.6),
+    [],
+  );
+  // Deterministic scatter of rocks/bushes/flowers around the base front arc.
+  const baseDecor = useMemo(() => {
+    const rnd = mulberry32(4242);
+    const r = 20.5 * S;
+    const items: { x: number; z: number; kind: number; s: number; c: number }[] = [];
+    for (let i = 0; i < 16; i++) {
+      const a = -Math.PI * (0.16 + rnd() * 0.68); // front arc — the door faces -z
+      const x = Math.cos(a) * r * (0.92 + rnd() * 0.22);
+      const z = Math.sin(a) * r * (0.92 + rnd() * 0.22);
+      if (Math.abs(x) < CLOUD_DOOR_HALF + 2.4) continue; // keep the entrance walkway clear
+      items.push({ x, z, kind: Math.floor(rnd() * 3), s: 0.7 + rnd() * 0.9, c: Math.floor(rnd() * 4) });
+    }
+    return items;
+  }, [S]);
   const signTitleMat = useMemo(() => new THREE.MeshBasicMaterial({ map: signTex }), [signTex]);
   const doorwayMat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#241812' }), []);
 
-  // ---- Door swing logic (same as before, scaled positions) ----
-  const doorPivotRef = useRef<THREE.Group>(null);
+  // ---- Door swing logic — double door, both leaves swing together ----
+  const doorPivotLRef = useRef<THREE.Group>(null);
+  const doorPivotRRef = useRef<THREE.Group>(null);
   const doorwayRef = useRef<THREE.Mesh>(null);
   useFrame((_, delta) => {
     const avatar = avatarPosRef.current;
@@ -367,10 +420,11 @@ export function ProjectsCloud({
       const d = Math.hypot(avatar.x - PROJECTS_CLOUD_X, avatar.z - CLOUD_DOOR_Z);
       if (d < 7 * S) open = true;
     }
-    if (doorPivotRef.current) {
+    if (doorPivotLRef.current && doorPivotRRef.current) {
       const target = open ? -1.75 : 0;
       const k = 1 - Math.exp(-6 * Math.min(delta, 1 / 30));
-      doorPivotRef.current.rotation.y += (target - doorPivotRef.current.rotation.y) * k;
+      doorPivotLRef.current.rotation.y += (target - doorPivotLRef.current.rotation.y) * k;
+      doorPivotRRef.current.rotation.y += (-target - doorPivotRRef.current.rotation.y) * k;
     }
     if (doorwayRef.current) doorwayRef.current.visible = !inside;
     // lantern pulse — never fully dark
@@ -407,6 +461,9 @@ export function ProjectsCloud({
       signTex.dispose();
       signTitleMat.dispose();
       doorwayMat.dispose();
+      leafMat.dispose();
+      rockGeo.dispose();
+      doorLeafGeo.dispose();
     };
   }, []);
 
@@ -434,30 +491,34 @@ export function ProjectsCloud({
       {/* Warm glow at threshold */}
       <pointLight position={[0, 6, doorZ + 3 * S]} color="#FFB45E" intensity={16 * S} distance={22 * S} decay={2} />
 
-      {/* Swinging door slab, pivoted on the left post */}
-      <group ref={doorPivotRef} position={[-(CLOUD_SHELL_DOOR_HALF - 0.2), 0, doorZ]}>
-        <mesh castShadow material={woodMat} position={[CLOUD_SHELL_DOOR_HALF - 0.2, CLOUD_SHELL_DOOR_TOP / 2, 0.25]}>
-          <boxGeometry args={[(CLOUD_SHELL_DOOR_HALF - 0.2) * 2, CLOUD_SHELL_DOOR_TOP - 0.6, 0.9]} />
-        </mesh>
-        <mesh material={frameMat} position={[CLOUD_SHELL_DOOR_HALF - 0.2, CLOUD_SHELL_DOOR_TOP * 0.68, 0.74]}>
-          <boxGeometry args={[(CLOUD_SHELL_DOOR_HALF - 0.2) * 1.35, CLOUD_SHELL_DOOR_TOP * 0.22, 0.12]} />
-        </mesh>
-        <mesh material={frameMat} position={[CLOUD_SHELL_DOOR_HALF - 0.2, CLOUD_SHELL_DOOR_TOP * 0.28, 0.74]}>
-          <boxGeometry args={[(CLOUD_SHELL_DOOR_HALF - 0.2) * 1.35, CLOUD_SHELL_DOOR_TOP * 0.20, 0.12]} />
-        </mesh>
-      </group>
+      {/* Swinging double door — two rounded-top wooden leaves on opposite jambs.
+          The leaf shape is x-symmetric, so no mirroring is needed: each leaf
+          just sits on the inner side of its pivot. */}
+      {[-1, 1].map((side) => {
+        const leafW = CLOUD_SHELL_DOOR_HALF - 0.2;
+        return (
+          <group key={side} ref={side < 0 ? doorPivotLRef : doorPivotRRef} position={[side * leafW, 0, doorZ]}>
+            <mesh castShadow material={woodMat} geometry={doorLeafGeo} position={[-side * leafW / 2, 0, 0.25]} />
+            <mesh material={frameMat} position={[-side * leafW / 2, CLOUD_SHELL_DOOR_TOP * 0.66, 0.74]}>
+              <boxGeometry args={[leafW * 0.68, CLOUD_SHELL_DOOR_TOP * 0.2, 0.1]} />
+            </mesh>
+            <mesh material={frameMat} position={[-side * leafW / 2, CLOUD_SHELL_DOOR_TOP * 0.28, 0.74]}>
+              <boxGeometry args={[leafW * 0.68, CLOUD_SHELL_DOOR_TOP * 0.18, 0.1]} />
+            </mesh>
+          </group>
+        );
+      })}
 
-      {/* Stone steps + cobble entrance path (scaled) */}
+      {/* Wooden steps + cobble entrance path (scaled) */}
       {[0, 1, 2].map((i) => (
         <mesh
           key={`step-${i}`}
           castShadow
           receiveShadow
-          material={stoneMat}
-          position={[0, 0.12 * S - i * 0.05 * S, doorZ - 1.1 * S - i * 1.3 * S]}
-          scale={[1 + i * 0.16, 1, 1]}
+          material={woodMat}
+          position={[0, 0.10 * S - i * 0.07 * S, doorZ - 1.2 * S - i * 1.5 * S]}
         >
-          <cylinderGeometry args={[4.4 * S, 4.7 * S, 0.3 * S, 16]} />
+          <boxGeometry args={[9.0 * S + i * 1.8 * S, 0.34 * S, 1.7 * S]} />
         </mesh>
       ))}
       {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
@@ -537,11 +598,48 @@ export function ProjectsCloud({
           <mesh castShadow material={frameMat}>
             <cylinderGeometry args={[0.8 * S, 0.68 * S, 1.0 * S, 10]} />
           </mesh>
-          <mesh castShadow position={[0, 2.0 * S, 0]} material={new THREE.MeshStandardMaterial({ color: '#4A7A33', roughness: 0.9 })}>
+          <mesh castShadow position={[0, 2.0 * S, 0]} material={leafMat}>
             <icosahedronGeometry args={[1.35 * S, 1]} />
           </mesh>
         </group>
       ))}
+
+      {/* Rocks, bushes and flower clusters scattered around the base (front arc) */}
+      {baseDecor.map((it, i) => {
+        if (it.kind === 0)
+          return (
+            <mesh
+              key={i}
+              castShadow
+              receiveShadow
+              material={stoneMat}
+              geometry={rockGeo}
+              position={[it.x, 0.3 * S * it.s, it.z]}
+              scale={[it.s, it.s * 0.72, it.s]}
+            />
+          );
+        if (it.kind === 1)
+          return (
+            <mesh key={i} castShadow material={leafMat} position={[it.x, 0.85 * S * it.s, it.z]} scale={[it.s, it.s * 0.8, it.s]}>
+              <icosahedronGeometry args={[1.1 * S, 1]} />
+            </mesh>
+          );
+        return (
+          <group key={i} position={[it.x, 0, it.z]}>
+            {([0, 1, 2] as const).map((f) => (
+              <group key={f} position={[(f - 1) * 0.5 * S * it.s, 0, (f % 2 - 0.5) * 0.4 * S]}>
+                <mesh material={leafMat} position={[0, 0.28 * S, 0]}>
+                  <cylinderGeometry args={[0.035 * S, 0.05 * S, 0.56 * S, 6]} />
+                </mesh>
+                <mesh position={[0, 0.62 * S, 0]}>
+                  <sphereGeometry args={[0.18 * S * it.s, 8, 6]} />
+                  <meshStandardMaterial color={FLOWER_COLORS[it.c]} roughness={0.55} />
+                </mesh>
+              </group>
+            ))}
+          </group>
+        );
+      })}
     </group>
   );
 }

@@ -36,13 +36,13 @@ export function pathHalfWidth(z: number): number {
 // and every scatter/sign keep-out. The giant cloud building
 // sits on the path where the old mountain destination was.
 //
-// 2026-11-18 redesign: the building was enlarged ~2.5x. All
-// dimensions derive from CLOUD_SCALE so exterior, interior,
+// 2026-11-18 redesign: medium-sized building (reference-matched).
+// All dimensions derive from CLOUD_SCALE so exterior, interior,
 // doorway, collision and camera stay consistent. The door plane
 // is DERIVED from the interior shell radius (it used to be a
 // hardcoded z-offset that silently assumed R=21.5).
 // ============================================================
-export const CLOUD_SCALE = 2.5;
+export const CLOUD_SCALE = 1.4;
 export const PROJECTS_CLOUD_Z = 170;
 export const PROJECTS_CLOUD_X = pathCenterX(PROJECTS_CLOUD_Z);
 /** Exterior collision radius (world units) around the cloud center. */
@@ -132,7 +132,7 @@ export function terrainColorAt(x: number, z: number, h: number, out: THREE.Color
   // Path paint with a slightly darker trodden rim just outside the sand.
   const edge = smoothstep(halfW + 1.6, halfW - 0.4, d);
   TMP.copy(SAND);
-  if (z > 168) TMP.lerp(SAND_WARM, smoothstep(168, 215, z));
+  if (z > PROJECTS_CLOUD_Z - 2) TMP.lerp(SAND_WARM, smoothstep(PROJECTS_CLOUD_Z - 2, PROJECTS_CLOUD_Z + 45, z));
   out.lerp(TMP, edge);
   // Trodden rim: narrow band at the path edge — darkened 0.08 → 0.2 in the
   // polish pass so the path edge reads as a defined border, not a hard seam.
@@ -141,7 +141,7 @@ export function terrainColorAt(x: number, z: number, h: number, out: THREE.Color
 
   const mountainBlend = 1 - smoothstep(-95, -70, z);
   out.lerp(ROCKY, mountainBlend * 0.75);
-  out.lerp(SAND_WARM, smoothstep(180, 235, z) * 0.55);
+  out.lerp(SAND_WARM, smoothstep(PROJECTS_CLOUD_Z + 10, PROJECTS_CLOUD_Z + CLOUD_R_EXT, z) * 0.55);
 
   // Macro color patches: two very-low-frequency HSL terms (wavelength ~40u)
   // so the meadow reads as patched, not uniform. Amplitudes raised 2026-10-20
