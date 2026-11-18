@@ -128,7 +128,24 @@ interface StationView {
   sprite: Phaser.GameObjects.Image;
   /** Whether the station is currently lit. */
   lit: boolean;
+  /**
+   * True when the station uses a loaded PNG pair (skills Stage K, projects
+   * Layer 3) whose transparent bottom pad must be compensated so the sprite's
+   * VISIBLE bottom rests on the floor line instead of hovering.
+   */
+  pngGrounded: boolean;
 }
+
+/**
+ * Maps project station ids to the extracted hologram folder slug under
+ * `public/assets/data-world/core/projects/` (see ASSET_MANIFEST.md there).
+ */
+const CORE_HOLO_SLUG: Record<string, string> = {
+  'nifty100-financial-analysis': 'nifty100',
+  'sql-data-warehouse': 'sql-warehouse',
+  primetradeai: 'primetradeai',
+  'data-analytics-dashboards': 'dashboards',
+};
 
 export class WorldScene extends Phaser.Scene {
   /**
@@ -414,6 +431,27 @@ export class WorldScene extends Phaser.Scene {
       'util-vent', 'util-support', 'util-pipe-v', 'util-pipe-h',
     ]) {
       this.load.image(`skills-${piece}`, `/assets/data-world/skills-${piece}.png`);
+    }
+    // Projects chapter (Layer 3, Core): one animated return portal (8 frames
+    // extracted from the supplied GIF), four hologram idle/hover pairs cropped
+    // from the supplied sheet, and the modular platform kit pieces.
+    // See public/assets/data-world/core/ASSET_MANIFEST.md.
+    for (let i = 0; i < 8; i++) {
+      this.load.image(`core-portal-return-f${i}`, `/assets/data-world/core/portals/skills-return/f${i}.png`);
+    }
+    const CORE_HOLO_SLUGS: Record<string, string> = CORE_HOLO_SLUG;
+    for (const slug of Object.values(CORE_HOLO_SLUGS)) {
+      this.load.image(`core-holo-${slug}`, `/assets/data-world/core/projects/${slug}/idle.png`);
+      this.load.image(`core-holo-${slug}-lit`, `/assets/data-world/core/projects/${slug}/hover.png`);
+    }
+    for (const piece of ['slab-1', 'slab-2', 'slab-3', 'slab-4', 'grate-1', 'grate-2']) {
+      this.load.image(`core-floor-${piece}`, `/assets/data-world/core/platform/floor/${piece}.png`);
+    }
+    for (const piece of ['pillar-1', 'pillar-2', 'pillar-3']) {
+      this.load.image(`core-structure-${piece}`, `/assets/data-world/core/platform/structures/${piece}.png`);
+    }
+    for (const piece of ['rack-1', 'rack-2', 'accent-1', 'accent-2']) {
+      this.load.image(`core-deco-${piece}`, `/assets/data-world/core/platform/decorations/${piece}.png`);
     }
   }
 
@@ -854,7 +892,7 @@ export class WorldScene extends Phaser.Scene {
     // Platform ledges: physics bodies stay EXACTLY as configured (Phase 1 contracts).
     // Visuals: on cliff, we use the platform artwork asset instead of individual ledge rects;
     // on skills, the tileset ledge pieces replace them the same way.
-    const artCoveredLedges = isCliff || world.chapter === 'skills';
+    const artCoveredLedges = isCliff || world.chapter === 'skills' || world.chapter === 'projects';
     for (const p of world.platforms) {
       const rect = this.add.rectangle(
         p.x + p.width / 2,
@@ -886,6 +924,11 @@ export class WorldScene extends Phaser.Scene {
       // Skills (Stage K): modular tileset ground + ledge platforms + utilities
       // + the two animated portals.
       this.buildSkillsArtwork();
+    } else if (world.chapter === 'projects') {
+      // Projects (Layer 3, Core): kit-built continuous floor + supports + decor,
+      // the single far-left animated return portal, and (via buildStations)
+      // the four hologram pairs.
+      this.buildProjectsArtwork();
     }
   }
 
@@ -1118,6 +1161,142 @@ export class WorldScene extends Phaser.Scene {
     portal('skills-portal-forward', 1350, 0.5, 180); // exit trigger x=1350
   }
 
+  /**
+   * Build the Projects (Layer 3, Core) visuals from the supplied kit assets.
+   * Physics bodies are created separately in buildTerrain() and are unchanged;
+   * this only adds visuals on top.
+   *
+   * Placement contract (world 1500x900, groundY 560) — see
+   * public/assets/data-world/core/ASSET_MANIFEST.md for the full manifest:
+   *
+   *  - Floor: the four kit slabs are assembled EDGE-TO-EDGE at ONE uniform
+   *    scale (1500 / 1653 source px) with their top edge at groundY, exactly
+   *    like the skills tileset — never one piece stretched. The slab top edge
+   *    is the authored walk surface, so the artwork surface line and the
+   *    collision line (groundY) coincide.
+   *  - Supports: three pillar pieces hang BELOW the floor line (top at
+   *    groundY+100, depth 1) so they read as structure underneath, peeking
+   *    through the slabs' transparent bottom rows.
+   *  - Floor panels / racks / accents: grounded by OPAQUE bounds (same rule as
+   *    stations and portals) at depth 2, placed in the gaps so they never
+   *    cover a hologram (stations render at depth 6, in front).
+   *  - Portal: the single animated Skills-return vortex, origin (0,1) at
+   *    x=0, 180x180, depth 3 -> art spans 0..180. Its visible opening
+   *    (display x ~35.7..143.4, measured from the dark-core bbox 88..353 of
+   *    the 443px frame) CONTAINS the trigger arm zone 38..82 of the
+   *    projects-entry pipe at x=60, so the player fires the return while
+   *    standing inside the glowing opening. Spawn x=144 sits outside the near
+   *    zone (8..112), so arrival never re-triggers. Grounded by opaque bounds
+   *    + 3px overlap, so the portal's mechanical base presses into the floor
+   *    instead of hovering. 8 frames at 10 fps = 0.8 s loop; reduced motion
+   *    keeps frame 0 static.
+   */
+  private buildProjectsArtwork(): void {
+    const world = this.world;
+    const srcSize = (key: string): { w: number; h: number } | null => {
+      if (!this.textures.exists(key)) return null;
+      const img = this.textures.get(key).getSourceImage() as { width: number; height: number } | null;
+      return img ? { w: img.width, h: img.height } : null;
+    };
+    const groundedY = (key: string, dispH: number): number =>
+      world.groundY + this.textureBottomPad(key) * dispH + GROUND_OVERLAP_PX;
+
+    // --- Continuous floor: 4 slabs edge-to-edge at one uniform scale ---
+    const slabKeys = ['core-floor-slab-1', 'core-floor-slab-2', 'core-floor-slab-3', 'core-floor-slab-4'];
+    const slabSrc = slabKeys.map((k) => srcSize(k));
+    const totalSrcW = slabSrc.reduce((s, d) => s + (d?.w ?? 0), 0);
+    if (totalSrcW > 0) {
+      const scale = world.width / totalSrcW;
+      let x = 0;
+      slabKeys.forEach((key, i) => {
+        const d = slabSrc[i];
+        if (!d) return;
+        const w = d.w * scale;
+        const h = d.h * scale;
+        // Top edge at groundY: the slab's authored top row is the walk surface.
+        this.add.image(x, world.groundY, key).setOrigin(0, 0).setDisplaySize(w, h).setDepth(2);
+        x += w;
+      });
+    }
+
+    // --- Support pillars hanging below the floor (depth 1, behind the slabs) ---
+    const pillars: Array<{ key: string; x: number }> = [
+      { key: 'core-structure-pillar-1', x: 300 },
+      { key: 'core-structure-pillar-2', x: 750 },
+      { key: 'core-structure-pillar-3', x: 1200 },
+    ];
+    for (const p of pillars) {
+      const d = srcSize(p.key);
+      if (!d) continue;
+      const s = 0.8;
+      this.add
+        .image(p.x, world.groundY + 100, p.key)
+        .setOrigin(0.5, 0)
+        .setDisplaySize(d.w * s, d.h * s)
+        .setDepth(1);
+    }
+
+    // --- Floor grate panels set into the walk surface (top at groundY) ---
+    const grates: Array<{ key: string; x: number }> = [
+      { key: 'core-floor-grate-1', x: 250 },
+      { key: 'core-floor-grate-2', x: 760 },
+    ];
+    for (const g of grates) {
+      const d = srcSize(g.key);
+      if (!d) continue;
+      const s = 0.5;
+      this.add.image(g.x, world.groundY, g.key).setOrigin(0, 0).setDisplaySize(d.w * s, d.h * s).setDepth(2);
+    }
+
+    // --- Decor: racks and accents, grounded by opaque bounds, behind stations ---
+    const decor: Array<{ key: string; x: number; s: number }> = [
+      { key: 'core-deco-rack-1', x: 210, s: 0.55 },
+      { key: 'core-deco-rack-2', x: 1370, s: 0.55 },
+      { key: 'core-deco-accent-1', x: 560, s: 0.4 },
+      { key: 'core-deco-accent-2', x: 1060, s: 0.4 },
+    ];
+    for (const u of decor) {
+      const d = srcSize(u.key);
+      if (!d) continue;
+      const dispW = d.w * u.s;
+      const dispH = d.h * u.s;
+      this.add
+        .image(u.x, groundedY(u.key, dispH), u.key)
+        .setOrigin(0.5, 1)
+        .setDisplaySize(dispW, dispH)
+        .setDepth(2);
+    }
+
+    // --- The single return portal: far left, grounded, in front of the floor ---
+    const prefix = 'core-portal-return';
+    const d0 = srcSize(`${prefix}-f0`);
+    if (d0) {
+      const dispW = 180;
+      const dispH = d0.h * (dispW / d0.w);
+      const yFor = (key: string): number => groundedY(key, dispH);
+      const sprite = this.add
+        .sprite(0, yFor(`${prefix}-f0`), `${prefix}-f0`)
+        .setOrigin(0, 1) // art spans x 0..180; opening covers the arm zone 38..82 of the trigger at x=60
+        .setDisplaySize(dispW, dispH)
+        .setDepth(3);
+      sprite.on('animationupdate', () => {
+        const key = sprite.texture?.key ?? `${prefix}-f0`;
+        sprite.setY(yFor(key));
+      });
+      const animKey = `${prefix}-anim`;
+      if (!this.anims.exists(animKey)) {
+        this.anims.create({
+          key: animKey,
+          frames: Array.from({ length: 8 }, (_, i) => ({ key: `${prefix}-f${i}` })),
+          frameRate: 10, // 8 frames at 10 fps = 0.8 s per loop, same as the skills portals
+          repeat: -1,
+        });
+      }
+      if (!this.reducedMotion) sprite.play(animKey);
+      // Reduced motion: the sprite stays on frame 0 — a static portal.
+    }
+  }
+
   private buildPlayer(): void {
     const world = this.world;
 
@@ -1206,12 +1385,18 @@ export class WorldScene extends Phaser.Scene {
     for (const station of world.stations) {
       const keyBase = `station-${station.kind}-${station.id}`;
       // Stage K: on the skills chapter use the supplied per-skill PNG pair when
-      // present; the procedural canvas below stays as the missing-asset
-      // fallback so a missing file can never soft-lock the chapter.
-      const pngIdle = `skills-station-${station.id}`;
+      // present; Layer 3: on the projects chapter use the extracted hologram
+      // pair. The procedural canvas below stays as the missing-asset fallback
+      // so a missing file can never soft-lock the chapter.
+      const pngIdle =
+        world.chapter === 'projects' && station.kind === 'project'
+          ? `core-holo-${CORE_HOLO_SLUG[station.id] ?? station.id}`
+          : `skills-station-${station.id}`;
       const pngLit = `${pngIdle}-lit`;
       const usePng =
-        world.chapter === 'skills' && this.textures.exists(pngIdle) && this.textures.exists(pngLit);
+        (world.chapter === 'skills' || world.chapter === 'projects') &&
+        this.textures.exists(pngIdle) &&
+        this.textures.exists(pngLit);
       const idleKey = usePng ? pngIdle : `${keyBase}-idle`;
       const litKey = usePng ? pngLit : `${keyBase}-lit`;
 
@@ -1258,6 +1443,21 @@ export class WorldScene extends Phaser.Scene {
         // The rect hitbox moves with the sprite and stays a plain rectangle —
         // independent of the alpha silhouette.
         sprite.setY(station.y + this.textureBottomPad(idleKey) * 104 + GROUND_OVERLAP_PX);
+      }
+
+      // Layer 3 holograms: display 220px wide with the aspect preserved from
+      // the extracted pair. Idle and hover are cropped to the SAME union rect,
+      // so both textures have identical dimensions and swapping them can never
+      // move the sprite vertically. Grounded by opaque bounds + 3px overlap so
+      // the mechanical base rests on (slightly presses into) the floor.
+      if (usePng && station.kind === 'project') {
+        const src = this.textures.get(idleKey).getSourceImage() as { width: number; height: number } | null;
+        if (src && src.width > 0) {
+          const dispW = 220;
+          const dispH = src.height * (dispW / src.width);
+          sprite.setDisplaySize(dispW, dispH);
+          sprite.setY(station.y + this.textureBottomPad(idleKey) * dispH + GROUND_OVERLAP_PX);
+        }
       }
 
       /*
@@ -1307,7 +1507,7 @@ export class WorldScene extends Phaser.Scene {
         });
       });
 
-      this.stations.push({ station, idleKey, litKey, sprite, lit: false });
+      this.stations.push({ station, idleKey, litKey, sprite, lit: false, pngGrounded: usePng });
     }
 
     /**
@@ -1326,8 +1526,11 @@ export class WorldScene extends Phaser.Scene {
      * On skills, the label sat on the return portal's lower section (the
      * portal spans x 100..280 and the label was drawn at x=40), so it is
      * suppressed there too — the portal keeps its own destination signage.
+     * On projects, the far-left return portal (art spans x 0..180) is the
+     * chapter's landmark, and the label at x=40 would sit on top of it, so it
+     * is suppressed there as well.
      */
-    if (world.chapter !== 'cliff' && world.chapter !== 'skills') {
+    if (world.chapter !== 'cliff' && world.chapter !== 'skills' && world.chapter !== 'projects') {
       const labelKey = chapterLabelTexture(this, world.chapter, this.chapterLabel);
       this.add
         .image(40, this.world.groundY - ROBOT_FRAME_HEIGHT - 46, labelKey)
@@ -1359,6 +1562,13 @@ export class WorldScene extends Phaser.Scene {
     if (this.world.chapter === 'skills') {
       this.pipeSkins.get('skills-entry')?.mouth.setVisible(false);
       this.pipeSkins.get('skills-to-projects')?.mouth.setVisible(false);
+    }
+    // Projects (Layer 3): the animated vortex artwork replaces the single
+    // return pipe's procedural container — same guard pattern as cliff/skills.
+    // The transport trigger is independent of container visibility and stays
+    // armed, so the player can still walk into the visible portal to return.
+    if (this.world.chapter === 'projects') {
+      this.pipeSkins.get('projects-entry')?.mouth.setVisible(false);
     }
   }
 
@@ -1664,7 +1874,17 @@ export class WorldScene extends Phaser.Scene {
               world.chapter === 'cliff' && (id === 'cliff-entry' || id === 'cliff-to-skills');
             const hiddenBySkillsArtwork =
               world.chapter === 'skills' && (id === 'skills-entry' || id === 'skills-to-projects');
-            built.mouth.setVisible(chapterPipeIds.has(id) && !hiddenBySurfaceArtwork && !hiddenBySkillsArtwork);
+            // Layer 3: the projects chapter's single pipe is likewise replaced
+            // by the animated return-portal artwork, so it must stay hidden
+            // here too — this loop runs on every arrival.
+            const hiddenByProjectsArtwork =
+              world.chapter === 'projects' && id === 'projects-entry';
+            built.mouth.setVisible(
+              chapterPipeIds.has(id) &&
+                !hiddenBySurfaceArtwork &&
+                !hiddenBySkillsArtwork &&
+                !hiddenByProjectsArtwork,
+            );
             /*
              * NOT `built.setActive(false)` here — measured, and it is a trap.
              *
@@ -2203,9 +2423,9 @@ export class WorldScene extends Phaser.Scene {
       if (view.lit === shouldLight) continue;
       view.lit = shouldLight;
       view.sprite.setTexture(shouldLight ? view.litKey : view.idleKey);
-      // Re-apply the ground offset for the swapped texture (lit cells have a
-      // slightly different transparent bottom pad than idle cells).
-      if (view.station.kind === 'skill' && this.world.chapter === 'skills') {
+      // Re-apply the ground offset for the swapped texture (lit cells can have
+      // a slightly different transparent bottom pad than idle cells).
+      if (view.pngGrounded) {
         const padKey = shouldLight ? view.litKey : view.idleKey;
         view.sprite.setY(view.station.y + this.textureBottomPad(padKey) * view.sprite.displayHeight + GROUND_OVERLAP_PX);
       }

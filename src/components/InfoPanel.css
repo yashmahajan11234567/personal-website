@@ -153,50 +153,6 @@
   color: #c3d3e4;
 }
 
-/* --- Fact list ---------------------------------------------------------- */
-
-.info-panel__facts {
-  display: grid;
-  grid-template-columns: minmax(96px, 34%) 1fr;
-  gap: 8px 14px;
-  margin: 0 0 18px;
-  padding: 14px 0 0;
-  border-top: 1px solid #1a2230;
-}
-
-.info-panel__facts dt {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #8fa4bd;
-  padding-top: 2px;
-}
-
-.info-panel__facts dd {
-  margin: 0;
-  font-size: 14.5px;
-  line-height: 1.5;
-  color: #dbe7f3;
-  overflow-wrap: anywhere;
-}
-
-.info-panel__collaborator {
-  display: block;
-}
-
-/* On a narrow screen the two columns stop fitting; stack instead of squashing. */
-@media (max-width: 420px) {
-  .info-panel__facts {
-    grid-template-columns: 1fr;
-    gap: 3px;
-  }
-
-  .info-panel__facts dd {
-    margin-bottom: 8px;
-  }
-}
-
 /* --- Sections ----------------------------------------------------------- */
 
 .info-panel__section {
@@ -251,29 +207,15 @@
   padding-left: 20px;
 }
 
+/* The Pipeline heading sits directly beneath Skills & Technologies inside the
+   left column, so it needs its own top spacing there. */
+.info-panel__col--skills h4:not(:first-child) {
+  margin-top: 14px;
+}
+
 .info-panel__pipeline strong {
   color: #dbe7f3;
   font-weight: 600;
-}
-
-/* --- Limitations -------------------------------------------------------- *
- *
- * Deliberately the most prominent block after the title. The audit's rule is
- * that a known limitation must be stated plainly where a reader meets it, so it
- * gets a cyan left rule and full-contrast text rather than muted styling.
- */
-.info-panel__section--limits {
-  padding: 11px 13px;
-  background: #0a1016;
-  border-left: 2px solid #38b6d9;
-}
-
-.info-panel__section--limits h4 {
-  color: #8ceaff;
-}
-
-.info-panel__section--limits ul {
-  color: #dbe7f3;
 }
 
 /* --- Links -------------------------------------------------------------- */
@@ -725,5 +667,188 @@
   .info-panel--skill .info-panel__skill-icon {
     width: 38px;
     height: 38px;
+  }
+}
+
+/* --- Project card: neon frame + two-column lower layout --------------------
+ *
+ * Same cyberpunk identity as the skill card (dark navy, cyan + magenta neon,
+ * IBM Plex Mono), wider so the lower section can split into two columns on
+ * desktop: Skills & Technologies left, Project Overview right. The layout
+ * stacks below 641px.
+ */
+.info-panel--project {
+  width: min(720px, calc(100% - 32px));
+  max-height: min(86vh, 780px);
+  border: 1px solid rgb(34 211 238 / 60%);
+  outline: 1px solid rgb(232 121 249 / 45%);
+  outline-offset: 5px;
+  box-shadow:
+    0 0 18px rgb(34 211 238 / 35%),
+    0 0 48px rgb(232 121 249 / 18%),
+    0 24px 64px rgb(0 0 0 / 72%);
+  font-family: var(--font-mono), 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+}
+
+/* Neon top edge: cyan into magenta. */
+.info-panel--project::before {
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    #22d3ee 0%,
+    #22d3ee 45%,
+    #e879f9 72%,
+    #164e63 100%
+  );
+  box-shadow: 0 0 14px rgb(34 211 238 / 80%);
+}
+
+.info-panel--project .info-panel__kind {
+  color: #e879f9;
+  text-shadow: 0 0 8px rgb(232 121 249 / 70%);
+}
+
+/* Title-as-repository-link: bright text plus a visible external-link glyph. */
+.info-panel--project .info-panel__title-link {
+  color: #f4f9ff;
+  text-decoration: underline;
+  text-decoration-color: rgb(34 211 238 / 60%);
+  text-underline-offset: 4px;
+  text-shadow: 0 0 14px rgb(34 211 238 / 45%);
+}
+
+.info-panel--project .info-panel__ext {
+  display: inline-block;
+  margin-left: 7px;
+  font-size: 0.68em;
+  vertical-align: super;
+  color: #22d3ee;
+  text-shadow: 0 0 8px rgb(34 211 238 / 90%);
+}
+
+/* Neon section labels with a pixel-square marker (matches the skill card). */
+.info-panel--project .info-panel__section h4 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #22d3ee;
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-shadow: 0 0 8px rgb(34 211 238 / 70%);
+}
+
+.info-panel--project .info-panel__section h4::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  flex: none;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+/* --- Preview strip --------------------------------------------------------
+ *
+ * Genuine screenshots only. Each image keeps its NATURAL aspect ratio
+ * (`height: auto`, no fixed-ratio frame), so nothing is ever stretched, and
+ * the frame links to the full image for a larger view.
+ */
+.info-panel__section ul.info-panel__preview-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: inherit;
+}
+
+.info-panel__preview-item {
+  margin: 0;
+}
+
+.info-panel__preview-item a {
+  display: block;
+  border: 1px solid #1d4a5c;
+  background: #060c16;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.info-panel__preview-item a:hover {
+  border-color: #22d3ee;
+  box-shadow: 0 0 10px rgb(34 211 238 / 40%);
+}
+
+.info-panel__preview-item img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.info-panel__preview-item figcaption {
+  margin-top: 5px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #9fb4c9;
+}
+
+/* --- Lower two-column layout ---------------------------------------------- */
+.info-panel__lower {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 16px;
+}
+
+.info-panel__lower .info-panel__section {
+  margin: 0;
+}
+
+@media (min-width: 641px) {
+  .info-panel--project .info-panel__lower {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    align-items: start;
+  }
+}
+
+/* --- Project overview rows: exactly PROBLEM / SOLUTION / IMPACT ----------- */
+.info-panel__overview-row {
+  padding: 9px 11px;
+  background: rgb(6 13 29 / 70%);
+  border: 1px solid rgb(34 211 238 / 22%);
+  border-left: 3px solid #22d3ee;
+}
+
+.info-panel__overview-row + .info-panel__overview-row {
+  margin-top: 8px;
+}
+
+.info-panel__overview-row--problem {
+  border-left-color: #e879f9;
+}
+
+.info-panel__overview-row--impact {
+  border-left-color: #a78bfa;
+}
+
+.info-panel__overview-row h5 {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #c084fc;
+  text-shadow: 0 0 8px rgb(232 121 249 / 60%);
+}
+
+.info-panel__overview-row p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #c3d3e4;
+}
+
+@media (max-width: 640px) {
+  .info-panel--project {
+    width: calc(100% - 20px);
+    max-height: 84dvh;
   }
 }

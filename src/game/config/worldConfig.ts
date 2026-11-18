@@ -517,10 +517,10 @@ export const SPAWN = { x: 120, y: GROUND_Y } as const;
  * out defeats the reveal.
  *
  * The widths are set by CONTENT, not taste. Six skill stations at a readable
- * 130px pitch need ~1100px, and four project stations at ~210px need ~1000px;
- * anything narrower forces the pitch down until stations overlap or become
- * unreachable. The exit pipe sits past the camera deadzone, so the player must
- * actually walk to it.
+ * 130px pitch need ~1100px, and four project holograms at ~250px pitch plus a
+ * far-left return portal need ~1500px; anything narrower forces the pitch down
+ * until stations overlap or become unreachable. The exit pipe sits past the
+ * camera deadzone, so the player must actually walk to it.
  */
 export const CLIFF_WIDTH = 900;
 /*
@@ -530,7 +530,15 @@ export const CLIFF_WIDTH = 900;
  * causing visual crowding. The extra 300px restores comfortable spacing.
  */
 export const SKILLS_WIDTH = 1500;
-const PROJECTS_WIDTH = 1000;
+/*
+ * PROJECTS is 1500 (not the earlier 1000): Layer 3 carries a far-left return
+ * portal (art spans x 0..180) plus four 220px-wide holograms. At 1000px the
+ * station fitter squeezed the run to a 210px pitch with the first hologram's
+ * hitbox starting at x=200 — almost touching the portal art — and left no
+ * clean right-side boundary. At 1500 the fitter yields a 250px pitch with
+ * centres 390/640/890/1140 and a clear 1250..1500 right margin.
+ */
+const PROJECTS_WIDTH = 1500;
 
 /**
  * Where a player stands just after emerging from a chapter's entry pipe.
@@ -710,8 +718,11 @@ const SKILLS_PLATFORMS: WorldPlatform[] = [
 ];
 
 const PROJECTS_PLATFORMS: WorldPlatform[] = [
-  { x: 320, y: 430, width: 128, height: 16 },
-  { x: 520, y: 360, width: 96, height: 16, oneWay: true },
+  // Layer 3 (Core): NO floating ledges. The whole chapter is one continuous
+  // ground-level data-centre floor (the kit slab pieces provide the visuals;
+  // the ground slab remains the only collision surface). The former two
+  // ledges rendered as bare debug rects and obstructed nothing — removed in
+  // the same pass that introduced the platform artwork, Stage K precedent.
 ];
 
 /* ------------------------------------------------------------------ *
@@ -781,8 +792,20 @@ const DATA_CHAPTERS: WorldChapter[] = [
     id: 'projects',
     label: 'PROJECTS',
     width: PROJECTS_WIDTH,
+    /*
+     * Layer 3 has exactly ONE pipe, at the FAR LEFT (x=60): it is the visible
+     * Skills return portal. An entry pipe routes to `previousChapter` =
+     * 'skills', so this single pipe IS the way back — no exitPipe needed.
+     *
+     * Spawn (60 + EMERGE_OFFSET = 144) is deliberately NOT the trigger: the
+     * arm zone is 38..82 and the near zone 8..112, and 144 is outside both, so
+     * arriving from Skills can never immediately fire the return transition.
+     * The portal artwork spans x 0..180 with its visible opening covering the
+     * arm zone, so the player activates the return while standing inside the
+     * glowing opening.
+     */
     spawn: { x: 60 + EMERGE_OFFSET, y: GROUND_Y },
-    entryPipe: pipe('projects-entry', 60, 'projects', 'START', 'ARRIVAL'),
+    entryPipe: pipe('projects-entry', 60, 'projects', 'BACK: SKILLS', 'RETURN'),
     // Terminal chapter: the journey ends here, so there is no way out but back.
     exitPipe: null,
   },

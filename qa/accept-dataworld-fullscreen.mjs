@@ -96,19 +96,29 @@ for (const [W, H] of VIEWPORTS) {
   check(`${W}x${H}: camera scroll clamped`, p.camScrollX >= -0.5 && p.camScrollX <= p.worldWidth - p.camViewWidth + 1 && p.camScrollY >= -0.5 && p.camScrollY <= p.worldHeight - p.camViewHeight + 1,
     `scroll=(${Math.round(p.camScrollX)},${Math.round(p.camScrollY)}) view=${p.camViewWidth}x${p.camViewHeight} world=${p.worldWidth}x${p.worldHeight}`);
 
-  // Shell controls reachable and not covered.
-  for (const tid of ['world-exit', 'world-index-toggle']) {
-    const info = await page.evaluate((id) => {
-      const el = document.querySelector(`[data-testid="${id}"]`);
+  // Shell controls: RETURN TO PORTFOLIO reachable and not covered; the CONTENTS
+  // toggle must be gone entirely (removed from the Data World UI).
+  {
+    const info = await page.evaluate(() => {
+      const el = document.querySelector('[data-testid="world-exit"]');
       if (!el) return { exists: false };
       const r = el.getBoundingClientRect();
       const cx = r.x + r.width / 2;
       const cy = r.y + r.height / 2;
       const hit = document.elementFromPoint(cx, cy);
       return { exists: true, x: r.x, y: r.y, w: r.width, h: r.height, hit: hit === el || el.contains(hit) };
-    }, tid);
-    check(`${W}x${H}: ${tid} visible+clickable`, info.exists && info.hit && info.x >= 0 && info.y >= 0 && info.x + info.w <= W + 1 && info.y + info.h <= H + 1,
+    });
+    check(`${W}x${H}: world-exit visible+clickable`, info.exists && info.hit && info.x >= 0 && info.y >= 0 && info.x + info.w <= W + 1 && info.y + info.h <= H + 1,
       JSON.stringify({ x: Math.round(info.x || 0), y: Math.round(info.y || 0), hit: info.hit }));
+  }
+  {
+    const gone = await page.evaluate(() => {
+      const toggle = document.querySelector('[data-testid="world-index-toggle"]');
+      const drawer = document.querySelector('.world-index');
+      const contentsBtn = [...document.querySelectorAll('button')].find((b) => /^\s*contents\s*$/i.test(b.textContent ?? ''));
+      return { toggle: !!toggle, drawer: !!drawer, contentsBtn: !!contentsBtn };
+    });
+    check(`${W}x${H}: no CONTENTS button/drawer`, !gone.toggle && !gone.drawer && !gone.contentsBtn, JSON.stringify(gone));
   }
 
   await page.screenshot({ path: `${OUT}/fs-${W}x${H}-cliff.png` });

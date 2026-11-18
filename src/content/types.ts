@@ -271,6 +271,27 @@ export interface Collaborator {
   readonly role: string;
 }
 
+/**
+ * A genuine project screenshot committed to THIS repository under
+ * `public/assets/`, shown in the project card's preview strip.
+ *
+ * Added for the project-card redesign: cards showcase real work visually, but
+ * only with real images — never generated stand-ins. `sourceUrl` is the
+ * upstream location the image was taken from, so the provenance stays
+ * checkable.
+ */
+export interface ProjectPreview {
+  readonly id: string;
+  /** Visible caption label, e.g. "Bluestock Fintech — Mutual Fund Analysis (Separate Project)". */
+  readonly label: string;
+  /** Committed image path, relative to the site root. */
+  readonly path: string;
+  /** Accessible image description. */
+  readonly alt: string;
+  /** Upstream source of the image, when it comes from another repository. */
+  readonly sourceUrl?: string;
+}
+
 export interface Project {
   readonly id: string;
   readonly title: string;
@@ -315,6 +336,17 @@ export interface Project {
    * repository and are therefore one project with five views, not five projects.
    */
   readonly dashboards?: readonly DashboardPreview[];
+  /**
+   * PROJECT OVERVIEW copy for the redesigned project card. The card renders
+   * exactly three labelled rows — PROBLEM, SOLUTION, IMPACT — from these fields,
+   * so the copy stays in the content model (reviewable, single source of truth)
+   * rather than hardcoded in JSX.
+   */
+  readonly problem?: string;
+  readonly solution?: string;
+  readonly impact?: string;
+  /** Genuine screenshots for the card's preview strip (click to enlarge). */
+  readonly previews?: readonly ProjectPreview[];
   /**
    * Where the evidence lives. Not a claim about the project — a pointer to the
    * files that back it, for a panel's "show me" affordance.

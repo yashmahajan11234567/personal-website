@@ -53,26 +53,45 @@ await page.screenshot({ path: `${OUT}/dw-boundary-left.png` });
 const alive = await page.evaluate(() => { const c = document.querySelector('canvas'); return !!c && c.width > 0; });
 check('canvas alive after boundary hold', alive, '');
 
-// Panel: Tab to station-index buttons, Enter to open, Escape to close
-// First dismiss entry plate, then open the contents drawer, then tab to station buttons.
+// Panel: dismiss the entry plate, travel to the skills chapter, walk to the
+// first skill station and press Enter — Escape must close it again.
 let panelOpened = false;
-// Dismiss entry plate
-await page.keyboard.press('Enter');
+await page.keyboard.press('Enter'); // dismiss entry plate
 await page.waitForTimeout(300);
-// Open the drawer
-const drawerToggle = await page.$('[data-testid="world-index-toggle"]');
-if (drawerToggle) {
-  await drawerToggle.click();
-  await page.waitForTimeout(300);
+const P = () => page.evaluate(() => window.__worldProbe());
+// travel right into the skills chapter
+await page.keyboard.down('d');
+{
+  const t0 = Date.now();
+  let pr = await P();
+  while (Date.now() - t0 < 45000) {
+    await page.waitForTimeout(200);
+    pr = await P();
+    if (!pr.travelling && !pr.locked && pr.chapter === 'skills') break;
+  }
+  await page.keyboard.up('d');
+  await page.waitForTimeout(600);
 }
-for (let i = 0; i < 15 && !panelOpened; i++) {
-  await page.keyboard.press('Tab');
-  await page.waitForTimeout(120);
-  await page.keyboard.press('Enter');
+// walk to the first skill station (x=440)
+{
+  const t0 = Date.now();
+  let pr = await P();
+  while (Date.now() - t0 < 30000) {
+    pr = await P();
+    if (pr.x >= 428) break;
+    if (!pr.travelling) await page.keyboard.down('d');
+    await page.waitForTimeout(150);
+  }
+  await page.keyboard.up('d');
   await page.waitForTimeout(400);
-  panelOpened = await page.evaluate(() => !!document.querySelector('.info-panel, [class*="info-panel"]'));
 }
-check('panel opens via keyboard', panelOpened, panelOpened ? '' : '15 tab+enter attempts failed');
+await page.keyboard.down('Enter');
+await page.waitForTimeout(350);
+await page.keyboard.up('Enter');
+await page.waitForFunction(() => window.__worldProbe().panelOpen === true, null, { timeout: 4000 }).catch(() => {});
+panelOpened = (await P()).panelOpen === true
+  && await page.evaluate(() => !!document.querySelector('.info-panel, [class*="info-panel"]'));
+check('panel opens via keyboard (Enter at station)', panelOpened, '');
 if (panelOpened) {
   await page.screenshot({ path: `${OUT}/dw-panel-open.png` });
   await page.keyboard.press('Escape');
