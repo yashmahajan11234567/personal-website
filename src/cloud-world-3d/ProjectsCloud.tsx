@@ -30,30 +30,40 @@ import {
 // ============================================================
 
 // Cloud lobes in LOCAL units (multiplied by CLOUD_SCALE on the mesh).
-// Reference silhouette: one cohesive wide base, rounded side formations,
-// and a large central upper cloud — the smooth-union SDF blends the lobes
-// into a single continuous fluffy surface instead of intersecting balls.
+// Reference silhouette: a fluffy multi-lobed cartoon cloud — one wide soft
+// base, bulbous lower side formations, scalloped upper-mid shoulders and a
+// massive central upper cloud with crown tufts. Lobes overlap heavily and
+// the smooth-union SDF (k=1.75) blends them into ONE continuous fluffy
+// surface: scalloped outline, no visible individual-ball seams.
 type CloudLobe = { x: number; y: number; z: number; r: number; sy: number };
 const CLOUD_LOBES: CloudLobe[] = [
-  // cohesive wide base — one low rounded mass, not separate balls
-  { x: 0, y: 4.5, z: 1, r: 17, sy: 0.42 },
-  { x: -15, y: 6, z: -1, r: 9, sy: 0.65 },
-  { x: 15, y: 6, z: -1, r: 9, sy: 0.65 },
-  { x: -10, y: 7, z: -8, r: 8.5, sy: 0.7 },
-  { x: 10, y: 7, z: -8, r: 8.5, sy: 0.7 },
-  { x: 0, y: 7.5, z: -10, r: 9, sy: 0.65 },
-  // rounded side formations
-  { x: -12, y: 13, z: 2, r: 9.5, sy: 0.85 },
-  { x: 12, y: 13, z: 2, r: 9.5, sy: 0.85 },
-  { x: -18, y: 11, z: -4, r: 7.5, sy: 0.8 },
-  { x: 18, y: 11, z: -4, r: 7.5, sy: 0.8 },
-  { x: -7, y: 15, z: -5, r: 7.5, sy: 0.85 },
-  { x: 7, y: 15, z: -5, r: 7.5, sy: 0.85 },
-  // large central upper cloud + crown tuft
-  { x: 0, y: 20, z: 0, r: 11, sy: 0.95 },
-  { x: -5.5, y: 16.5, z: 1, r: 8, sy: 0.9 },
-  { x: 5.5, y: 16.5, z: 1, r: 8, sy: 0.9 },
-  { x: 0, y: 27.5, z: -1, r: 6.5, sy: 0.9 },
+  // ---- base: wide, low, soft mass merging into the ground ----
+  { x: 0, y: 5, z: 2, r: 15, sy: 0.45 },
+  { x: -13, y: 6, z: 0, r: 8.5, sy: 0.6 },
+  { x: 13, y: 6, z: 0, r: 8.5, sy: 0.6 },
+  { x: -8.5, y: 6.5, z: -7, r: 7.5, sy: 0.65 },
+  { x: 8.5, y: 6.5, z: -7, r: 7.5, sy: 0.65 },
+  { x: 0, y: 6.5, z: -9, r: 8, sy: 0.6 }, // front base — frames the door
+  // ---- lower side bulges (wide facade) ----
+  { x: -18, y: 10.5, z: -2, r: 8, sy: 0.75 },
+  { x: 18, y: 10.5, z: -2, r: 8, sy: 0.75 },
+  { x: -12, y: 12.5, z: 3, r: 8, sy: 0.8 },
+  { x: 12, y: 12.5, z: 3, r: 8, sy: 0.8 },
+  { x: 0, y: 13, z: 7, r: 8.5, sy: 0.75 }, // back mid
+  // ---- upper-mid shoulders (scalloped) ----
+  { x: -6.5, y: 15, z: -5.5, r: 7, sy: 0.82 },
+  { x: 6.5, y: 15, z: -5.5, r: 7, sy: 0.82 },
+  { x: -9.5, y: 17.5, z: 1, r: 7.5, sy: 0.85 },
+  { x: 9.5, y: 17.5, z: 1, r: 7.5, sy: 0.85 },
+  { x: 0, y: 17.5, z: 6.5, r: 7, sy: 0.8 },
+  // ---- massive central upper cloud ----
+  { x: -4.5, y: 21, z: -1.5, r: 8, sy: 0.9 },
+  { x: 4.5, y: 21, z: 1.5, r: 8, sy: 0.9 },
+  { x: 0, y: 22.5, z: 0, r: 9.5, sy: 0.92 },
+  // ---- crown tufts ----
+  { x: -4, y: 26.5, z: 0, r: 5.5, sy: 0.9 },
+  { x: 4, y: 26.5, z: 0, r: 5.5, sy: 0.9 },
+  { x: 0, y: 28.5, z: -1, r: 4.5, sy: 0.9 },
 ];
 
 // Sampling domain in local units. MarchingCubes vertices live in normalized
@@ -99,7 +109,7 @@ function cloudBodySDF(x: number, y: number, z: number): number {
   const shellY = CLOUD_SHELL_Y / S;
   let d = Infinity;
   for (const b of CLOUD_LOBES) {
-    d = smin(d, ellipsoidSDF(x - b.x, y - b.y, z - b.z, b.r, b.r * b.sy, b.r), 1.55);
+    d = smin(d, ellipsoidSDF(x - b.x, y - b.y, z - b.z, b.r, b.r * b.sy, b.r), 1.75);
   }
   // Hollow interior, matching ProjectsCloudInterior's shell.
   d = smax(d, -ellipsoidSDF(x, y - shellY, z, shellR, shellR * CLOUD_INTERIOR_YSCALE, shellR), 0.8);
