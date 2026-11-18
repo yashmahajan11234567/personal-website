@@ -56,14 +56,11 @@ const CLOUD_LOBES: CloudLobe[] = [
   { x: -9.5, y: 17.5, z: 1, r: 7.5, sy: 0.85 },
   { x: 9.5, y: 17.5, z: 1, r: 7.5, sy: 0.85 },
   { x: 0, y: 17.5, z: 6.5, r: 7, sy: 0.8 },
-  // ---- massive central upper cloud ----
-  { x: -4.5, y: 21, z: -1.5, r: 8, sy: 0.9 },
-  { x: 4.5, y: 21, z: 1.5, r: 8, sy: 0.9 },
-  { x: 0, y: 22.5, z: 0, r: 9.5, sy: 0.92 },
-  // ---- crown tufts ----
-  { x: -4, y: 26.5, z: 0, r: 5.5, sy: 0.9 },
-  { x: 4, y: 26.5, z: 0, r: 5.5, sy: 0.9 },
-  { x: 0, y: 28.5, z: -1, r: 4.5, sy: 0.9 },
+  // ---- one dominant central top mass (reference: a single big crown
+  //      sphere, not multiple tufts) flanked by two smaller lobes ----
+  { x: 0, y: 21.5, z: 0, r: 10.5, sy: 1.0 },
+  { x: -5.5, y: 19.5, z: -1.5, r: 7.5, sy: 0.9 },
+  { x: 5.5, y: 19.5, z: 1.5, r: 7.5, sy: 0.9 },
 ];
 
 // Sampling domain in local units. MarchingCubes vertices live in normalized
@@ -251,16 +248,52 @@ function buildSignTexture(): THREE.CanvasTexture {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   while (fontSize > 60) {
-    ctx.font = `bold ${fontSize}px Georgia, "Times New Roman", serif`;
+    ctx.font = `bold ${fontSize}px Arial, Helvetica, sans-serif`;
     if (ctx.measureText(txt).width <= w * 0.8) break;
     fontSize -= 12;
   }
-  ctx.lineWidth = 12;
-  ctx.strokeStyle = 'rgba(255, 244, 214, 0.92)';
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = 'rgba(50, 30, 12, 0.85)';
   ctx.strokeText(txt, w / 2, h / 2 + 6);
-  ctx.fillStyle = '#33200F';
+  ctx.fillStyle = '#FFF8EE';
   ctx.fillText(txt, w / 2, h / 2 + 6);
   const tex = new THREE.CanvasTexture(canvas);
+  tex.anisotropy = 16;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+// Vertical-plank wood texture for the door leaves (reference: arched wooden
+// plank door). Plank seams run along x in texture space, which maps to the
+// vertical direction on the extruded leaf's front face.
+function generateDoorTexture(): THREE.CanvasTexture {
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#8B5E34';
+  ctx.fillRect(0, 0, size, size);
+  const plankW = size / 7;
+  for (let p = 0; p < 7; p++) {
+    const x0 = p * plankW;
+    const base = 126 + Math.floor(Math.random() * 32);
+    ctx.fillStyle = `rgb(${base}, ${Math.floor(base * 0.66)}, ${Math.floor(base * 0.42)})`;
+    ctx.fillRect(x0 + 1, 0, plankW - 2, size);
+    // vertical grain
+    ctx.strokeStyle = 'rgba(50,30,15,0.22)';
+    for (let g = 0; g < 14; g++) {
+      const gx = x0 + 4 + Math.random() * (plankW - 8);
+      ctx.lineWidth = 0.8 + Math.random() * 1.2;
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.bezierCurveTo(gx + Math.sin(g) * 6, size * 0.33, gx - Math.cos(g) * 6, size * 0.66, gx + Math.sin(g * 2) * 5, size);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(30,18,8,0.6)';
+    ctx.fillRect(x0, 0, 2, size);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.anisotropy = 16;
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
@@ -396,6 +429,9 @@ export function ProjectsCloud({
   );
   const signTex = useMemo(buildSignTexture, []);
   const leafMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#4A7A33', roughness: 0.9 }), []);
+  const doorTex = useMemo(generateDoorTexture, []);
+  const doorMat = useMemo(() => new THREE.MeshStandardMaterial({ map: doorTex, roughness: 0.85 }), [doorTex]);
+  const knobMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#3A2E22', roughness: 0.35, metalness: 0.6 }), []);
   const rockGeo = useMemo(() => displacedSphereGeometry(1.2 * CLOUD_SCALE, 1, 0.28, 77), []);
   const doorLeafGeo = useMemo(
     () => roundedDoorLeafGeo(CLOUD_SHELL_DOOR_HALF - 0.2, CLOUD_SHELL_DOOR_TOP - 0.6),
@@ -474,6 +510,9 @@ export function ProjectsCloud({
       leafMat.dispose();
       rockGeo.dispose();
       doorLeafGeo.dispose();
+      doorTex.dispose();
+      doorMat.dispose();
+      knobMat.dispose();
     };
   }, []);
 
@@ -508,7 +547,12 @@ export function ProjectsCloud({
         const leafW = CLOUD_SHELL_DOOR_HALF - 0.2;
         return (
           <group key={side} ref={side < 0 ? doorPivotLRef : doorPivotRRef} position={[side * leafW, 0, doorZ]}>
-            <mesh castShadow material={woodMat} geometry={doorLeafGeo} position={[-side * leafW / 2, 0, 0.25]} />
+            <mesh castShadow material={doorMat} geometry={doorLeafGeo} position={[-side * leafW / 2, 0, 0.25]} />
+            {side === 1 && (
+              <mesh material={knobMat} position={[-1.0, CLOUD_SHELL_DOOR_TOP * 0.5, 0.78]}>
+                <sphereGeometry args={[0.32 * S, 10, 8]} />
+              </mesh>
+            )}
             <mesh material={frameMat} position={[-side * leafW / 2, CLOUD_SHELL_DOOR_TOP * 0.66, 0.74]}>
               <boxGeometry args={[leafW * 0.68, CLOUD_SHELL_DOOR_TOP * 0.2, 0.1]} />
             </mesh>
@@ -519,14 +563,17 @@ export function ProjectsCloud({
         );
       })}
 
-      {/* Wooden steps + cobble entrance path (scaled) */}
+      {/* Stone threshold platform + stone steps + cobble entrance path (scaled) */}
+      <mesh castShadow receiveShadow material={stoneMat} position={[0, 0.25 * S, doorZ - 0.8 * S]}>
+        <boxGeometry args={[(CLOUD_SHELL_DOOR_HALF + 1.6) * 2, 0.5 * S, 1.8 * S]} />
+      </mesh>
       {[0, 1, 2].map((i) => (
         <mesh
           key={`step-${i}`}
           castShadow
           receiveShadow
-          material={woodMat}
-          position={[0, 0.10 * S - i * 0.07 * S, doorZ - 1.2 * S - i * 1.5 * S]}
+          material={stoneMat}
+          position={[0, 0.10 * S - i * 0.07 * S, doorZ - 2.0 * S - i * 1.5 * S]}
         >
           <boxGeometry args={[9.0 * S + i * 1.8 * S, 0.34 * S, 1.7 * S]} />
         </mesh>
@@ -543,13 +590,14 @@ export function ProjectsCloud({
         </mesh>
       ))}
 
-      {/* PROJECTS sign above door (scaled) */}
+      {/* PROJECTS sign — hanging wooden board above the door (reference) */}
       <group position={[0, 0, doorZ + 0.4 * S]}>
-        <mesh castShadow material={frameMat} position={[-5.1 * S, 8.3 * S, 0]}>
-          <boxGeometry args={[0.4 * S, 16.6 * S, 0.4 * S]} />
+        {/* short hanging rods up into the cloud face */}
+        <mesh castShadow material={frameMat} position={[-3.4 * S, 16.6 * S, 1.1 * S]} rotation={[0.5, 0, 0]}>
+          <boxGeometry args={[0.3 * S, 3.2 * S, 0.3 * S]} />
         </mesh>
-        <mesh castShadow material={frameMat} position={[5.1 * S, 8.3 * S, 0]}>
-          <boxGeometry args={[0.4 * S, 16.6 * S, 0.4 * S]} />
+        <mesh castShadow material={frameMat} position={[3.4 * S, 16.6 * S, 1.1 * S]} rotation={[0.5, 0, 0]}>
+          <boxGeometry args={[0.3 * S, 3.2 * S, 0.3 * S]} />
         </mesh>
         <mesh castShadow receiveShadow material={woodMat} position={[0, 15.0 * S, 0]}>
           <boxGeometry args={[10.2 * S, 2.8 * S, 0.35 * S]} />
@@ -565,19 +613,6 @@ export function ProjectsCloud({
         ).map(([x, y, w, h], i) => (
           <mesh key={i} castShadow material={frameMat} position={[x, y, -0.22 * S]}>
             <boxGeometry args={[w, h, 0.45 * S]} />
-          </mesh>
-        ))}
-        {/* Emissive border */}
-        {(
-          [
-            [0, 16.15 * S, 9.4 * S, 0.15 * S],
-            [0, 13.85 * S, 9.4 * S, 0.15 * S],
-            [-4.8 * S, 15.0 * S, 0.15 * S, 2.45 * S],
-            [4.8 * S, 15.0 * S, 0.15 * S, 2.45 * S],
-          ] as [number, number, number, number][]
-        ).map(([x, y, w, h], i) => (
-          <mesh key={`b${i}`} material={borderMat} position={[x, y, -0.27 * S]}>
-            <boxGeometry args={[w, h, 0.08 * S]} />
           </mesh>
         ))}
         {/* Title plane */}
@@ -601,6 +636,17 @@ export function ProjectsCloud({
           <pointLight position={[0, 5.0 * S, 0]} color="#FFB45E" intensity={16 * S} distance={20 * S} decay={2} />
         </group>
       ))}
+
+      {/* Center hanging lantern below the sign, above the door arch (reference) */}
+      <group position={[0, 0, doorZ - 1.4 * S]}>
+        <mesh material={frameMat} position={[0, 13.1 * S, 1.2 * S]}>
+          <cylinderGeometry args={[0.05 * S, 0.05 * S, 2.6 * S, 6]} />
+        </mesh>
+        <mesh position={[0, 12.2 * S, 0]} material={lanternMat}>
+          <sphereGeometry args={[0.5 * S, 12, 10]} />
+        </mesh>
+        <pointLight position={[0, 12.2 * S, 0]} color="#FFB45E" intensity={14 * S} distance={18 * S} decay={2} />
+      </group>
 
       {/* Potted plants flanking entrance (scaled) */}
       {[-10.5 * S, 10.5 * S].map((lx) => (
@@ -646,6 +692,25 @@ export function ProjectsCloud({
                   <meshStandardMaterial color={FLOWER_COLORS[it.c]} roughness={0.55} />
                 </mesh>
               </group>
+            ))}
+          </group>
+        );
+      })}
+      {/* Split-rail fences flanking the approach path (reference) */}
+      {[-1, 1].map((side) => {
+        const fx = side * (CLOUD_DOOR_HALF + 5.5 * S);
+        const z0 = doorZ - 4 * S;
+        return (
+          <group key={`fence${side}`}>
+            {[0, 1, 2, 3].map((i) => (
+              <mesh key={i} castShadow material={woodMat} position={[fx, 0.8 * S, z0 - i * 3.0 * S]}>
+                <boxGeometry args={[0.24 * S, 1.6 * S, 0.24 * S]} />
+              </mesh>
+            ))}
+            {[1.25 * S, 0.7 * S].map((ry, ri) => (
+              <mesh key={ri} castShadow material={woodMat} position={[fx, ry, z0 - 4.5 * S]}>
+                <boxGeometry args={[0.14 * S, 0.16 * S, 9.6 * S]} />
+              </mesh>
             ))}
           </group>
         );
