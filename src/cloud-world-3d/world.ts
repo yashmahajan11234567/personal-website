@@ -58,12 +58,12 @@ export const CLOUD_SHELL_Y = 1.5 * CLOUD_SCALE;
 /** Max distance the interior camera may sit from the cloud center (spring arm). */
 export const CLOUD_INTERIOR_CAM_R = 15 * CLOUD_SCALE;
 /** Half-width / height of the opening cut through the interior shell. */
-export const CLOUD_SHELL_DOOR_HALF = 4.6 * CLOUD_SCALE;
-export const CLOUD_SHELL_DOOR_TOP = 11.4 * CLOUD_SCALE;
+export const CLOUD_SHELL_DOOR_HALF = 5.2 * CLOUD_SCALE;
+export const CLOUD_SHELL_DOOR_TOP = 12.6 * CLOUD_SCALE;
 /** Half-width of the door corridor cut into the -z face of the cloud. */
-export const CLOUD_DOOR_HALF = 3.6 * CLOUD_SCALE;
+export const CLOUD_DOOR_HALF = 5.0 * CLOUD_SCALE;
 /** Depth of the doorway tunnel cut through the shell (front face -> cut plane). */
-export const CLOUD_DOOR_CUT_DEPTH = 7.5 * CLOUD_SCALE;
+export const CLOUD_DOOR_CUT_DEPTH = 8.5 * CLOUD_SCALE;
 /** World z of the door plane, derived: 0.5u inside the shell's front face. */
 export const CLOUD_DOOR_Z = PROJECTS_CLOUD_Z - CLOUD_INTERIOR_R + 0.5;
 /** Scatter/sign keep-out margin beyond the collision radius. */

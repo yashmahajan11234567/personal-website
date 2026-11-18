@@ -2,13 +2,19 @@ import { useMemo, useRef, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 // @ts-ignore — BufferGeometryUtils ships as ESM without bundled types here
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MarchingCubes } from 'three/examples/jsm/objects/MarchingCubes.js';
 import {
   PROJECTS_CLOUD_X,
   PROJECTS_CLOUD_Z,
   CLOUD_DOOR_Z,
+  CLOUD_DOOR_CUT_DEPTH,
+  CLOUD_INTERIOR_R,
+  CLOUD_INTERIOR_YSCALE,
   CLOUD_SCALE,
+  CLOUD_SHELL_DOOR_HALF,
+  CLOUD_SHELL_DOOR_TOP,
+  CLOUD_SHELL_Y,
   terrainHeight,
 } from './world';
 
@@ -19,26 +25,84 @@ import {
 // All architecture derived from CLOUD_SCALE (≈2.5×).
 // ============================================================
 
-// Metaball definition (local units, will be multiplied by CLOUD_SCALE).
-// Hand-tuned to give a fluffy, cohesive cloud ~140×90×115 world units.
-const METABALLS: { x: number; y: number; z: number; r: number }[] = [
-  // Base layer — broad, slightly flattened
-  { x: -18, y: 6, z: 4, r: 22 },
-  { x: 18, y: 6, z: 4, r: 22 },
-  { x: -28, y: 9, z: 0, r: 16 },
-  { x: 28, y: 9, z: -2, r: 16 },
-  { x: 0, y: 18, z: -1, r: 14 },
-  { x: -20, y: 12, z: -6, r: 12 },
-  { x: 20, y: 12, z: 6, r: 12 },
-  { x: -12, y: 22, z: -2, r: 11 },
-  { x: 12, y: 22, z: 2, r: 11 },
-  { x: 0, y: 30, z: 0, r: 10 },
-  { x: -30, y: 8, z: -8, r: 10 },
-  { x: 30, y: 8, z: 8, r: 10 },
-  { x: -14, y: 16, z: -10, r: 9 },
-  { x: 14, y: 16, z: 10, r: 9 },
-  { x: 0, y: 12, z: 14, r: 11 },
+// Cloud lobes in LOCAL units (multiplied by CLOUD_SCALE on the mesh).
+// This list is the audited ~55.6 × 35.6 × 45.2 silhouette; smooth-union SDF
+// blends it into one continuous fluffy surface instead of intersecting balls.
+type CloudLobe = { x: number; y: number; z: number; r: number; sy: number };
+const CLOUD_LOBES: CloudLobe[] = [
+  { x: -8, y: 7.5, z: 5, r: 17, sy: 0.6 },
+  { x: 8, y: 7.5, z: 5, r: 17, sy: 0.6 },
+  { x: -14, y: 11, z: 3, r: 12, sy: 0.85 },
+  { x: 14, y: 11, z: -3, r: 12, sy: 0.85 },
+  { x: -8, y: 17, z: -3, r: 10, sy: 0.9 },
+  { x: 8, y: 17, z: 3, r: 10, sy: 0.9 },
+  { x: 0, y: 23.5, z: 0, r: 9.5, sy: 0.9 },
+  { x: -19, y: 8, z: -5, r: 8.5, sy: 0.8 },
+  { x: 19, y: 8, z: 5, r: 8.5, sy: 0.8 },
+  { x: 0, y: 13, z: 10, r: 11, sy: 0.8 },
+  { x: -10, y: 14.5, z: -8, r: 7.5, sy: 0.9 },
+  { x: 10, y: 14.5, z: 8, r: 7.5, sy: 0.9 },
+  { x: -11, y: 8, z: -13, r: 9, sy: 0.75 },
+  { x: 11, y: 8, z: -13, r: 9, sy: 0.75 },
+  { x: -13, y: 8, z: -13, r: 9.5, sy: 0.8 },
+  { x: 13, y: 8, z: -13, r: 9.5, sy: 0.8 },
 ];
+
+// Sampling domain in local units. MarchingCubes vertices live in normalized
+// [-1, 1] space, so after `update()` the geometry is scaled by these half
+// extents and translated by these centers to recover local world units.
+const CLOUD_DOMAIN = {
+  xMin: -28, xMax: 28,
+  yMin: -2, yMax: 36,
+  zMin: -24, zMax: 22,
+} as const;
+const CLOUD_HALF = {
+  x: (CLOUD_DOMAIN.xMax - CLOUD_DOMAIN.xMin) / 2,
+  y: (CLOUD_DOMAIN.yMax - CLOUD_DOMAIN.yMin) / 2,
+  z: (CLOUD_DOMAIN.zMax - CLOUD_DOMAIN.zMin) / 2,
+};
+const CLOUD_CENTER = {
+  x: (CLOUD_DOMAIN.xMax + CLOUD_DOMAIN.xMin) / 2,
+  y: (CLOUD_DOMAIN.yMax + CLOUD_DOMAIN.yMin) / 2,
+  z: (CLOUD_DOMAIN.zMax + CLOUD_DOMAIN.zMin) / 2,
+};
+
+function ellipsoidSDF(x: number, y: number, z: number, rx: number, ry: number, rz: number): number {
+  return Math.hypot(x / rx, y / ry, z / rz) - 1;
+}
+function boxSDF(x: number, y: number, z: number, hx: number, hy: number, hz: number): number {
+  const dx = Math.abs(x) - hx, dy = Math.abs(y) - hy, dz = Math.abs(z) - hz;
+  const ox = Math.max(dx, 0), oy = Math.max(dy, 0), oz = Math.max(dz, 0);
+  return Math.hypot(ox, oy, oz) + Math.min(Math.max(dx, Math.max(dy, dz)), 0);
+}
+function smin(a: number, b: number, k: number): number {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - h * h * h * k * (1 / 6);
+}
+function smax(a: number, b: number, k: number): number {
+  return -smin(-a, -b, k);
+}
+
+// Signed distance to the hollow cloud body with the interior cavity and the
+// doorway corridor subtracted. All inputs are LOCAL units (world / CLOUD_SCALE).
+function cloudBodySDF(x: number, y: number, z: number): number {
+  const S = CLOUD_SCALE;
+  const shellR = CLOUD_INTERIOR_R / S;
+  const shellY = CLOUD_SHELL_Y / S;
+  let d = Infinity;
+  for (const b of CLOUD_LOBES) {
+    d = smin(d, ellipsoidSDF(x - b.x, y - b.y, z - b.z, b.r, b.r * b.sy, b.r), 1.55);
+  }
+  // Hollow interior, matching ProjectsCloudInterior's shell.
+  d = smax(d, -ellipsoidSDF(x, y - shellY, z, shellR, shellR * CLOUD_INTERIOR_YSCALE, shellR), 0.8);
+  // Door corridor through the front (-z) face.
+  const doorHalf = CLOUD_SHELL_DOOR_HALF / S;
+  const doorTop = CLOUD_SHELL_DOOR_TOP / S;
+  const doorDepth = CLOUD_DOOR_CUT_DEPTH / S;
+  const doorCenterZ = -shellR + doorDepth / 2;
+  d = smax(d, -boxSDF(x, y - doorTop / 2, z - doorCenterZ, doorHalf, doorTop / 2, doorDepth / 2 + 1.2), 0.45);
+  return d;
+}
 
 // Procedural texture generators (run once per session)
 function generateAlbedoTexture(): THREE.CanvasTexture {
@@ -196,27 +260,53 @@ export function ProjectsCloud({
   const S = CLOUD_SCALE;
   const groundY = terrainHeight(PROJECTS_CLOUD_X, PROJECTS_CLOUD_Z);
 
-  // ---- Metaball cloud geometry (MarchingCubes) ----
+  // ---- Smooth SDF cloud geometry (MarchingCubes) ----
   const cloudGeo = useMemo(() => {
-    const resolution = 80; // voxel resolution — balance detail / perf
-    const mc = new MarchingCubes(resolution, new THREE.MeshStandardMaterial(), true, false);
-    mc.isolation = 85; // iso-surface threshold
-    // Add scaled metaballs
-    for (const b of METABALLS) {
-      mc.addBall(b.x * S, b.y * S, b.z * S, b.r * S, 1.0);
+    const resolution = 88; // voxel resolution — smooth silhouette without excessive tris
+    const mc = new MarchingCubes(resolution, new THREE.MeshStandardMaterial(), true, false, 500000);
+    mc.isolation = 0;
+    const half = resolution / 2;
+    // Fill the normalized grid by evaluating the LOCAL-space SDF at the matching
+    // world sample. This three.js MarchingCubes has no scale/offset constructor
+    // args, so `addBall()` in world units would collapse the cloud to a ~2u blob.
+    for (let iz = 0; iz < resolution; iz++) {
+      const fz = (iz - half) / half;
+      const wz = fz * CLOUD_HALF.z + CLOUD_CENTER.z;
+      const zOff = iz * resolution * resolution;
+      for (let iy = 0; iy < resolution; iy++) {
+        const fy = (iy - half) / half;
+        const wy = fy * CLOUD_HALF.y + CLOUD_CENTER.y;
+        const yOff = zOff + iy * resolution;
+        for (let ix = 0; ix < resolution; ix++) {
+          const fx = (ix - half) / half;
+          const wx = fx * CLOUD_HALF.x + CLOUD_CENTER.x;
+          mc.field[yOff + ix] = -cloudBodySDF(wx, wy, wz);
+        }
+      }
     }
     mc.update();
-    const geo = mc.geometry;
+    // MarchingCubes allocates a large non-indexed buffer and only fills
+    // `drawRange`; trim to the used vertices, weld duplicates, THEN compute
+    // normals — on the raw non-indexed buffer computeVertexNormals would make
+    // per-face normals and the cloud would read faceted/angular.
+    const src = mc.geometry;
+    const used = src.drawRange.count;
+    const trimmed = new THREE.BufferGeometry();
+    for (const name of ['position', 'normal', 'uv'] as const) {
+      const a = src.getAttribute(name) as THREE.BufferAttribute | undefined;
+      if (a) trimmed.setAttribute(name, new THREE.BufferAttribute(a.array.slice(0, used * a.itemSize), a.itemSize));
+    }
+    let geo = mergeVertices(trimmed, 1e-4);
     geo.computeVertexNormals();
-    // The MarchingCubes geometry is centered at (0,0,0). Translate so its base sits near groundY.
-    // Find min Y to align bottom.
+    // Convert normalized MarchingCubes vertices back to local world units, then
+    // sit the cloud base on the terrain and let the mesh scale apply CLOUD_SCALE.
+    geo.scale(CLOUD_HALF.x, CLOUD_HALF.y, CLOUD_HALF.z);
+    geo.translate(CLOUD_CENTER.x, CLOUD_CENTER.y, CLOUD_CENTER.z);
     const pos = geo.getAttribute('position') as THREE.BufferAttribute;
     let minY = Infinity;
-    for (let i = 0; i < pos.count; i++) {
-      const y = pos.getY(i);
-      if (y < minY) minY = y;
-    }
-    geo.translate(0, -minY + 0.5, 0); // slight lift so base kisses terrain
+    for (let i = 0; i < pos.count; i++) minY = Math.min(minY, pos.getY(i));
+    geo.translate(0, -minY + 0.5, 0);
+    geo.computeVertexNormals();
     return geo;
   }, []);
 
@@ -322,38 +412,38 @@ export function ProjectsCloud({
 
   return (
     <group position={[PROJECTS_CLOUD_X, groundY, PROJECTS_CLOUD_Z]}>
-      {/* Smooth metaball cloud body */}
-      <mesh geometry={cloudGeo} material={cloudMat} castShadow receiveShadow />
+      {/* Smooth SDF cloud body */}
+      <mesh geometry={cloudGeo} material={cloudMat} scale={[S, S, S]} castShadow receiveShadow />
 
-      {/* Door frame: posts + arch (scaled) */}
-      <mesh castShadow material={frameMat} position={[-3.5 * S, 3.9 * S, doorZ]}>
-        <boxGeometry args={[0.8 * S, 7.8 * S, 0.8 * S]} />
+      {/* Door frame: posts + arch, sized from the shared shell opening */}
+      <mesh castShadow material={frameMat} position={[-(CLOUD_SHELL_DOOR_HALF + 0.9), CLOUD_SHELL_DOOR_TOP / 2, doorZ]}>
+        <boxGeometry args={[1.0, CLOUD_SHELL_DOOR_TOP + 1.0, 1.0]} />
       </mesh>
-      <mesh castShadow material={frameMat} position={[3.5 * S, 3.9 * S, doorZ]}>
-        <boxGeometry args={[0.8 * S, 7.8 * S, 0.8 * S]} />
+      <mesh castShadow material={frameMat} position={[CLOUD_SHELL_DOOR_HALF + 0.9, CLOUD_SHELL_DOOR_TOP / 2, doorZ]}>
+        <boxGeometry args={[1.0, CLOUD_SHELL_DOOR_TOP + 1.0, 1.0]} />
       </mesh>
-      <mesh castShadow material={frameMat} position={[0, 7.8 * S, doorZ]}>
-        <torusGeometry args={[3.5 * S, 0.45 * S, 10, 22, Math.PI]} />
+      <mesh castShadow material={frameMat} position={[0, CLOUD_SHELL_DOOR_TOP - (CLOUD_SHELL_DOOR_HALF + 0.2), doorZ]}>
+        <torusGeometry args={[CLOUD_SHELL_DOOR_HALF + 0.2, 0.55 * S, 12, 28, Math.PI]} />
       </mesh>
 
       {/* Dark doorway behind the slab (hidden once inside) */}
-      <mesh ref={doorwayRef} position={[0, 3.8 * S, doorZ + 0.5 * S]} rotation={[0, Math.PI, 0]}>
-        <planeGeometry args={[6.4 * S, 7.6 * S]} />
+      <mesh ref={doorwayRef} position={[0, CLOUD_SHELL_DOOR_TOP / 2, doorZ + 0.6]} rotation={[0, Math.PI, 0]}>
+        <planeGeometry args={[CLOUD_SHELL_DOOR_HALF * 2, CLOUD_SHELL_DOOR_TOP]} />
         <primitive object={doorwayMat} attach="material" />
       </mesh>
       {/* Warm glow at threshold */}
-      <pointLight position={[0, 4.5 * S, doorZ + 2.5 * S]} color="#FFB45E" intensity={12 * S} distance={18 * S} decay={2} />
+      <pointLight position={[0, 6, doorZ + 3 * S]} color="#FFB45E" intensity={16 * S} distance={22 * S} decay={2} />
 
-      {/* Swinging door slab, pivoted on left post */}
-      <group ref={doorPivotRef} position={[-3.2 * S, 0, doorZ]}>
-        <mesh castShadow material={woodMat} position={[3.2 * S, 3.8 * S, 0.08 * S]}>
-          <boxGeometry args={[6.4 * S, 7.6 * S, 0.35 * S]} />
+      {/* Swinging door slab, pivoted on the left post */}
+      <group ref={doorPivotRef} position={[-(CLOUD_SHELL_DOOR_HALF - 0.2), 0, doorZ]}>
+        <mesh castShadow material={woodMat} position={[CLOUD_SHELL_DOOR_HALF - 0.2, CLOUD_SHELL_DOOR_TOP / 2, 0.25]}>
+          <boxGeometry args={[(CLOUD_SHELL_DOOR_HALF - 0.2) * 2, CLOUD_SHELL_DOOR_TOP - 0.6, 0.9]} />
         </mesh>
-        <mesh material={frameMat} position={[3.2 * S, 5.6 * S, 0.29 * S]}>
-          <boxGeometry args={[4.4 * S, 3.0 * S, 0.08 * S]} />
+        <mesh material={frameMat} position={[CLOUD_SHELL_DOOR_HALF - 0.2, CLOUD_SHELL_DOOR_TOP * 0.68, 0.74]}>
+          <boxGeometry args={[(CLOUD_SHELL_DOOR_HALF - 0.2) * 1.35, CLOUD_SHELL_DOOR_TOP * 0.22, 0.12]} />
         </mesh>
-        <mesh material={frameMat} position={[3.2 * S, 1.8 * S, 0.29 * S]}>
-          <boxGeometry args={[4.4 * S, 2.6 * S, 0.08 * S]} />
+        <mesh material={frameMat} position={[CLOUD_SHELL_DOOR_HALF - 0.2, CLOUD_SHELL_DOOR_TOP * 0.28, 0.74]}>
+          <boxGeometry args={[(CLOUD_SHELL_DOOR_HALF - 0.2) * 1.35, CLOUD_SHELL_DOOR_TOP * 0.20, 0.12]} />
         </mesh>
       </group>
 

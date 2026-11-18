@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import {
@@ -72,6 +72,70 @@ function drawIcon(ctx: CanvasRenderingContext2D, icon: string, cx: number, cy: n
     ctx.arc(cx + s * 0.3, cy, s * 0.3, Math.PI * 1.5, Math.PI * 0.5);
     ctx.stroke();
   }
+}
+
+function generateCloudSurfaceTexture(): THREE.CanvasTexture {
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#FFF8EC';
+  ctx.fillRect(0, 0, size, size);
+  // Soft low-frequency cloud lumps: many translucent radial blobs.
+  for (let i = 0; i < 260; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    const r = 18 + Math.random() * 70;
+    const light = Math.random() > 0.45;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    const c = light ? '255,253,246' : '238,224,198';
+    g.addColorStop(0, `rgba(${c},${0.05 + Math.random() * 0.10})`);
+    g.addColorStop(1, `rgba(${c},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(3, 2);
+  tex.anisotropy = 16;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function generateWoodTexture(): THREE.CanvasTexture {
+  const size = 512;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#8A5A33';
+  ctx.fillRect(0, 0, size, size);
+  const plankW = size / 6;
+  for (let p = 0; p < 6; p++) {
+    const x0 = p * plankW;
+    const base = 118 + Math.floor(Math.random() * 28);
+    ctx.fillStyle = `rgb(${base},${Math.floor(base * 0.62)},${Math.floor(base * 0.38)})`;
+    ctx.fillRect(x0 + 1, 0, plankW - 2, size);
+    // grain lines
+    ctx.strokeStyle = 'rgba(60,35,18,0.22)';
+    for (let gline = 0; gline < 18; gline++) {
+      const gx = x0 + 4 + Math.random() * (plankW - 8);
+      ctx.lineWidth = 0.8 + Math.random() * 1.4;
+      ctx.beginPath();
+      ctx.moveTo(gx, 0);
+      ctx.bezierCurveTo(gx + Math.sin(gline) * 7, size * 0.33, gx - Math.cos(gline) * 7, size * 0.66, gx + Math.sin(gline * 2) * 5, size);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(35,20,10,0.55)';
+    ctx.fillRect(x0, 0, 2, size);
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(5, 5);
+  tex.anisotropy = 16;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
 }
 
 const texCache = new Map<string, THREE.CanvasTexture>();
@@ -241,8 +305,11 @@ export function ProjectsCloudInterior({
   const groundY = terrainHeight(PROJECTS_CLOUD_X, PROJECTS_CLOUD_Z);
 
   // ---- one coherent inward-facing shell, with a real door opening cut out ----
+  const shellTex = useMemo(generateCloudSurfaceTexture, []);
+  const woodTex = useMemo(generateWoodTexture, []);
   const shellGeo = useMemo(() => {
-    const g = displacedSphereGeometry(CLOUD_INTERIOR_R, 3, 0.05, 909);
+    // Higher detail + welded sphere + smooth normals: no faceted look.
+    const g = displacedSphereGeometry(CLOUD_INTERIOR_R, 5, 0.035, 909);
     g.scale(1, CLOUD_INTERIOR_YSCALE, 1);
 
     // Cut the doorway: drop every triangle whose centroid falls inside the
@@ -291,18 +358,19 @@ export function ProjectsCloudInterior({
   const shellMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
+        map: shellTex,
         vertexColors: true,
-        roughness: 0.95,
-        flatShading: true,
+        roughness: 0.96,
+        flatShading: false,
         // DoubleSide: opaque from inside (the room's wall, and what hides the
         // hollowed-out exterior lobes beyond it) and also visible from outside
-        // through the gaps the lobe clipping leaves around the entrance.
+        // through the doorway cut.
         side: THREE.DoubleSide,
         // gentle self-lift so the interior reads warm cream under lantern light
-        emissive: new THREE.Color('#5A4C3A'),
-        emissiveIntensity: 0.34,
+        emissive: new THREE.Color('#4A3E30'),
+        emissiveIntensity: 0.20,
       }),
-    [],
+    [shellTex],
   );
   // Entrance tunnel — hides the cut shell edges and reads as a doorway from
   // inside. DoubleSide because both faces are visible during entry/exit.
@@ -319,8 +387,18 @@ export function ProjectsCloudInterior({
     [],
   );
   const floorMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: '#9A6B3F', roughness: 0.8 }),
-    [],
+    () =>
+      new THREE.MeshStandardMaterial({
+        map: woodTex,
+        color: '#D8B98E',
+        roughness: 0.72,
+        metalness: 0.0,
+      }),
+    [woodTex],
+  );
+  const baseboardMat = useMemo(
+    () => new THREE.MeshStandardMaterial({ map: woodTex, color: '#6E4526', roughness: 0.85, side: THREE.DoubleSide }),
+    [woodTex],
   );
   const inlayMat = useMemo(
     () => new THREE.MeshStandardMaterial({ color: '#C79C64', roughness: 0.85 }),
@@ -348,6 +426,14 @@ export function ProjectsCloudInterior({
     () => new THREE.MeshStandardMaterial({ color: '#4A7A33', roughness: 0.9 }),
     [],
   );
+
+  // Procedural textures are session-scoped; release them on unmount.
+  useEffect(() => {
+    return () => {
+      shellTex.dispose();
+      woodTex.dispose();
+    };
+  }, [shellTex, woodTex]);
 
   // gentle lantern pulse
   useFrame(() => {
@@ -418,18 +504,31 @@ export function ProjectsCloudInterior({
 
   return (
     <group position={[PROJECTS_CLOUD_X, groundY, PROJECTS_CLOUD_Z]}>
-      {/* wooden floor + lighter inlay ring */}
-      <mesh receiveShadow material={floorMat} position={[0, -0.12, 0]}>
-        <cylinderGeometry args={[CLOUD_INTERIOR_R - 2.5, CLOUD_INTERIOR_R - 2.5, 0.3, 44]} />
-      </mesh>
-      <mesh material={inlayMat} position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[ (9.5 / 20.5) * (CLOUD_INTERIOR_R - 2.5), (11.0 / 20.5) * (CLOUD_INTERIOR_R - 2.5), 48 ]} />
-      </mesh>
-      {/* round rug in the centre */}
-      <mesh material={rugMat} position={[0, 0.05, 2.0 * CLOUD_SCALE]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[6.0 * CLOUD_SCALE, 32]} />
-      </mesh>
+      {/* soft interior ambience so the gallery never falls to black between lanterns */}
+      <hemisphereLight args={['#FFF6E8', '#6B543C', 0.55]} />
+      {/* wooden floor + baseboard + lighter inlay ring */}
+      {(() => {
+        const floorR = CLOUD_INTERIOR_R - 2.5;
+        return (
+          <>
+            <mesh receiveShadow material={floorMat} position={[0, -0.12, 0]}>
+              <cylinderGeometry args={[floorR, floorR, 0.3, 64]} />
+            </mesh>
+            <mesh material={baseboardMat} position={[0, 0.48, 0]}>
+              <cylinderGeometry args={[floorR + 0.18, floorR + 0.18, 1.0, 64, 1, true]} />
+            </mesh>
+            <mesh material={inlayMat} position={[0, 0.035, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[(9.5 / 20.5) * floorR, (11.0 / 20.5) * floorR, 64]} />
+            </mesh>
+            {/* round rug in the centre */}
+            <mesh material={rugMat} position={[0, 0.05, 2.0 * CLOUD_SCALE]} rotation={[-Math.PI / 2, 0, 0]}>
+              <circleGeometry args={[6.0 * CLOUD_SCALE, 48]} />
+            </mesh>
+          </>
+        );
+      })()}
       {/* faceted cloud shell (inside view) with the doorway cut out */}
+      {/* (smooth welded shell — see displacedSphereGeometry detail 5 above) */}
       <mesh geometry={shellGeo} material={shellMat} position={[0, CLOUD_SHELL_Y, 0]} />
 
       {/* entrance tunnel: two jambs + lintel framing the shell opening */}
@@ -455,14 +554,28 @@ export function ProjectsCloudInterior({
           <mesh material={lanternMat}>
             <sphereGeometry args={[0.5, 12, 10]} />
           </mesh>
-          <pointLight position={[0, 0, 0]} color="#FFB45E" intensity={16} distance={22} decay={2} />
+          <pointLight position={[0, 0, 0]} color="#FFB45E" intensity={24} distance={32} decay={2} />
         </group>
       ))}
+      {/* warm perimeter fill lights so walls/floor transitions stay readable */}
+      {[45, 135, 225, 315].map((deg) => {
+        const a = (deg * Math.PI) / 180;
+        return (
+          <pointLight
+            key={`fill-${deg}`}
+            position={[32 * Math.cos(a), 20, 32 * Math.sin(a)]}
+            color="#FFD9B0"
+            intensity={18}
+            distance={48}
+            decay={2}
+          />
+        );
+      })}
       {/* central skylight wash — lifts the whole gallery so the displays and
           the cream shell stay readable from any camera angle */}
-      <pointLight position={[0, 17.0 * S, 2.0 * S]} color="#FFF0D8" intensity={42} distance={46 * S} decay={2} />
+      <pointLight position={[0, 17.0 * S, 2.0 * S]} color="#FFF0D8" intensity={90} distance={95 * S} decay={2} />
       {/* purple accent glow on the back wall (matches reference) */}
-      <pointLight position={[0, 10.0 * S, 16.0 * S]} color="#B48AE0" intensity={8} distance={28 * S} decay={2} />
+      <pointLight position={[0, 10.0 * S, 16.0 * S]} color="#B48AE0" intensity={12} distance={32 * S} decay={2} />
 
       {/* the project displays (data-driven, supports 20+) */}
       {displayData.map((d) => (
