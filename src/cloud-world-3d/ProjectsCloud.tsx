@@ -33,8 +33,8 @@ import {
 // Reference silhouette: a fluffy multi-lobed cartoon cloud — one wide soft
 // base, bulbous lower side formations, scalloped upper-mid shoulders and a
 // massive central upper cloud with crown tufts. Lobes overlap heavily and
-// the smooth-union SDF (k=1.75) blends them into ONE continuous fluffy
-// surface: scalloped outline, no visible individual-ball seams.
+// the smooth-union SDF (k=1.2) blends them into ONE continuous fluffy
+// surface: scalloped outline with visible lobe bumps, no hard ball seams.
 type CloudLobe = { x: number; y: number; z: number; r: number; sy: number };
 const CLOUD_LOBES: CloudLobe[] = [
   // ---- base: wide, low, soft mass merging into the ground ----
@@ -106,7 +106,7 @@ function cloudBodySDF(x: number, y: number, z: number): number {
   const shellY = CLOUD_SHELL_Y / S;
   let d = Infinity;
   for (const b of CLOUD_LOBES) {
-    d = smin(d, ellipsoidSDF(x - b.x, y - b.y, z - b.z, b.r, b.r * b.sy, b.r), 1.75);
+    d = smin(d, ellipsoidSDF(x - b.x, y - b.y, z - b.z, b.r, b.r * b.sy, b.r), 1.2);
   }
   // Hollow interior, matching ProjectsCloudInterior's shell.
   d = smax(d, -ellipsoidSDF(x, y - shellY, z, shellR, shellR * CLOUD_INTERIOR_YSCALE, shellR), 0.8);
@@ -127,9 +127,9 @@ function generateAlbedoTexture(): THREE.CanvasTexture {
   const ctx = canvas.getContext('2d')!;
   // Base gradient: darker underside → bright crown
   const grad = ctx.createLinearGradient(0, size, 0, 0);
-  grad.addColorStop(0, '#E8DCC8'); // warm shade
-  grad.addColorStop(0.45, '#FAF3E4'); // mid cream
-  grad.addColorStop(1, '#FFFDF8'); // highlight
+  grad.addColorStop(0, '#F1E9DA'); // soft warm shade
+  grad.addColorStop(0.45, '#FBF8F1'); // cream
+  grad.addColorStop(1, '#FFFFFF'); // bright crown — reference clouds read white, not tan
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
   // Overlay low-frequency noise for organic variation
@@ -337,7 +337,7 @@ export function ProjectsCloud({
 
   // ---- Smooth SDF cloud geometry (MarchingCubes) ----
   const cloudGeo = useMemo(() => {
-    const resolution = 88; // voxel resolution — smooth silhouette without excessive tris
+    const resolution = 96; // voxel resolution — crisp scalloped silhouette without excessive tris
     const mc = new MarchingCubes(resolution, new THREE.MeshStandardMaterial(), true, false, 500000);
     mc.isolation = 0;
     const half = resolution / 2;
@@ -397,6 +397,10 @@ export function ProjectsCloud({
       normalScale: new THREE.Vector2(0.6, 0.6),
       roughness: 0.92,
       metalness: 0.0,
+      // slight lift so the cloud reads white/cream under the warm sunset sun
+      // (reference artwork shows near-white clouds, not tan)
+      emissive: new THREE.Color('#FFF6EA'),
+      emissiveIntensity: 0.22,
     });
   }, []);
 
@@ -529,7 +533,7 @@ export function ProjectsCloud({
         <boxGeometry args={[1.0, CLOUD_SHELL_DOOR_TOP + 1.0, 1.0]} />
       </mesh>
       <mesh castShadow material={frameMat} position={[0, CLOUD_SHELL_DOOR_TOP - (CLOUD_SHELL_DOOR_HALF + 0.2), doorZ]}>
-        <torusGeometry args={[CLOUD_SHELL_DOOR_HALF + 0.2, 0.55 * S, 12, 28, Math.PI]} />
+        <torusGeometry args={[CLOUD_SHELL_DOOR_HALF + 0.2, 0.38 * S, 12, 28, Math.PI]} />
       </mesh>
 
       {/* Dark doorway behind the slab (hidden once inside) */}
@@ -549,16 +553,10 @@ export function ProjectsCloud({
           <group key={side} ref={side < 0 ? doorPivotLRef : doorPivotRRef} position={[side * leafW, 0, doorZ]}>
             <mesh castShadow material={doorMat} geometry={doorLeafGeo} position={[-side * leafW / 2, 0, 0.25]} />
             {side === 1 && (
-              <mesh material={knobMat} position={[-1.0, CLOUD_SHELL_DOOR_TOP * 0.5, 0.78]}>
-                <sphereGeometry args={[0.32 * S, 10, 8]} />
+              <mesh material={knobMat} position={[-1.0, CLOUD_SHELL_DOOR_TOP * 0.5, 0.85]}>
+                <sphereGeometry args={[0.42 * S, 10, 8]} />
               </mesh>
             )}
-            <mesh material={frameMat} position={[-side * leafW / 2, CLOUD_SHELL_DOOR_TOP * 0.66, 0.74]}>
-              <boxGeometry args={[leafW * 0.68, CLOUD_SHELL_DOOR_TOP * 0.2, 0.1]} />
-            </mesh>
-            <mesh material={frameMat} position={[-side * leafW / 2, CLOUD_SHELL_DOOR_TOP * 0.28, 0.74]}>
-              <boxGeometry args={[leafW * 0.68, CLOUD_SHELL_DOOR_TOP * 0.18, 0.1]} />
-            </mesh>
           </group>
         );
       })}
@@ -624,16 +622,17 @@ export function ProjectsCloud({
         <pointLight position={[0, 15.0 * S, -4.5 * S]} color="#FFC069" intensity={9 * S} distance={18 * S} decay={2} />
       </group>
 
-      {/* Flanking entrance lanterns (scaled) */}
-      {[-6.8 * S, 6.8 * S].map((lx) => (
-        <group key={lx} position={[lx, 0, doorZ - 1.5 * S]}>
-          <mesh castShadow material={frameMat} position={[0, 2.4 * S, 0]}>
-            <cylinderGeometry args={[0.14 * S, 0.17 * S, 4.8 * S, 8]} />
+      {/* Flanking wall sconces mounted on the cloud face beside the door (reference) */}
+      {[-8.8 * S, 8.8 * S].map((lx) => (
+        <group key={lx} position={[lx, 0, doorZ + 2.0 * S]}>
+          {/* bracket arm from the wall */}
+          <mesh castShadow material={frameMat} position={[0, 5.6 * S, -0.9 * S]} rotation={[Math.PI / 2.6, 0, 0]}>
+            <cylinderGeometry args={[0.09 * S, 0.11 * S, 1.6 * S, 6]} />
           </mesh>
-          <mesh position={[0, 5.0 * S, 0]} material={lanternMat}>
-            <sphereGeometry args={[0.45 * S, 12, 10]} />
+          <mesh position={[0, 5.2 * S, 0]} material={lanternMat}>
+            <sphereGeometry args={[0.48 * S, 12, 10]} />
           </mesh>
-          <pointLight position={[0, 5.0 * S, 0]} color="#FFB45E" intensity={16 * S} distance={20 * S} decay={2} />
+          <pointLight position={[0, 5.2 * S, 0]} color="#FFB45E" intensity={16 * S} distance={20 * S} decay={2} />
         </group>
       ))}
 
