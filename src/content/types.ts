@@ -146,11 +146,38 @@ export interface RepositoryRef {
   readonly url: string;
 }
 
+/**
+ * One project where a skill was applied, with what the skill actually did there.
+ *
+ * Lives inside `SkillExperience.applications` so a skill card can list its
+ * PROJECT APPLICATION entries. `contribution` must describe only verified work;
+ * if a connection cannot be verified the whole entry is omitted.
+ */
+export interface SkillApplication {
+  /** Project name as the portfolio states it. */
+  readonly project: string;
+  /** The skill's actual contribution to that project. Evidence-backed. */
+  readonly contribution: string;
+  /** Repository backing the project, when one maps to it. */
+  readonly repository?: RepositoryRef;
+}
+
 /** Evidence backing a skill claim, plus training context where relevant. */
 export interface SkillExperience {
   readonly experienceType: ExperienceType;
   /** Implementation facts. Every line traces to the evidence audit. */
   readonly evidence: readonly string[];
+  /**
+   * "HOW I USED IT" — one paragraph of applied practice, in the author's words.
+   * Optional because older entries predate the card structure; every line must
+   * still trace to the evidence audit, never to aspiration.
+   */
+  readonly usage?: string;
+  /**
+   * "PROJECT APPLICATION" — the projects where the skill was actually applied.
+   * Optional for the same reason as `usage`. Omit a project rather than guess.
+   */
+  readonly applications?: readonly SkillApplication[];
   /**
    * Required when `experienceType` is TRAINING or BOTH — the context that makes
    * the claim honest ("practised via Docker Desktop in DevOps coursework").
@@ -244,6 +271,27 @@ export interface Collaborator {
   readonly role: string;
 }
 
+/**
+ * A genuine project screenshot committed to THIS repository under
+ * `public/assets/`, shown in the project card's preview strip.
+ *
+ * Added for the project-card redesign: cards showcase real work visually, but
+ * only with real images — never generated stand-ins. `sourceUrl` is the
+ * upstream location the image was taken from, so the provenance stays
+ * checkable.
+ */
+export interface ProjectPreview {
+  readonly id: string;
+  /** Visible caption label, e.g. "Bluestock Fintech — Mutual Fund Analysis (Separate Project)". */
+  readonly label: string;
+  /** Committed image path, relative to the site root. */
+  readonly path: string;
+  /** Accessible image description. */
+  readonly alt: string;
+  /** Upstream source of the image, when it comes from another repository. */
+  readonly sourceUrl?: string;
+}
+
 export interface Project {
   readonly id: string;
   readonly title: string;
@@ -288,6 +336,17 @@ export interface Project {
    * repository and are therefore one project with five views, not five projects.
    */
   readonly dashboards?: readonly DashboardPreview[];
+  /**
+   * PROJECT OVERVIEW copy for the redesigned project card. The card renders
+   * exactly three labelled rows — PROBLEM, SOLUTION, IMPACT — from these fields,
+   * so the copy stays in the content model (reviewable, single source of truth)
+   * rather than hardcoded in JSX.
+   */
+  readonly problem?: string;
+  readonly solution?: string;
+  readonly impact?: string;
+  /** Genuine screenshots for the card's preview strip (click to enlarge). */
+  readonly previews?: readonly ProjectPreview[];
   /**
    * Where the evidence lives. Not a claim about the project — a pointer to the
    * files that back it, for a panel's "show me" affordance.

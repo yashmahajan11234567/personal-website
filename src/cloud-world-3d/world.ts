@@ -18,19 +18,59 @@ export function smoothstep(a: number, b: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-// Winding path centerline: meanders through the open valley, straightens
-// inside the mountain passage (z 95..175) so the canyon reads as one carved
-// corridor, then opens again into the Projects Sunset stretch.
+// Winding path centerline: meanders through the open valley all the way to
+// the Projects Cloud destination.
 export function pathCenterX(z: number): number {
-  const canyon = smoothstep(92, 108, z) * (1 - smoothstep(168, 184, z));
-  const amp = 1 - 0.75 * canyon;
-  return (2.5 * Math.sin(z * 0.05) + 1.5 * Math.sin(z * 0.13 + 2.0)) * amp;
+  return 2.5 * Math.sin(z * 0.05) + 1.5 * Math.sin(z * 0.13 + 2.0);
 }
 
 // Path half width varies gently so the trail breathes instead of reading as a
 // uniform stripe.
 export function pathHalfWidth(z: number): number {
   return 2.6 + Math.sin(z * 0.07) * 0.7 + 0.5 * Math.sin(z * 0.023 + 1.3);
+}
+
+// ============================================================
+// Projects Cloud building — single source of truth for its
+// placement, the player collision, the camera interior clamp
+// and every scatter/sign keep-out. The giant cloud building
+// sits on the path where the old mountain destination was.
+//
+// 2026-11-18 redesign: medium-sized building (reference-matched).
+// All dimensions derive from CLOUD_SCALE so exterior, interior,
+// doorway, collision and camera stay consistent. The door plane
+// is DERIVED from the interior shell radius (it used to be a
+// hardcoded z-offset that silently assumed R=21.5).
+// ============================================================
+export const CLOUD_SCALE = 1.4;
+export const PROJECTS_CLOUD_Z = 170;
+export const PROJECTS_CLOUD_X = pathCenterX(PROJECTS_CLOUD_Z);
+/** Exterior collision radius (world units) around the cloud center. */
+export const CLOUD_R_EXT = 26 * CLOUD_SCALE;
+/** Interior walkable radius once the player is through the door. */
+export const CLOUD_R_INT = 17 * CLOUD_SCALE;
+/** Visible interior shell radius (the cream gallery wall the player sees). */
+export const CLOUD_INTERIOR_R = 21.5 * CLOUD_SCALE;
+/** Vertical stretch of the interior shell — raises the gallery ceiling. */
+export const CLOUD_INTERIOR_YSCALE = 1.18;
+/** Y offset of the interior shell mesh above the cloud group origin. */
+export const CLOUD_SHELL_Y = 1.5 * CLOUD_SCALE;
+/** Max distance the interior camera may sit from the cloud center (spring arm). */
+export const CLOUD_INTERIOR_CAM_R = 15 * CLOUD_SCALE;
+/** Half-width / height of the opening cut through the interior shell. */
+export const CLOUD_SHELL_DOOR_HALF = 5.2 * CLOUD_SCALE;
+export const CLOUD_SHELL_DOOR_TOP = 12.6 * CLOUD_SCALE;
+/** Half-width of the door corridor cut into the -z face of the cloud. */
+export const CLOUD_DOOR_HALF = 5.0 * CLOUD_SCALE;
+/** Depth of the doorway tunnel cut through the shell (front face -> cut plane). */
+export const CLOUD_DOOR_CUT_DEPTH = 8.5 * CLOUD_SCALE;
+/** World z of the door plane, derived: 0.5u inside the shell's front face. */
+export const CLOUD_DOOR_Z = PROJECTS_CLOUD_Z - CLOUD_INTERIOR_R + 0.5;
+/** Scatter/sign keep-out margin beyond the collision radius. */
+export const CLOUD_KEEP_OUT_MARGIN = 6 * CLOUD_SCALE;
+/** Scatter/sign keep-out: nothing grows or stands this close to the cloud. */
+export function inProjectsCloudKeepOut(x: number, z: number): boolean {
+  return Math.hypot(x - PROJECTS_CLOUD_X, z - PROJECTS_CLOUD_Z) < CLOUD_R_EXT + CLOUD_KEEP_OUT_MARGIN;
 }
 
 // Analytic terrain height. The terrain mesh is DISPLACED from this function on
@@ -92,7 +132,7 @@ export function terrainColorAt(x: number, z: number, h: number, out: THREE.Color
   // Path paint with a slightly darker trodden rim just outside the sand.
   const edge = smoothstep(halfW + 1.6, halfW - 0.4, d);
   TMP.copy(SAND);
-  if (z > 168) TMP.lerp(SAND_WARM, smoothstep(168, 215, z));
+  if (z > PROJECTS_CLOUD_Z - 2) TMP.lerp(SAND_WARM, smoothstep(PROJECTS_CLOUD_Z - 2, PROJECTS_CLOUD_Z + 45, z));
   out.lerp(TMP, edge);
   // Trodden rim: narrow band at the path edge — darkened 0.08 → 0.2 in the
   // polish pass so the path edge reads as a defined border, not a hard seam.
@@ -101,33 +141,7 @@ export function terrainColorAt(x: number, z: number, h: number, out: THREE.Color
 
   const mountainBlend = 1 - smoothstep(-95, -70, z);
   out.lerp(ROCKY, mountainBlend * 0.75);
-  out.lerp(SAND_WARM, smoothstep(180, 235, z) * 0.55);
-
-  // VIDEO PASS 2026-10-24 — bore floor: inside the carved tunnel (z 100..170,
-  // within the bore radius of the path center) the floor is still meadow
-  // green, meeting the brown shell in a sharp line that read as a "hard seam /
-  // two-tone floor" in the user's gameplay video. Blend the floor toward warm
-  // sandstone with z-fades at both mouths so the interior reads as carved
-  // rock floor; the transition is gradual (10u) so there is no new seam.
-  // FORENSIC FIX 2026-10-25 (vis007/05+/08): the ramps were INVERTED —
-  // `(1 - smoothstep(96,106,z)) * smoothstep(174,164,z)` is 1 for z<96 (the
-  // open approach apron) and 0 for 106<z<164 (the actual bore) — it painted
-  // the apron sandstone and left the bore floor green. Corrected to ramp IN
-  // at the entrance and OUT at the exit.
-  {
-    const inBore = smoothstep(96, 106, z) * (1 - smoothstep(164, 174, z));
-    const lateral = 1 - smoothstep(7.2, 11, Math.abs(x - pathCenterX(z)));
-    const boreFloor = inBore * lateral;
-    if (boreFloor > 0.001) {
-      // Two-step blend: sandy walkway center, darker toward the walls so the
-      // springing line (shell base meets floor) has no bright floor edge.
-      TMP.set('#8F6F49');
-      out.lerp(TMP, boreFloor * 0.8);
-      const wallSide = smoothstep(2.5, 6.5, Math.abs(x - pathCenterX(z)));
-      TMP.set('#6E5238'); // match the shell tone family
-      out.lerp(TMP, boreFloor * wallSide * 0.72);
-    }
-  }
+  out.lerp(SAND_WARM, smoothstep(PROJECTS_CLOUD_Z + 10, PROJECTS_CLOUD_Z + CLOUD_R_EXT, z) * 0.55);
 
   // Macro color patches: two very-low-frequency HSL terms (wavelength ~40u)
   // so the meadow reads as patched, not uniform. Amplitudes raised 2026-10-20
@@ -157,7 +171,7 @@ export function mulberry32(seed: number): () => number {
 
 // ============================================================
 // Sign placement clearance — shared by the skill signs
-// (CloudWorld3D) and the PROJECTS sign (MountainPassage).
+// (CloudWorld3D) and any destination signage.
 //
 // Rebuilds the deterministic tree positions with the SAME seed and
 // consumption order as Vegetation.tsx getTreeSpecs(), plus the fixed
@@ -181,6 +195,7 @@ export function getSignTreeObstacles(): { x: number; z: number }[] {
     // 6.5 (was 5.5): broadleaf canopy can reach ~3.1u, so trunks must stay
     // far enough out that no branch overhangs the walking corridor.
     if (Math.abs(x - pathCenterX(z)) < 6.5) continue;
+    if (inProjectsCloudKeepOut(x, z)) continue; // keep the building footprint clear
     trees.push({ x, z });
     rnd(); // scale
     rnd(); // rotY

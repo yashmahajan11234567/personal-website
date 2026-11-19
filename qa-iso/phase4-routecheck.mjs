@@ -1,0 +1,18 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ headless: true });
+const p = await (await b.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+const errs = [];
+p.on('pageerror', e => errs.push(String(e).slice(0, 120)));
+await p.goto('http://localhost:5174/#/', { waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => !document.querySelector('.loading-screen') && !!document.getElementById('experience'), { timeout: 40000 });
+await new Promise(r => setTimeout(r, 2500));
+const hero = await p.evaluate(() => JSON.stringify({ scrollH: document.scrollingElement.scrollHeight, exp: !!document.getElementById('experience') }));
+await p.evaluate(() => { location.hash = '#/cloud-world-25d'; });
+await p.waitForFunction(() => window.__cw25d, { timeout: 30000 });
+await new Promise(r => setTimeout(r, 4000));
+const open = await p.evaluate(() => JSON.stringify({ scrollH: document.scrollingElement.scrollHeight, overflow: getComputedStyle(document.documentElement).overflow, expInDom: !!document.getElementById('experience') }));
+await p.click('.cw25d-back');
+await new Promise(r => setTimeout(r, 4500));
+const back = await p.evaluate(() => JSON.stringify({ exp: !!document.getElementById('experience'), overflow: getComputedStyle(document.documentElement).overflow, scrollH: document.scrollingElement.scrollHeight }));
+console.log('P4-ROUTE hero:', hero, 'open:', open, 'back:', back, 'errors:', errs.length);
+await b.close();

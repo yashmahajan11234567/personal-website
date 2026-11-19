@@ -397,3 +397,118 @@ export const drawChapterPlate = (
   ctx.fillRect(W - 6, H - 3, 4, 1);
   stampPixelText(ctx, 6, Math.floor((H - GLYPH_H) / 2), text.toUpperCase(), DATA_PALETTE.text, 1);
 };
+
+/**
+ * Draw a large Surface portal (cliff exit) — a tall glowing blue archway
+ * with energy field effects. Much larger than a standard pipe mouth to
+ * match the reference image's dramatic "NEXT: SKILLS" portal.
+ */
+export const drawSurfacePortal = (
+  ctx: CanvasRenderingContext2D,
+  size: { width: number; height: number },
+  /** 0 = dormant, 1 = fully lit/active. */
+  energy: number = 0,
+): void => {
+  const W = size.width;
+  const H = size.height;
+  const cx = W / 2;
+
+  const e = Math.max(0, Math.min(1, energy));
+
+  // Colors: deep blue portal with cyan/magenta energy
+  const voidColor = '#04060A';
+  const frameMid = '#0A2440';
+  const frameLit = lerpColor('#0E3A6E', '#1E7FD8', e);
+  const fieldDim = lerpColor('#003366', '#004499', e);
+  const fieldBright = lerpColor('#0088CC', '#00AADD', e);
+  const fieldCore = lerpColor('#44DDFF', '#88EEFF', e);
+  const accentCyan = lerpColor('#00CCFF', '#44EEFF', e);
+  const accentMagenta = lerpColor('#CC00AA', '#FF44DD', e);
+
+  // Clear
+  ctx.fillStyle = voidColor;
+  ctx.fillRect(0, 0, W, H);
+
+  // Portal arch frame: tall curved top, vertical sides
+  const archW = W * 0.7;
+  const archH = H * 0.85;
+  const archX = (W - archW) / 2;
+  const archY = H - archH;
+
+  // Frame sides (vertical)
+  const frameThick = 6;
+  ctx.fillStyle = e > 0 ? frameLit : frameMid;
+  ctx.fillRect(archX, archY, frameThick, archH);
+  ctx.fillRect(archX + archW - frameThick, archY, frameThick, archH);
+
+  // Frame top (curved - approximated with rects)
+  ctx.fillRect(archX, archY, archW, frameThick);
+  ctx.fillRect(archX, archY + frameThick, frameThick * 2, frameThick);
+  ctx.fillRect(archX + archW - frameThick * 2, archY + frameThick, frameThick * 2, frameThick);
+
+  // Inner energy field (the glowing portal surface)
+  const fieldX = archX + frameThick;
+  const fieldY = archY + frameThick;
+  const fieldW = archW - frameThick * 2;
+  const fieldH = archH - frameThick * 2;
+
+  // Base field
+  ctx.fillStyle = fieldDim;
+  ctx.fillRect(fieldX, fieldY, fieldW, fieldH);
+
+  // Vertical energy streaks
+  for (let i = 0; i < 5; i++) {
+    const sx = fieldX + (fieldW / 6) * (i + 1);
+    const streakW = Math.max(2, Math.floor(fieldW / 12));
+    const streakH = fieldH * (0.4 + 0.3 * Math.sin(e * Math.PI + i));
+    ctx.fillStyle = i % 2 === 0 ? fieldBright : fieldCore;
+    ctx.fillRect(sx, fieldY + (fieldH - streakH) / 2, streakW, streakH);
+  }
+
+  // Horizontal scan lines (subtle)
+  ctx.fillStyle = `rgba(0, 170, 204, ${0.15 + e * 0.15})`;
+  for (let y = fieldY; y < fieldY + fieldH; y += 4) {
+    ctx.fillRect(fieldX, y, fieldW, 1);
+  }
+
+  // Core glow at center
+  const coreR = Math.floor(Math.min(fieldW, fieldH) * 0.15 * (0.5 + e * 0.5));
+  const gradient = ctx.createRadialGradient(cx, fieldY + fieldH / 2, 0, cx, fieldY + fieldH / 2, coreR);
+  gradient.addColorStop(0, fieldCore);
+  gradient.addColorStop(0.5, fieldBright);
+  gradient.addColorStop(1, 'rgba(0, 200, 255, 0)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(fieldX, fieldY, fieldW, fieldH);
+
+  // Magenta accent particles (rising)
+  if (e > 0.2) {
+    ctx.fillStyle = accentMagenta;
+    for (let i = 0; i < 8; i++) {
+      const px = fieldX + (i * fieldW) / 8 + Math.sin(Date.now() / 200 + i) * 3;
+      const py = fieldY + fieldH - (i % 3) * 12 - (Date.now() / 30) % 40;
+      if (px > fieldX && px < fieldX + fieldW && py > fieldY && py < fieldY + fieldH) {
+        ctx.fillRect(px, py, 2, 2);
+      }
+    }
+  }
+
+  // Outer glow rim
+  ctx.strokeStyle = accentCyan;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(fieldX - 1, fieldY - 1, fieldW + 2, fieldH + 2);
+
+  // Base platform indicator (bottom)
+  ctx.fillStyle = frameLit;
+  ctx.fillRect(archX - 4, H - 8, archW + 8, 8);
+};
+
+function lerpColor(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16);
+  const pb = parseInt(b.slice(1), 16);
+  const ra = (pa >> 16) & 255, ga = (pa >> 8) & 255, ba = pa & 255;
+  const rb = (pb >> 16) & 255, gb = (pb >> 8) & 255, bb = pb & 255;
+  const r = Math.round(ra + (rb - ra) * t);
+  const g = Math.round(ga + (gb - ga) * t);
+  const bb2 = Math.round(ba + (bb - ba) * t);
+  return `rgb(${r}, ${g}, ${bb2})`;
+}

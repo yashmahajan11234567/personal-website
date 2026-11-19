@@ -1,0 +1,7 @@
+{
+  "style": "flat cartoon game texture, cel-shaded, bold simple shapes, vibrant pastel colors, fills the ENTIRE frame edge to edge with no border, no background, no sky, no objects unless the asset is a texture",
+  "neg": "ugly, blurry, lowres, deformed, watermark, text, letters, numbers, signature, cropped, photo, realistic, 3d render, dark moody, gradients vignette, multiple objects, collage, grid, black background, white background, magenta, leaf shapes, lily pads, koi fish, lotus",
+  "assets": [
+    {"name": "tex_water", "w": 1024, "h": 1024, "tile": true, "prompt": "seamless cartoon open water surface texture filling the ENTIRE frame, top-down view: uniform bright turquoise aqua blue base with only subtle soft horizontal wavy ripple streaks in lighter cyan and sparse tiny white sparkle dots, very calm and uniform, NO leaves, NO lily pads, NO fish, NO objects, tileable edge to edge"}
+  ]
+}

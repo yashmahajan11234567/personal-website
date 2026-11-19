@@ -1,0 +1,19 @@
+{
+  "style": "cute chibi adventurer character sprite, isometric 2:1 view, indie adventure game, flat vector illustration, cel shading, lighting from top-left, red cap, teal jacket, brown backpack, big expressive eyes, clean bold outlines, centered, full body visible, standing on small soft shadow, on a solid flat pure magenta background RGB(255,0,255)",
+  "neg": "ugly, blurry, lowres, deformed, distorted, watermark, text, cropped, out of frame, extra limbs, mutation, jpeg artifacts, photo, 3d render, multiple characters",
+  "dirs": {
+    "0": "facing right (east), profile view looking right",
+    "1": "facing down-right (south-east), three-quarter front view",
+    "2": "facing front (south) toward viewer, full front view",
+    "3": "facing down-left (south-west), three-quarter front view",
+    "4": "facing left (west), profile view looking left",
+    "5": "facing up-left (north-west), three-quarter back view",
+    "6": "facing away (north), back view",
+    "7": "facing up-right (north-east), three-quarter back view"
+  },
+  "poses": {
+    "idle": "idle standing pose, relaxed, arms at sides, slight smile",
+    "walk_a": "walking pose frame A, left leg forward, right arm swinging forward",
+    "walk_b": "walking pose frame B, right leg forward, left arm swinging forward, legs passing"
+  }
+}

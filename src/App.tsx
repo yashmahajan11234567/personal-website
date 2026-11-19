@@ -29,7 +29,6 @@ const CloudWorld3D = lazy(() =>
 const ExperienceSection = lazy(() =>
   import('./experience/ExperienceSection').then((m) => ({ default: m.ExperienceSection })),
 );
-
 const HASH_WORLDS = {
   '#/data-world': 'data-world',
   '#/cloud-world': 'cloud-world',
@@ -84,6 +83,34 @@ function App() {
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, [applyHash]);
+
+  /*
+   * Scroll isolation for world routes (regression fix). The hero branch renders
+   * the Experience section in the normal document flow, so any world route must
+   * lock document scroll while mounted — otherwise wheel input can scroll the
+   * document and expose the sections beneath the game. Previous inline overflow
+   * values and scroll Y are restored on exit (deferred past the hero remount).
+   */
+  useEffect(() => {
+    if (currentWorld === 'hero') return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = {
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+      y: window.scrollY,
+    };
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
+    return () => {
+      html.style.overflow = prev.htmlOverflow;
+      body.style.overflow = prev.bodyOverflow;
+      const restore = () => window.scrollTo(0, prev.y);
+      requestAnimationFrame(() => requestAnimationFrame(restore));
+      window.setTimeout(restore, 120);
+    };
+  }, [currentWorld]);
 
   useEffect(() => {
     if (!isLoading) return;
@@ -170,6 +197,23 @@ function App() {
     destroyActiveTimeline();
   }
 
+  /*
+   * Lock page scroll while any world is open. The rule lives in
+   * WorldShell.css (`html.game-world-active, body.game-world-active`); applying
+   * the class here is what makes the full-screen stage safe — with the world
+   * route rendering nothing else, the document is exactly one viewport tall,
+   * and this belt-and-braces lock keeps it that way on any browser.
+   */
+  useEffect(() => {
+    const active = currentWorld !== 'hero';
+    document.documentElement.classList.toggle('game-world-active', active);
+    document.body.classList.toggle('game-world-active', active);
+    return () => {
+      document.documentElement.classList.remove('game-world-active');
+      document.body.classList.remove('game-world-active');
+    };
+  }, [currentWorld]);
+
   const syncUrl = (hash: string) => {
     if (window.location.hash !== hash) window.location.hash = hash;
   };
@@ -195,7 +239,7 @@ function App() {
     <div className="app">
       <a href="#main" className="skip-link">Skip to main content</a>
       <main id="main">
-        {isLoading ? (
+        {isLoading && currentWorld === 'hero' ? (
           <LoadingScreen progress={loadingProgress} onComplete={() => {}} />
         ) : currentWorld === 'hero' && (
           <>

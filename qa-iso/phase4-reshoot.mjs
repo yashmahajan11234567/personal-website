@@ -1,0 +1,25 @@
+import { chromium } from 'playwright';
+const OUT = '/Users/yashsiphone/CLOUD_WORLD_DOCKSIDE/PHASE_4_PROTOTYPE/shots/';
+const b = await chromium.launch({ headless: true });
+const p = await (await b.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+const errs = [];
+p.on('pageerror', e => errs.push(String(e).slice(0, 140)));
+await p.goto('http://localhost:5174/#/cloud-world-25d', { waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => window.__cw25d, { timeout: 30000 });
+await p.evaluate(() => __cw25d.forceHigh());
+await new Promise(r => setTimeout(r, 6000));
+await p.evaluate(() => __cw25d.zoom(1));
+await new Promise(r => setTimeout(r, 1500));
+await p.screenshot({ path: OUT + 'p4-1-full-harbour.png' });
+// boat close-up: board, sail, zoom tight
+await p.evaluate(() => { __cw25d.teleport(29.5, 0); __cw25d.zoom(0.5); });
+await new Promise(r => setTimeout(r, 1200));
+await p.evaluate(() => __cw25d.board());
+await new Promise(r => setTimeout(r, 800));
+await p.evaluate(() => { __cw25d.key('d'); __cw25d.key('w'); });
+await new Promise(r => setTimeout(r, 2000));
+await p.evaluate(() => { __cw25d.key('d', false); __cw25d.key('w', false); __cw25d.zoom(0.15); });
+await new Promise(r => setTimeout(r, 1800));
+await p.screenshot({ path: OUT + 'p4-3-boat-closeup.png' });
+console.log('mode:', await p.evaluate(() => __cw25d.mode), 'boat:', await p.evaluate(() => JSON.stringify(__cw25d.boat)), 'errors:', errs.length);
+await b.close();

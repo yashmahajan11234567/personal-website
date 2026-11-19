@@ -10,13 +10,6 @@ export interface SkillStop {
   side: 'left' | 'right';
 }
 
-export interface ProjectInfo {
-  id: string;
-  title: string;
-  github: string;
-  technologies: string[];
-}
-
 // Approach-facing yaw for a sign beside the path. The player walks the path
 // toward +z with the camera behind looking +z, so a sign on the LEFT of the
 // path (negative x side) should present its face slightly right-of-center-back
@@ -53,32 +46,6 @@ export function SkillMarker({
       position={[stop.x, stop.z]}
       yaw={approachYaw(stop.z, stop.side)}
       scale={scale}
-      onClick={handleClick}
-      onHover={setHovered}
-    />
-  );
-}
-
-export function ProjectMarker({
-  project,
-  position,
-  onClick,
-}: {
-  project: ProjectInfo;
-  position: [number, number];
-  onClick?: (id: string) => void;
-}) {
-  const [, setHovered] = useState(false);
-  const handleClick = () => onClick?.(project.id);
-  // Projects zone: player arrives moving +z out of the tunnel, signs flank the
-  // path — same approach-facing logic as skills, keyed by x-side.
-  const side = position[0] < pathCenterX(position[1]) ? 'left' : 'right';
-  return (
-    <CloudSign
-      title={project.title}
-      position={[position[0], position[1]]}
-      yaw={approachYaw(position[1], side)}
-      scale={3.6}
       onClick={handleClick}
       onHover={setHovered}
     />

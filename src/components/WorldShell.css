@@ -9,44 +9,51 @@
  */
 
 .world-canvas {
-  /* Phaser RESIZEs the canvas to this box. It must have a real size before the
-     engine measures it, otherwise the canvas boots at 0x0. */
-  width: min(100%, 1100px);
-  height: clamp(280px, 58vh, 620px);
-  background: #070b14;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  /*
-   * `position: relative` so the information panel can position itself against
-   * this box. Phase 1 had no absolutely-positioned child here, so this is purely
-   * additive.
-   */
-  position: relative;
-  /*
-   * Phase 1 set `overflow: hidden` here. It is RETAINED on purpose: the canvas
-   * must be clipped to its rounded frame so the game never bleeds past the
-   * border. The panel is therefore NOT a child that overflows — it is centred
-   * inside this box, and `overflow: hidden` clips it to the stage, which is what
-   * "the panel opens over the world" should look like.
+  /* 
+   * FULL-SCREEN. Phaser RESIZEs the canvas to this box, so the box must be the
+   * whole viewport for the game to be full-screen. It must also have a real size
+   * before the engine measures it, otherwise the canvas boots at 0x0.
    *
+   * `position: absolute; inset: 0` pins the box to the container's top-left,
+   * so the in-flow h1 above it cannot push the canvas down and leave a band of
+   * clipped game at the bottom of the screen. No border and no radius: the
+   * world IS the screen, so a frame around it would read as a window onto the
+   * game rather than the game itself. `z-index: 1` puts it above the video
+   * background layer (z-index: 0).
+   */
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  /* Transparent background so the video layer shows through.
+     Fallback #070b14 is set on the video layer itself. */
+  background: transparent;
+  /* 
+   * `overflow: hidden` keeps gameplay and overlays clipped to the viewport.
    * `line-height: 0` was for the canvas only (an inline canvas adds baseline
-   * space). It must NOT apply to the panel's text, so the panel resets it below.
+   * space). It must NOT apply to overlay text, so overlays reset it themselves.
    */
   overflow: hidden;
   line-height: 0;
+  z-index: 1;
 }
 
+/* The canvas tracks the full-screen box; Phaser owns its pixel size. */
 .world-canvas canvas {
   display: block;
-  max-width: 100%;
+  width: 100%;
+  height: 100%;
 }
 
 /* The engine reports status on the container; a failed load must be visible
-   rather than leaving an empty bordered box. */
+   rather than leaving an empty box. */
 .world-canvas[data-status='unplayable']::after {
   content: 'World unavailable';
-  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 100;
   padding: 2rem 1rem;
+  background: #070b14;
   color: var(--color-text-light);
   font-family: var(--font-mono);
   line-height: 1.5;
@@ -97,171 +104,6 @@
   font-size: 0.8rem;
 }
 
-/* On a narrow viewport the stage and the mirror stack without the page ever
-   scrolling sideways — checked at 390, 375, and 412. */
-@media (max-width: 640px) {
-  .world-canvas {
-    height: clamp(240px, 46vh, 420px);
-  }
-}
-
-/* ------------------------------------------------------------------------ *
- * Phase 2 — the station index
- *
- * A real, focusable list of every skill and project, each opening the same panel
- * the canvas opens. This exists so the portfolio is fully reachable with Tab and
- * Enter, with no canvas, no game state and no movement keys.
- *
- * It is a separate region from `.world-a11y` on purpose: the Phase 1 suite
- * asserts an exact `<kbd>` count inside `.world-a11y`, and keeping this content
- * out of it means that assertion cannot be disturbed by additions here.
- * ------------------------------------------------------------------------ */
-
-.world-index {
-  width: min(100%, 1100px);
-  margin-top: 1.5rem;
-  text-align: left;
-  font-family: var(--font-mono);
-  color: var(--color-text-light);
-}
-
-.world-index h2 {
-  margin: 0 0 0.75rem;
-  font-size: 1rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.world-index__group {
-  margin-bottom: 1.25rem;
-}
-
-.world-index__group h3 {
-  margin: 0 0 0.5rem;
-  font-size: 0.8rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  /* Cyan, matching the Data World's interaction accent. */
-  color: #38b6d9;
-}
-
-.world-index ul {
-  display: grid;
-  gap: 0.5rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.world-index li {
-  display: grid;
-  /* The button and its summary sit side by side on desktop, stacked on mobile. */
-  grid-template-columns: minmax(180px, 260px) 1fr;
-  gap: 0.25rem 1rem;
-  align-items: baseline;
-  padding: 0.5rem 0.75rem;
-  background: rgb(255 255 255 / 2%);
-  border: 1px solid var(--color-border);
-  border-left: 2px solid #1d4a5c;
-  border-radius: 4px;
-}
-
-.world-index li:has(button[aria-current='true']) {
-  /* The station the canvas currently has in range. Mirrored in the DOM so a
-     visitor who cannot see the canvas still knows what Enter would open. */
-  border-left-color: #8ceaff;
-  background: rgb(56 182 217 / 8%);
-}
-
-.world-index button {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--color-text);
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-
-.world-index button:hover {
-  color: #8ceaff;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-/* A visible focus ring is required: these buttons are the primary route to the
-   content for a keyboard-only visitor. */
-.world-index button:focus-visible {
-  outline: 2px solid #8ceaff;
-  outline-offset: 3px;
-  border-radius: 2px;
-}
-
-.world-index__summary {
-  font-size: 0.8rem;
-  line-height: 1.5;
-  color: var(--color-muted);
-}
-
-.world-index__controls {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.35rem 1rem;
-  margin: 1rem 0 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--color-border);
-  font-size: 0.8rem;
-}
-
-.world-index__controls dt {
-  color: var(--color-muted);
-}
-
-.world-index__controls dd {
-  margin: 0;
-}
-
-.world-index__controls kbd {
-  display: inline-block;
-  padding: 0.1rem 0.4rem;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  font-size: 0.78rem;
-}
-
-.world-index__chapter,
-.world-index__nearby {
-  margin: 0.25rem 0 0;
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-muted);
-}
-
-.world-index__nearby {
-  color: #8ceaff;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-/* On a narrow viewport the button and its summary stack, and the page must
-   still never scroll sideways. */
-@media (max-width: 640px) {
-  .world-index li {
-    grid-template-columns: 1fr;
-  }
-
-  .world-index__controls {
-    grid-template-columns: 1fr;
-    gap: 0.15rem;
-  }
-
-  .world-index__controls dd {
-    margin-bottom: 0.5rem;
-  }
-}
 /* ------------------------------------------------------------------------ *
  * STAGE E — the world OWNS the viewport while it is open
  *
@@ -274,11 +116,7 @@
  *   1. `.world-a11y` was `position: static` and in normal flow, so the
  *      accessibility mirror occupied 239px of real page. It must stay in the DOM
  *      and in the accessibility tree, so it is hidden visually rather than removed.
- *   2. `.world-index` was a visible block below the canvas, duplicating every skill
- *      and project as plain text — 826px of duplicate content under a game that
- *      already shows them. It is now a drawer, closed by default and opened on
- *      demand, so the content stays reachable without the canvas.
- *   3. The page could scroll while the game was active, moving the canvas out from
+ *   2. The page could scroll while the game was active, moving the canvas out from
  *      under the pointer mid-play.
  * ------------------------------------------------------------------------ */
 
@@ -299,83 +137,6 @@
   border: 0;
 }
 
-/*
- * The station index becomes a drawer over the stage rather than a block of page
- * below it. `display: none` when closed because it is a visible duplicate of game
- * content; the OPEN state below restores it as a focusable, scrollable overlay.
- */
-.world-index {
-  display: none;
-}
-
-/* --- The open drawer ----------------------------------------------------- */
-
-/*
- * STACKING ORDER, measured from a real failure.
- *
- * The drawer was z-index 30 and the information panel 20, so an open drawer sat
- * ON TOP of the panel and intercepted pointer events on its close button --
- * `.info-panel__close` could be focused and seen but never clicked. The panel is a
- * dialog opened on top of the world, so it must outrank both the drawer (20 > 30
- * is handled below by lifting the panel) and the toggle.
- *
- * The panel's own z-index is raised in InfoPanel.css; here the drawer and the
- * toggle are pushed BELOW it so the ordering holds regardless of load order.
- */
-.world-index[data-open='true'] {
-  display: block;
-  position: absolute;
-  /*
-   * Below the information panel (z-index 20) so the panel is always reachable,
-   * and BELOW the toggle (16) so the toggle stays clickable to close the drawer.
-   * An earlier version gave the drawer and the toggle the same z-index, which made
-   * the toggle unclickable while the drawer was open: the drawer's later-in-
-   * document box painted over it and swallowed every click.
-   */
-  z-index: 15;
-  inset: 0;
-  width: auto;
-  margin: 0;
-  padding: 18px 16px 18px 18px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background: rgb(4 6 10 / 96%);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border) #070b14;
-}
-
-.world-index[data-open='true'] h2 {
-  margin: 0 0 0.9rem;
-  font-size: 1rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-accent, #8ceaff);
-}
-
-.world-index[data-open='true'] .world-index__group {
-  margin-bottom: 1.1rem;
-}
-
-/* --- The stage fills the viewport ---------------------------------------- */
-
-.world-canvas {
-  /*
-   * Full viewport height minus the world's own header, so the game occupies the
-   * screen instead of leaving a band of page beneath it. `dvh` rather than `vh`
-   * so a mobile browser's collapsing URL bar cannot crop the canvas.
-   */
-  height: min(calc(100dvh - 132px), 900px);
-  max-height: calc(100dvh - 96px);
-}
-
-@media (max-width: 640px) {
-  .world-canvas {
-    height: min(calc(100dvh - 108px), 640px);
-    max-height: calc(100dvh - 84px);
-  }
-}
 
 /*
  * Page scroll is locked while the world is open, and released when the visitor
@@ -498,15 +259,8 @@ body.game-world-active {
     }
   }
 }
-/* ------------------------------------------------------------------------ *
- * The contents toggle.
- *
- * Positioned over the stage's top-right rather than in page flow, because the
- * whole point of STAGE E is that nothing sits in the page flow beneath the game.
- * ------------------------------------------------------------------------ */
-
 /*
- * THE EXIT CONTROL — top-left corner, opposite the contents toggle.
+ * THE EXIT CONTROL — top-left corner.
  *
  * Requirement 4 asks for an always-discoverable exit that does not require
  * finishing the game and is not buried inside a gameplay interaction. As an
@@ -518,7 +272,6 @@ body.game-world-active {
  *   41  this control, above the entry plate (40), so EXIT is reachable even
  *       while the "press to enter" plate is up. A visitor who wants out should
  *       never have to dismiss a plate first.
- *   16  the contents toggle sits below it, so the two corners cannot overlap.
  */
 /*
  * THE EXIT CONTROL — SPECIFICITY IS LOAD-BEARING HERE.
@@ -583,10 +336,10 @@ body.game-world-active {
    * from whichever ancestor happens to change.
    */
   line-height: 1.2;
-  border: 1px solid #2c556f;
+  border: 1px solid #17D3F4;
   border-radius: 4px;
-  background: #0c1620;
-  color: #dbeafe;
+  background: #0A0E1A;
+  color: #8CEAFF;
   font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
@@ -594,7 +347,7 @@ body.game-world-active {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
 /* The arrow is decorative; the accessible name comes from the button's text. */
@@ -602,44 +355,18 @@ body.game-world-active {
   content: '\2190';
   font-size: 14px;
   line-height: 1;
-  color: #8ceaff;
+  color: #17D3F4;
 }
 
 .placeholder-world[data-theme='dark'] button.world-exit:hover {
-  background: #14293a;
-  border-color: #8ceaff;
-  color: #ffffff;
+  background: #101828;
+  border-color: #44EEFF;
+  color: #FFFFFF;
+  box-shadow: 0 0 12px rgba(23, 211, 244, 0.4);
 }
 
 .world-exit:focus-visible {
-  outline: 2px solid #8ceaff;
+  outline: 2px solid #17D3F4;
   outline-offset: 2px;
 }
 
-.world-index-toggle {
-  position: absolute;
-  /* Above the drawer (15) so it can close it, and below the panel (20). */
-  z-index: 16;
-  top: 10px;
-  right: 10px;
-  padding: 7px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: rgb(7 11 20 / 92%);
-  color: var(--color-text-light);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-
-.world-index-toggle:hover {
-  background: #0f1724;
-  color: #e8f4ff;
-}
-
-.world-index-toggle:focus-visible {
-  outline: 2px solid #8ceaff;
-  outline-offset: 2px;
-}
