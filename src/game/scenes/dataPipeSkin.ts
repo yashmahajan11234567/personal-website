@@ -30,7 +30,7 @@ import Phaser from 'phaser';
 import type { ChapterId, WorldPipe } from '../config/worldConfig';
 import { PIPE_HEIGHT, PIPE_HALF_WIDTH, pipeRect } from '../config/worldConfig';
 import { DATA_PALETTE, drawSignBoard } from '../art/facilityArt';
-import { drawPipeMouth, drawChapterPlate } from '../art/worldObjects';
+import { drawPipeMouth, drawChapterPlate, drawSurfacePortal } from '../art/worldObjects';
 import { stampPixelText } from '../art/pixelFont';
 import type { TransportSkin } from './pipeTransport';
 
@@ -67,6 +67,12 @@ export const createDataPipeSkin = (
   reducedMotion: boolean,
 ): DataPipeSkinResult => {
   const rect = pipeRect(pipe);
+  const isCliffExit = pipe.id === 'cliff-to-skills';
+
+  // For cliff exit: larger portal visual (wider/taller) while keeping physics rect unchanged
+  const visualW = isCliffExit ? 120 : rect.width;
+  const visualH = isCliffExit ? 140 : rect.height;
+
   const mouthKey = `${PREFIX}-mouth-${pipe.id}`;
   /** The powered variant, swapped in on proximity. */
   const litKey = `${PREFIX}-mouth-lit-${pipe.id}`;
@@ -79,14 +85,18 @@ export const createDataPipeSkin = (
    * ---------------------------------------------------------------- */
 
   if (!scene.textures.exists(mouthKey)) {
-    const texture = scene.textures.createCanvas(mouthKey, rect.width, rect.height);
+    const texture = scene.textures.createCanvas(mouthKey, visualW, visualH);
     if (texture) {
-      drawPipeMouth(texture.getContext(), rect, 0);
+      if (isCliffExit) {
+        drawSurfacePortal(texture.getContext(), { width: visualW, height: visualH }, 0);
+      } else {
+        drawPipeMouth(texture.getContext(), rect, 0);
+      }
       texture.refresh();
     }
   }
 
-  /*
+  /* 
    * THE LIT TEXTURE — the tube's "powered" state.
    *
    * Drawn once at build time rather than redrawn per frame: a canvas texture
@@ -98,9 +108,13 @@ export const createDataPipeSkin = (
    * here. `dataPipeSkin` picks between them on proximity.
    */
   if (!scene.textures.exists(litKey)) {
-    const texture = scene.textures.createCanvas(litKey, rect.width, rect.height);
+    const texture = scene.textures.createCanvas(litKey, visualW, visualH);
     if (texture) {
-      drawPipeMouth(texture.getContext(), rect, 1);
+      if (isCliffExit) {
+        drawSurfacePortal(texture.getContext(), { width: visualW, height: visualH }, 1);
+      } else {
+        drawPipeMouth(texture.getContext(), rect, 1);
+      }
       texture.refresh();
     }
   }
@@ -173,17 +187,21 @@ export const createDataPipeSkin = (
   const mouthImage = scene.add.image(0, 0, mouthKey).setOrigin(0.5, 0.5);
   container.add(mouthImage);
 
+  // Chapter plate above the mouth names the destination.
+  // For cliff exit, position above the larger portal visual.
+  const plateY = -visualH / 2 - PLATE_H / 2 - 6;
   const plate = scene.add
-    .image(0, -PIPE_HEIGHT / 2 - PLATE_H / 2 - 6, plateKey)
+    .image(0, plateY, plateKey)
     .setOrigin(0.5, 0.5);
   container.add(plate);
 
-  // The sign's board sits at ground level, to the left of the mouth. Its post
-  // runs down into the floor, so the board is raised by the post height.
+  // The sign stands beside the pipe. This is the "JUMP TO START" prompt.
+  // For cliff exit, position relative to the larger visual.
+  const signY = visualH / 2 - SIGN_H / 2 - SIGN_POST_H + 4;
   const sign = scene.add
     .image(
       -(PIPE_HALF_WIDTH + signW / 2 + SIGN_GAP),
-      PIPE_HEIGHT / 2 - SIGN_H / 2 - SIGN_POST_H + 4,
+      signY,
       signKey,
     )
     .setOrigin(0.5, 0.5);
@@ -195,12 +213,42 @@ export const createDataPipeSkin = (
     .setVisible(false);
   container.add(tunnel);
 
+  // Cliff exit portal: add hover interaction
+  if (isCliffExit) {
+    container.setInteractive(
+      new Phaser.Geom.Rectangle(-visualW / 2, -visualH / 2, visualW, visualH),
+      Phaser.Geom.Rectangle.Contains
+    );
+    container.on('pointerover', () => {
+      hoverActive = true;
+      setActive(true);
+    });
+    container.on('pointerout', () => {
+      hoverActive = false;
+      setActive(false);
+    });
+  }
+
   /* ---------------------------------------------------------------- *
    * Skin
    * ---------------------------------------------------------------- */
 
   /** Per-pipe scroll offset. Instance state, never module state. */
   let scroll = 0;
+
+  // Hover state for cliff exit portal (merged with proximity in updateLit)
+  let hoverActive = false;
+  let proximityActive = false;
+
+  const updateLit = () => {
+    const lit = hoverActive || proximityActive;
+    mouthImage.setTexture(lit ? litKey : mouthKey);
+  };
+
+  const setActive = (active: boolean) => {
+    proximityActive = active;
+    updateLit();
+  };
 
   const skin: TransportSkin = {
     name: 'data',
@@ -252,7 +300,11 @@ export const createDataPipeSkin = (
       mouthImage.setAlpha(1);
       sign.setAlpha(1);
       // A tube must not stay lit after the player has gone through it.
-      mouthImage.setTexture(mouthKey);
+      if (isCliffExit) {
+        hoverActive = false;
+        proximityActive = false;
+      }
+      updateLit();
     },
   };
 
@@ -267,11 +319,9 @@ export const createDataPipeSkin = (
    * Idempotent, and it resets on `conduitEnd` so a tube does not stay lit after
    * the player has travelled through it.
    */
-  const setActive = (active: boolean) => {
-    mouthImage.setTexture(active ? litKey : mouthKey);
-  };
 
-  setActive(false);
+  // Initial state
+  updateLit();
 
   return { skin, mouth: container, setActive };
 };

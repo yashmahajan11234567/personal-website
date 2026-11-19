@@ -25,18 +25,33 @@
   background: linear-gradient(to bottom, #101d4a 0%, #233a78 25%, #46619e 45%, #b595a0 65%, #eec39a 85%, #f7dfc4 100%);
 }
 
+/*
+ * FULL-SCREEN STAGE.
+ *
+ * The Data World owns the whole viewport while it is open, so the canvas can
+ * fill the window instead of sitting in a centred column with page beneath it.
+ * `100dvh` (not `vh`) so a mobile browser's collapsing URL bar cannot crop the
+ * canvas.
+ *
+ * `position: absolute` (not `fixed`) ON PURPOSE: a fixed element creates a
+ * stacking context in Blink even with `z-index: auto`, which would bury the
+ * sibling overlays (entry plate z-40, contents toggle z-16, drawer z-15)
+ * underneath the world container and make them unclickable. Absolute with
+ * `z-index: auto` creates no stacking context, so the shell's z-index band
+ * keeps working exactly as before, and the page cannot scroll anyway because
+ * the world route renders nothing else and `game-world-active` locks
+ * html/body overflow. The h1 stays in the DOM and accessibility tree; the
+ * positioned canvas paints over it.
+ */
 .placeholder-world {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1.5rem;
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
   background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-mono);
-  padding: 2rem;
-  text-align: center;
+  overflow: hidden;
 }
 
 .placeholder-world[data-theme="dark"] {

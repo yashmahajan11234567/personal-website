@@ -6,8 +6,8 @@
  * the hero bundle never contains or executes Phaser.
  *
  * React owns: this component's lifecycle, the accessibility DOM, the heading and
- * Back affordance, the information panel, and the station index. Phaser owns: the
- * canvas and everything in it.
+ * Back affordance, and the information panel. Phaser owns: the canvas and
+ * everything in it.
  *
  * PRESERVED PHASE 1 CONTRACT
  *
@@ -16,24 +16,15 @@
  * `[data-testid="world-interaction"]`, `.world-a11y` and its single `button`, and
  * it asserts EXACTLY seven `<kbd>` elements inside `.world-a11y`. Those are kept
  * in behaviour, including the control list's three rows and its literal key
- * counts. Everything Phase 2 adds lives in a SEPARATE region (`.world-index`) so
- * it cannot disturb them.
- *
- * THE CANVAS IS NOT THE ONLY ROUTE TO THE PORTFOLIO
- *
- * `.world-index` lists every station as a real focusable button that opens the
- * same panel the canvas opens, with the same content-model record. A visitor who
- * never presses a movement key, or who cannot see the canvas at all, reaches
- * every skill and project through ordinary DOM controls. That is the property
- * which stops the game from being a gate in front of the content.
+ * counts.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { PORTFOLIO, projectsForWorld, skillsForWorld } from '../content';
 import { WORLD_CONFIGS } from '../game/config/worldConfig';
 import type { WorldId } from '../game/config/worldConfig';
 import { InfoPanel } from './InfoPanel';
 import type { PanelKind } from './InfoPanel';
+import { BackgroundVideoLayer } from './BackgroundVideoLayer';
 import './WorldShell.css';
 
 /**
@@ -66,18 +57,15 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
   const [status, setStatus] = useState<'loading' | 'ready' | 'unplayable'>('loading');
   const [lastInteraction, setLastInteraction] = useState<string | null>(null);
   const [panel, setPanel] = useState<OpenPanel | null>(null);
-  const [chapter, setChapter] = useState<string | null>(null);
-
-  /*
-   * The contents drawer.
-   *
-   * The index used to be a visible block of page beneath the canvas, duplicating
-   * every skill and project that the world already shows. It is now a drawer over
-   * the stage, closed by default: the content is still fully reachable by Tab and
-   * Enter with no canvas and no game state, but it no longer sits under the game
-   * taking up 826px of scrollable page.
+  /**
+   * Key of the panel currently playing its close animation. The panel stays
+   * mounted for the 170ms exit transition, then unmounts — an instant unmount
+   * would make the open animation feel asymmetric.
    */
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [closingKey, setClosingKey] = useState<string | null>(null);
+  const panelRef = useRef<OpenPanel | null>(null);
+  panelRef.current = panel;
+  const [chapter, setChapter] = useState<string | null>(null);
 
   /*
    * Whether the DATA WORLD entry plate has been dismissed.
@@ -103,30 +91,22 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
    * re-subscribing or re-mounting the engine.
    */
   const handleRef = useRef<{ setPanelOpen: (open: boolean) => void } | null>(null);
-  /**
-   * The station the canvas currently has in range. Mirrored here so the DOM
-   * shows the same highlight the canvas does — if a visitor cannot see the canvas
-   * at all, this text is how they learn what Enter would open.
-   */
-  const [focusedStation, setFocusedStation] = useState<{
-    id: string;
-    kind: string;
-  } | null>(null);
 
   const config = WORLD_CONFIGS[world];
-  const contentWorld = world === 'data' ? 'data' : 'cloud';
-
-  // Content-driven station list for the DOM index. Resolved from the content
-  // model, never hardcoded, so the index can never drift from the world.
-  const skills = skillsForWorld(contentWorld);
-  const projects = projectsForWorld(contentWorld);
 
   const openPanel = useCallback((kind: PanelKind, id: string) => {
     setPanel({ kind, id });
   }, []);
 
   const closePanel = useCallback(() => {
-    setPanel(null);
+    const current = panelRef.current;
+    if (!current) return;
+    const key = `${current.kind}:${current.id}`;
+    setClosingKey(key);
+    window.setTimeout(() => {
+      setClosingKey((c) => (c === key ? null : c));
+      setPanel((cur) => (cur && `${cur.kind}:${cur.id}` === key ? null : cur));
+    }, 170);
   }, []);
 
   /**
@@ -327,8 +307,7 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
            * interactions yet." when the world becomes ready. The scene announces
            * the starting chapter during `create()`, so routing chapter events here
            * too made that assertion fail on a world where nothing had been
-           * touched. Chapter state has its own live region (`world-chapter`), which
-           * is where "where am I" belongs — this one answers "what did I just do".
+           * touched. Chapter state feeds the video background layer instead.
            */
           if (event.kind !== 'chapter') {
             setLastInteraction(`${event.id} @ ${event.world}`);
@@ -337,11 +316,6 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
           if (event.kind === 'chapter') {
             const next = event.payload?.chapter;
             if (typeof next === 'string') setChapter(next);
-            return;
-          }
-
-          if (event.kind === 'proximity') {
-            setFocusedStation({ id: event.id, kind: String(event.payload?.stationKind ?? '') });
             return;
           }
 
@@ -394,34 +368,28 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
 
   const handleExit = useCallback(() => onExit(), [onExit]);
 
-  /**
-   * The record a station id resolves to, for the mirror's accessible label.
-   * Falls back to the id so a missing record degrades to something addressable
-   * rather than an empty label.
-   */
-  const labelFor = (kind: PanelKind, id: string): string => {
-    const record = kind === 'skill' ? PORTFOLIO.skills[id] : PORTFOLIO.projects[id];
-    if (!record) return id;
-    return 'summary' in record ? record.name : record.title;
-  };
-
   /*
    * The root is a FRAGMENT, not a wrapper element, and that is load-bearing.
    *
    * `.placeholder-world` is a Phase 1 contract: its `h1`, its single exit button
    * (addressed as `.placeholder-world button`) and `.world-a11y` all live inside
    * it, and App.css styles `.placeholder-world button` as the exit control. The
-   * station index is ten more buttons, so putting them inside that container would
-   * both break the Phase 1 selector (which resolves to 11 elements) and restyle
-   * them all as exit buttons.
-   *
-   * Rendering the index as a SIBLING of `.placeholder-world` keeps that container
-   * exactly as it was, and the index inherits nothing it does not ask for.
+   * entry plate is rendered as a SIBLING of that container so the container keeps
+   * exactly the elements the contract addresses.
    */
   return (
     <>
       <div className="placeholder-world" data-theme="dark" data-world={world}>
         <h1>{config.name}</h1>
+
+        {/* Video background layer — sits behind the Phaser canvas.
+            Only rendered for the Data World where video backgrounds exist. */}
+        {world === 'data' && (
+          <BackgroundVideoLayer
+            chapter={chapter as 'cliff' | 'skills' | 'projects' || 'cliff'}
+            reducedMotion={prefersReducedMotion()}
+          />
+        )}
 
         {/* The canvas container. Phaser appends its canvas here and removes it on
             unmount; the container itself is React-owned and always empty of the
@@ -432,7 +400,14 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
           data-testid="world-canvas"
           data-status={status}
         >
-          {panel && <InfoPanel kind={panel.kind} id={panel.id} onClose={closePanel} />}
+          {panel && (
+            <InfoPanel
+              kind={panel.kind}
+              id={panel.id}
+              onClose={closePanel}
+              closing={closingKey === `${panel.kind}:${panel.id}`}
+            />
+          )}
         </div>
 
         {/*
@@ -443,11 +418,10 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
           explicit test id, so a test meaning "the exit control" never has to guess
           among every button in `.placeholder-world`.
 
-          Positioned top-LEFT by CSS, mirroring the contents toggle at top-right, so
-          the two persistent shell controls sit in opposite corners and neither can
-          be mistaken for the other. It was previously an unstyled flow button that
-          rendered wherever the flex layout put it — measured below the canvas, which
-          is not "always discoverable".
+          Positioned top-LEFT by CSS, so it is the only persistent shell control in a
+          corner and cannot be mistaken for any other button. It was previously an
+          unstyled flow button that rendered wherever the flex layout put it —
+          measured below the canvas, which is not "always discoverable".
         */}
         <button
           type="button"
@@ -455,19 +429,18 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
           onClick={handleExit}
           data-testid="world-exit"
         >
-          Back to portfolio
+          RETURN TO PORTFOLIO
           <span className="visually-hidden"> — leave the Data World and return to the site</span>
         </button>
 
         {/*
-          Accessibility mirror. The canvas is NOT the only way to reach the
-          portfolio: this semantic region states the world, the controls, and the
-          live interaction state, and it is readable by keyboard and screen
-          readers without entering the game.
+        Accessibility mirror. The canvas is NOT the only way to reach the
+        portfolio: this semantic region states the world, the controls, and the
+        live interaction state, and it is readable by keyboard and screen
+        readers without entering the game.
 
-          The control list below is the Phase 1 one, unchanged: three rows and seven
-          `<kbd>` elements. Phase 2's own controls are documented in the separate
-          `.world-index` region so this section's assertions cannot be disturbed.
+        The control list below is the Phase 1 one, unchanged: three rows and
+        seven `<kbd>` elements.
         */}
         <section className="world-a11y" aria-label={`${config.name} accessible controls`}>
           <h2>{config.name} — playable overview</h2>
@@ -580,104 +553,6 @@ export const WorldShell = ({ world, onExit }: WorldShellProps) => {
           </div>
         </div>
       )}
-
-      {/* Opens the contents drawer over the stage. */}
-      <button
-        type="button"
-        className="world-index-toggle"
-        data-testid="world-index-toggle"
-        aria-expanded={drawerOpen}
-        aria-controls="world-index-drawer"
-        onClick={() => setDrawerOpen((open) => !open)}
-      >
-        {drawerOpen ? 'Close contents' : 'Contents'}
-      </button>
-
-      <section
-        id="world-index-drawer"
-        className="world-index"
-        data-open={drawerOpen ? 'true' : 'false'}
-        aria-label={`${config.name} contents`}
-        /*
-         * `aria-hidden` while closed. No `inert` is needed as well: the closed state
-         * is `display: none`, which already removes the drawer from the tab order
-         * entirely, so there are no invisible focus stops below the game. Adding
-         * `inert` too would be belt-and-braces on top of that, at the cost of a
-         * React typing wart for no behavioural gain.
-         */
-        aria-hidden={drawerOpen ? undefined : 'true'}
-      >
-        <h2>Contents</h2>
-
-        <div className="world-index__group">
-          <h3>Skills</h3>
-          <ul>
-            {skills.map((skill) => (
-              <li key={skill.id}>
-                <button
-                  type="button"
-                  data-testid={`index-skill-${skill.id}`}
-                  data-station-kind="skill"
-                  onClick={() => openPanel('skill', skill.id)}
-                  aria-current={focusedStation?.id === skill.id ? 'true' : undefined}
-                >
-                  {skill.name}
-                </button>
-                <span className="world-index__summary">{skill.summary}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="world-index__group">
-          <h3>Projects</h3>
-          <ul>
-            {projects.map((project) => (
-              <li key={project.id}>
-                <button
-                  type="button"
-                  data-testid={`index-project-${project.id}`}
-                  data-station-kind="project"
-                  onClick={() => openPanel('project', project.id)}
-                  aria-current={focusedStation?.id === project.id ? 'true' : undefined}
-                >
-                  {project.title}
-                </button>
-                <span className="world-index__summary">{project.description}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <dl className="world-index__controls">
-          <dt>Interact with a station</dt>
-          <dd>
-            Walk near one in the world, then press <kbd>Enter</kbd>
-          </dd>
-          <dt>Close a panel</dt>
-          <dd>
-            Press <kbd>Escape</kbd> or activate the Back button
-          </dd>
-        </dl>
-
-        {/*
-          Chapter tracking, announced politely. The canvas tells React which
-          chapter the pipe delivered the player to, so this text and the world
-          never disagree.
-        */}
-        <p data-testid="world-chapter" aria-live="polite" className="world-index__chapter">
-          {chapter ? `Chapter: ${chapter}` : 'Chapter: starting cliff'}
-        </p>
-
-        {focusedStation && (
-          <p data-testid="world-nearby" aria-live="polite" className="world-index__nearby">
-            {`Nearest station: ${labelFor(
-              focusedStation.kind === 'project' ? 'project' : 'skill',
-              focusedStation.id
-            )}. Press Enter to open it.`}
-          </p>
-        )}
-      </section>
     </>
   );
 };

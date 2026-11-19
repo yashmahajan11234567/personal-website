@@ -469,14 +469,19 @@ export const CAMERA = {
    * flush with the top of the frame, `groundY - b + viewH` must equal `560`, i.e.
    * `b = viewH` exactly — a ratio of 1.0, which is just "centre on the floor line".
    *
-   * `0.47` is chosen instead of 1.0 for one reason: it keeps a sliver of the lit
-   * floor rim and a few px of sub-floor in frame, which is what makes the landing
-   * plane read as a surface rather than as the bottom edge of the screen. Measured
-   * at the recording viewport this puts the content band top at canvas y=-9 and
-   * the floor line at canvas y=551 of 568 — the band fills the frame and the floor
-   * sits at the bottom, with a visible lip below it.
+  /*
+   * 0.40, not 0.47, to put the ground line at ~90% of the viewport height.
+   *
+   * The visible band is `[groundY - (b + viewH), groundY - b + viewH]` with
+   * `b = ratio * viewH`. At ratio 0.40 the floor line lands at
+   * `(0.5 + 0.40) = 90%` down the frame, leaving the remaining ~10% as the lit
+   * floor rim and sub-floor, which is what makes the landing plane read as a
+   * surface rather than as the bottom edge of the screen.
+   *
+   * The camera's lower scroll bound is the world bottom (`world.height`), so the
+   * whole world height stays available for the reveal below the floor line.
    */
-  verticalBiasRatio: 0.47,
+  verticalBiasRatio: 0.4,
 } as const;
 
 /**
@@ -512,10 +517,10 @@ export const SPAWN = { x: 120, y: GROUND_Y } as const;
  * out defeats the reveal.
  *
  * The widths are set by CONTENT, not taste. Six skill stations at a readable
- * 130px pitch need ~1100px, and four project stations at ~210px need ~1000px;
- * anything narrower forces the pitch down until stations overlap or become
- * unreachable. The exit pipe sits past the camera deadzone, so the player must
- * actually walk to it.
+ * 130px pitch need ~1100px, and four project holograms at ~250px pitch plus a
+ * far-left return portal need ~1500px; anything narrower forces the pitch down
+ * until stations overlap or become unreachable. The exit pipe sits past the
+ * camera deadzone, so the player must actually walk to it.
  */
 export const CLIFF_WIDTH = 900;
 /*
@@ -525,7 +530,15 @@ export const CLIFF_WIDTH = 900;
  * causing visual crowding. The extra 300px restores comfortable spacing.
  */
 export const SKILLS_WIDTH = 1500;
-const PROJECTS_WIDTH = 1000;
+/*
+ * PROJECTS is 1500 (not the earlier 1000): Layer 3 carries a far-left return
+ * portal (art spans x 0..180) plus four 220px-wide holograms. At 1000px the
+ * station fitter squeezed the run to a 210px pitch with the first hologram's
+ * hitbox starting at x=200 — almost touching the portal art — and left no
+ * clean right-side boundary. At 1500 the fitter yields a 250px pitch with
+ * centres 390/640/890/1140 and a clear 1250..1500 right margin.
+ */
+const PROJECTS_WIDTH = 1500;
 
 /**
  * Where a player stands just after emerging from a chapter's entry pipe.
@@ -695,13 +708,21 @@ const CLIFF_PLATFORMS: WorldPlatform[] = [
 ];
 
 const SKILLS_PLATFORMS: WorldPlatform[] = [
-  { x: 300, y: 420, width: 120, height: 16 },
-  { x: 520, y: 350, width: 96, height: 16, oneWay: true },
+  // Stage K visual correction pass: the two floating ledges that used to sit
+  // at (300,420,120) and (520,350,96,oneWay) were removed together with their
+  // artwork. Their only gameplay purpose was optional jumping — every portal,
+  // station and the robot share the ground line at y=560, so nothing required
+  // them, and in screenshots they read as isolated floating platforms in the
+  // upper playable area. Traversal and collision on the flat floor are
+  // unchanged (covered by accept-dataworld-traversal / -gameplay / -stagek).
 ];
 
 const PROJECTS_PLATFORMS: WorldPlatform[] = [
-  { x: 320, y: 430, width: 128, height: 16 },
-  { x: 520, y: 360, width: 96, height: 16, oneWay: true },
+  // Layer 3 (Core): NO floating ledges. The whole chapter is one continuous
+  // ground-level data-centre floor (the kit slab pieces provide the visuals;
+  // the ground slab remains the only collision surface). The former two
+  // ledges rendered as bare debug rects and obstructed nothing — removed in
+  // the same pass that introduced the platform artwork, Stage K precedent.
 ];
 
 /* ------------------------------------------------------------------ *
@@ -757,7 +778,13 @@ const DATA_CHAPTERS: WorldChapter[] = [
     id: 'skills',
     label: 'SKILLS',
     width: SKILLS_WIDTH,
-    spawn: { x: 60 + EMERGE_OFFSET, y: GROUND_Y },
+    // Spawn 90: right of the entry-pipe trigger zone (38..82) so arrival never
+    // re-triggers, and far enough left that the mobile arrival camera window
+    // (~scrollX 40..50 at 390px/zoom 2) still shows the whole portal art.
+    spawn: { x: 90, y: GROUND_Y },
+    // The transport trigger stays at x=60 — the recording shows the return
+    // transition firing there, and the trigger position is authoritative. The
+    // portal ARTWORK was moved left to sit around it (art spans 60..225).
     entryPipe: pipe('skills-entry', 60, 'skills', 'START', 'ARRIVAL'),
     exitPipe: pipe('skills-to-projects', SKILLS_WIDTH - 150, 'projects', 'NEXT: PROJECTS', 'NEXT CHAPTER'),
   },
@@ -765,8 +792,20 @@ const DATA_CHAPTERS: WorldChapter[] = [
     id: 'projects',
     label: 'PROJECTS',
     width: PROJECTS_WIDTH,
+    /*
+     * Layer 3 has exactly ONE pipe, at the FAR LEFT (x=60): it is the visible
+     * Skills return portal. An entry pipe routes to `previousChapter` =
+     * 'skills', so this single pipe IS the way back — no exitPipe needed.
+     *
+     * Spawn (60 + EMERGE_OFFSET = 144) is deliberately NOT the trigger: the
+     * arm zone is 38..82 and the near zone 8..112, and 144 is outside both, so
+     * arriving from Skills can never immediately fire the return transition.
+     * The portal artwork spans x 0..180 with its visible opening covering the
+     * arm zone, so the player activates the return while standing inside the
+     * glowing opening.
+     */
     spawn: { x: 60 + EMERGE_OFFSET, y: GROUND_Y },
-    entryPipe: pipe('projects-entry', 60, 'projects', 'START', 'ARRIVAL'),
+    entryPipe: pipe('projects-entry', 60, 'projects', 'BACK: SKILLS', 'RETURN'),
     // Terminal chapter: the journey ends here, so there is no way out but back.
     exitPipe: null,
   },
@@ -796,11 +835,11 @@ export const DATA_WORLD: WorldConfig = {
   height: WORLD_HEIGHT,
   groundY: GROUND_Y,
   palette: {
-    background: '#04060a',
-    far: '#0c111a',
-    ground: '#1a2230',
-    groundTop: '#6e7f96',
-    grid: '#2b3646',
+    background: '#04060e',
+    far: '#0d1526',
+    ground: '#141c30',
+    groundTop: '#22d3ee',
+    grid: '#1d2a47',
   },
   chapters: DATA_CHAPTERS,
   entryChapter: 'cliff',

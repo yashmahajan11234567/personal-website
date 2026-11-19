@@ -9,12 +9,12 @@
  *
  * HONESTY IS STRUCTURAL, NOT EDITORIAL
  *
- * A project panel ALWAYS renders the `limitations` field, even when that list says
- * "None identified", and ALWAYS renders `authorship` with collaborators named for
- * collaborative or extended work. Both are required fields in the content model,
- * so an omission here would be a bug rather than a design choice. A skill panel
- * always renders the experience type and the training context when the claim is
- * TRAINING, because coursework must never read as production experience.
+ * A skill panel always renders the experience type and the training context
+ * when the claim is TRAINING, because coursework must never read as production
+ * experience. Both are required fields in the content model, so an omission
+ * here would be a bug rather than a design choice. A project panel renders
+ * the approved card structure only: title link, description, previews,
+ * gallery, Skills & Technologies, Pipeline, Project Overview, Outcomes.
  *
  * This is also why the panel is React and not canvas text: these are the exact
  * claims a recruiter will check, and they need to be selectable, linkable and
@@ -57,6 +57,12 @@ export interface InfoPanelProps {
   /** Called when the visitor closes the panel. Escape and the button both use it. */
   onClose: () => void;
   /**
+   * True while the close animation runs: the parent keeps the panel mounted for
+   * the animation's duration and passes this flag so the panel can play the
+   * exit transition instead of vanishing instantly.
+   */
+  closing?: boolean;
+  /**
    * Pre-select a gallery entry when the panel opens.
    *
    * Set by the world so pressing Enter on the Data Analytics Dashboards screen
@@ -66,22 +72,6 @@ export interface InfoPanelProps {
    */
   initialDashboardId?: string;
 }
-
-/** Human label for an authorship classification. */
-const AUTHORSHIP_LABEL: Record<Project['authorship'], string> = {
-  solo: 'Built alone',
-  collaborative: 'Joint work',
-  'extended-existing': 'Took over an existing application',
-  course: 'Coursework',
-};
-
-/** Human label for an experience type. */
-const EXPERIENCE_LABEL: Record<Skill['experience']['experienceType'], string> = {
-  PROJECT: 'Shown in a project',
-  TRAINING: 'Training only',
-  BOTH: 'Coursework and project',
-  UNCERTAIN: 'Evidence too thin to classify',
-};
 
 /**
  * The dashboard gallery: a large preview plus a selectable strip.
@@ -146,74 +136,60 @@ const DashboardGallery = ({
 };
 
 const SkillPanel = ({ skill }: { skill: Skill }) => {
-  const { experience, visual } = skill;
-  // TRAINING and BOTH claims must carry their context, or the claim is
-  // unsupported. The content model enforces this; rendering it again here means
-  // a future data edit cannot quietly drop it from the panel.
-  const needsContext =
-    experience.experienceType === 'TRAINING' || experience.experienceType === 'BOTH';
+  const { experience } = skill;
 
   return (
     <>
-      <h3 className="info-panel__title">{skill.name}</h3>
+      {/*
+        TITLE ROW: station icon + skill name.
+
+        The icon lives INSIDE the h3 so `.info-panel__body` keeps exactly three
+        children (title + two sections) — the cards-portal QA asserts
+        bodyChildren === 3 and reads the title via textContent, which an
+        aria-hidden <img alt=""> does not affect.
+      */}
+      <h3 className="info-panel__title">
+        <img
+          className="info-panel__skill-icon"
+          src={`/assets/data-world/skills-station-${skill.id}.png`}
+          alt=""
+          aria-hidden="true"
+        />
+        <span className="info-panel__title-text">{skill.name}</span>
+      </h3>
 
       {/*
-        The one-line summary is the whole point of the panel: a recruiter should
-        understand the skill in three to five seconds. It is `Skill.summary`,
-        which the content model states is one line of plain description and never
-        a metric.
+        HOW I USED IT — one paragraph of applied practice from the content
+        model (`experience.usage`), rendered verbatim.
       */}
-      <p className="info-panel__summary">{skill.summary}</p>
-
-      <dl className="info-panel__facts">
-        <dt>Experience</dt>
-        <dd>{EXPERIENCE_LABEL[experience.experienceType]}</dd>
-        {needsContext && experience.trainingContext && (
-          <>
-            <dt>Context</dt>
-            <dd>{experience.trainingContext}</dd>
-          </>
-        )}
-        <dt>Drawn as</dt>
-        <dd>{visual.treatment === 'scaffold' ? 'Scaffolding' : 'A built station'}</dd>
-      </dl>
-
-      {/*
-        Evidence, only when the content model records it. These are repository
-        facts already vetted by the audit, so they are shown verbatim rather than
-        summarised.
-      */}
-      {experience.evidence.length > 0 && (
-        <div className="info-panel__section">
-          <h4>Evidence</h4>
-          <ul>
-            {experience.evidence.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ul>
+      {experience.usage && (
+        <div className="info-panel__section info-panel__section--skill">
+          <h4>How I used it</h4>
+          <p className="info-panel__body-text">{experience.usage}</p>
         </div>
       )}
 
       {/*
-        Repositories, one link per entry. These are absolute URLs - the content
-        model validates that and `validateContent()` reports a
-        `bad-repository-url` issue otherwise. The previous bare `repository: string`
-        put `"Bluestock_fintech, Sql-data-warehouse"` straight into an `href`,
-        which is why every skill link in the old build was dead.
+        PROJECT APPLICATION — the projects the skill was actually applied in
+        (`experience.applications`). The project name links to its repository
+        when the model records one; the contribution states only verified work.
       */}
-      {experience.repositories && experience.repositories.length > 0 && (
-        <div className="info-panel__section">
-          <h4>Repositories</h4>
-          <ul className="info-panel__links">
-            {experience.repositories.map((repo) => (
-              <li key={repo.url}>
-                <a href={repo.url} target="_blank" rel="noreferrer noopener">
-                  {repo.name}
-                  <span className="visually-hidden">
-                    {' '}
-                    for {skill.name} (opens in a new tab)
-                  </span>
-                </a>
+      {experience.applications && experience.applications.length > 0 && (
+        <div className="info-panel__section info-panel__section--skill">
+          <h4>Project application</h4>
+          <ul className="info-panel__apps">
+            {experience.applications.map((app) => (
+              <li key={app.project}>
+                <span className="info-panel__app-name">
+                  {app.repository ? (
+                    <a href={app.repository.url} target="_blank" rel="noreferrer noopener">
+                      {app.project}
+                    </a>
+                  ) : (
+                    app.project
+                  )}
+                </span>
+                <span className="info-panel__app-contrib">{app.contribution}</span>
               </li>
             ))}
           </ul>
@@ -257,6 +233,11 @@ const ProjectPanel = ({
           data-testid="project-title-link"
         >
           {project.title}
+          {/* Visible external-link indicator: the title is a repository link,
+              so it must LOOK like one, not only behave like one. */}
+          <span className="info-panel__ext" aria-hidden="true">
+            &#8599;
+          </span>
           <span className="visually-hidden"> (opens the repository in a new tab)</span>
         </a>
       ) : (
@@ -267,39 +248,41 @@ const ProjectPanel = ({
     <p className="info-panel__summary">{project.description}</p>
 
     {/*
-      Authorship comes FIRST, before the description. The audit's rule is that
-      coursework must not read as production experience and joint work must not
-      read as solo; putting the classification above the pitch makes that
-      structural rather than a matter of copy tone.
+      PROJECT PREVIEW STRIP.
+
+      `previews` holds genuine screenshots committed under `public/assets/`.
+      Each image renders at its NATURAL aspect ratio (`height: auto`, no fixed
+      frame) so nothing is stretched, and the whole figure links to the full
+      image in a new tab — the existing architecture has no lightbox, so
+      "click for a larger view" is a real link to the asset itself.
     */}
-    <dl className="info-panel__facts">
-      <dt>Authorship</dt>
-      <dd>{AUTHORSHIP_LABEL[project.authorship]}</dd>
-      {project.collaborators && project.collaborators.length > 0 && (
-        <>
-          <dt>Also by</dt>
-          <dd>
-            {project.collaborators.map((c) => (
-              <span key={c.name} className="info-panel__collaborator">
-                {c.name} — {c.role}
-              </span>
-            ))}
-          </dd>
-        </>
-      )}
-      {/*
-        `contribution` describes only what THIS person added. For
-        extended-existing work that is the added work, never the original
-        application, which is why it is labelled "My contribution".
-      */}
-      <dt>My contribution</dt>
-      <dd>{project.contribution}</dd>
-    </dl>
+    {project.previews && project.previews.length > 0 && (
+      <div className="info-panel__section info-panel__section--previews">
+        <h4>Project preview</h4>
+        <ul className="info-panel__preview-list">
+          {project.previews.map((pv) => (
+            <li key={pv.id}>
+              <figure className="info-panel__preview-item">
+                <a
+                  href={pv.path}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  data-testid={`preview-link-${pv.id}`}
+                  aria-label={`${pv.label} — open the full image in a new tab`}
+                >
+                  <img src={pv.path} alt={pv.alt} loading="lazy" />
+                </a>
+                <figcaption>{pv.label}</figcaption>
+              </figure>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
 
     {/*
-      The gallery comes directly after the facts: for a project whose whole point
-      is its dashboards, the previews are the content, and burying them below the
-      pipeline list is what made the previous panel feel like a wall of text.
+      The gallery comes directly after the preview strip: for a project whose
+      whole point is its dashboards, the previews are the content.
     */}
     {project.dashboards && project.dashboards.length > 0 && (
       <DashboardGallery
@@ -309,62 +292,76 @@ const ProjectPanel = ({
       />
     )}
 
-    {project.technologies.length > 0 && (
-      <div className="info-panel__section">
-        <h4>Technologies</h4>
-        <ul className="info-panel__tags">
-          {project.technologies.map((tech) => (
-            <li key={tech}>{tech}</li>
-          ))}
-        </ul>
-      </div>
-    )}
+    {/*
+      LOWER TWO-COLUMN LAYOUT (desktop): Skills & Technologies on the left with
+      the Pipeline directly beneath it, Project Overview (PROBLEM / SOLUTION /
+      IMPACT) on the right. Stacks into one column on small screens via the
+      media query in InfoPanel.css. The copy comes straight from the content
+      model — the card renders exactly three labelled overview rows and never
+      any other label.
+    */}
+    <div className="info-panel__lower">
+      {(project.technologies.length > 0 || project.workflow.stages.length > 0) && (
+        <div className="info-panel__section info-panel__col info-panel__col--skills">
+          {project.technologies.length > 0 && (
+            <>
+              <h4>Skills &amp; Technologies</h4>
+              <ul className="info-panel__tags">
+                {project.technologies.map((tech) => (
+                  <li key={tech}>{tech}</li>
+                ))}
+              </ul>
+            </>
+          )}
 
-    {/* The pipeline the project actually runs, in execution order. */}
-    {project.workflow.stages.length > 0 && (
-      <div className="info-panel__section">
-        <h4>Pipeline</h4>
-        <ol className="info-panel__pipeline">
-          {project.workflow.stages.map((stage) => (
-            <li key={stage.id}>
-              <strong>{stage.label}</strong>
-              {stage.detail && <span> — {stage.detail}</span>}
-            </li>
-          ))}
-        </ol>
-      </div>
-    )}
+          {/* The pipeline the project actually runs, in execution order,
+              positioned directly beneath Skills & Technologies. */}
+          {project.workflow.stages.length > 0 && (
+            <>
+              <h4>Pipeline</h4>
+              <ol className="info-panel__pipeline">
+                {project.workflow.stages.map((stage) => (
+                  <li key={stage.id}>
+                    <strong>{stage.label}</strong>
+                    {stage.detail && <span> — {stage.detail}</span>}
+                  </li>
+                ))}
+              </ol>
+            </>
+          )}
+        </div>
+      )}
+
+      {(project.problem || project.solution || project.impact) && (
+        <div className="info-panel__section info-panel__col info-panel__col--overview">
+          <h4>Project overview</h4>
+          {project.problem && (
+            <div className="info-panel__overview-row info-panel__overview-row--problem">
+              <h5>PROBLEM</h5>
+              <p>{project.problem}</p>
+            </div>
+          )}
+          {project.solution && (
+            <div className="info-panel__overview-row info-panel__overview-row--solution">
+              <h5>SOLUTION</h5>
+              <p>{project.solution}</p>
+            </div>
+          )}
+          {project.impact && (
+            <div className="info-panel__overview-row info-panel__overview-row--impact">
+              <h5>IMPACT</h5>
+              <p>{project.impact}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
 
     {project.results && project.results.length > 0 && (
       <div className="info-panel__section">
         <h4>Outcomes</h4>
         <ul>
           {project.results.map((line) => (
-            <li key={line}>{line}</li>
-          ))}
-        </ul>
-      </div>
-    )}
-
-    {/*
-      Limitations are REQUIRED by the content model and always rendered here,
-      including an explicit "None identified". The point is that a project which
-      does not run says so on its own panel, where a reader cannot miss it.
-    */}
-    <div className="info-panel__section info-panel__section--limits">
-      <h4>Limitations</h4>
-      <ul>
-        {project.limitations.map((line) => (
-          <li key={line}>{line}</li>
-        ))}
-      </ul>
-    </div>
-
-    {project.evidence && project.evidence.length > 0 && (
-      <div className="info-panel__section">
-        <h4>Where the evidence lives</h4>
-        <ul>
-          {project.evidence.map((line) => (
             <li key={line}>{line}</li>
           ))}
         </ul>
@@ -382,7 +379,7 @@ const ProjectPanel = ({
   </>
 );
 
-export const InfoPanel = ({ kind, id, onClose, initialDashboardId }: InfoPanelProps) => {
+export const InfoPanel = ({ kind, id, onClose, initialDashboardId, closing }: InfoPanelProps) => {
   /*
    * Resolve from the content model by id.
    *
@@ -467,7 +464,12 @@ export const InfoPanel = ({ kind, id, onClose, initialDashboardId }: InfoPanelPr
 
   return (
     <aside
-      className="info-panel"
+      className={
+        'info-panel' +
+        (kind === 'skill' ? ' info-panel--skill' : '') +
+        (kind === 'project' ? ' info-panel--project' : '') +
+        (closing ? ' info-panel--closing' : '')
+      }
       data-testid="info-panel"
       data-panel-kind={kind}
       data-panel-id={id}

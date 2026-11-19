@@ -1,0 +1,430 @@
+{
+ "generated": "2026-11-17",
+ "sources": {
+  "portal": "Animated_SKILLS_Portal_Vortex_bef201.gif (443x443, 8 frames, 100ms each, RGBA transparent)",
+  "kit": "image_a03bbb.png (1774x887 RGBA, 25.2% transparent)",
+  "holograms": "image_85fb82.png (1159x1358 RGBA, 21.5% transparent, 4 rows x 2 cols)"
+ },
+ "assets": [
+  {
+   "file": "portals/skills-return/f0.png",
+   "source": "portal gif frame 0",
+   "source_dims": "443x443",
+   "extracted_dims": "443x443",
+   "display_dims": "180x180",
+   "origin": "(0,1)",
+   "transparency": "RGBA transparent (bottom pad 24/443 rows)",
+   "world_position": "x=0, grounded at groundY=560 (visible bottom y=563, 3px overlap), depth 3",
+   "purpose": "Sole visible portal: Core/Projects -> Infrastructure/Skills. Trigger pipe projects-entry x=60 (arm zone 38..82) sits inside the visible opening (display x 35.7..143.4)"
+  },
+  {
+   "file": "portals/skills-return/f1.png",
+   "source": "portal gif frame 1",
+   "source_dims": "443x443",
+   "extracted_dims": "443x443",
+   "display_dims": "180x180",
+   "origin": "(0,1)",
+   "transparency": "RGBA transparent (bottom pad 24/443 rows)",
+   "world_position": "x=0, grounded at groundY=560 (visible bottom y=563, 3px overlap), depth 3",
+   "purpose": "Sole visible portal: Core/Projects -> Infrastructure/Skills. Trigger pipe projects-entry x=60 (arm zone 38..82) sits inside the visible opening (display x 35.7..143.4)"
+  },
+  {
+   "file": "portals/skills-return/f2.png",
+   "source": "portal gif frame 2",
+   "source_dims": "443x443",
+   "extracted_dims": "443x443",
+   "display_dims": "180x180",
+   "origin": "(0,1)",
+   "transparency": "RGBA transparent (bottom pad 24/443 rows)",
+   "world_position": "x=0, grounded at groundY=560 (visible bottom y=563, 3px overlap), depth 3",
+   "purpose": "Sole visible portal: Core/Projects -> Infrastructure/Skills. Trigger pipe projects-entry x=60 (arm zone 38..82) sits inside the visible opening (display x 35.7..143.4)"
+  },
+  {
+   "file": "portals/skills-return/f3.png",
+   "source": "portal gif frame 3",
+   "source_dims": "443x443",
+   "extracted_dims": "443x443",
+   "display_dims": "180x180",
+   "origin": "(0,1)",
+   "transparency": "RGBA transparent (bottom pad 24/443 rows)",
+   "world_position": "x=0, grounded at groundY=560 (visible bottom y=563, 3px overlap), depth 3",
+   "purpose": "Sole visible portal: Core/Projects -> Infrastructure/Skills. Trigger pipe projects-entry x=60 (arm zone 38..82) sits inside the visible opening (display x 35.7..143.4)"
+  },
+  {
+   "file": "portals/skills-return/f4.png",
+   "source": "portal gif frame 4",
+   "source_dims": "443x443",
+   "extracted_dims": "443x443",
+   "display_dims": "180x180",
+   "origin": "(0,1)",
+   "transparency": "RGBA transparent (bottom pad 24/443 rows)",
+   "world_position": "x=0, grounded at groundY=560 (visible bottom y=563, 3px overlap), depth 3",
+   "purpose": "Sole visible portal: Core/Projects -> Infrastructure/Skills. Trigger pipe projects-entry x=60 (arm zone 38..82) sits inside the visible opening (display x 35.7..143.4)"
+  },
+  {
+   "file": "portals/skills-return/f5.png",
+   "source": "portal gif frame 5",
+   "source_dims": "443x443",
+   "extracted_dims": "443x443",
+   "display_dims": "180x180",
+   "origin": "(0,1)",
+   "transparency": "RGBA transparent (bottom pad 24/443 rows)",
+   "world_position": "x=0, grounded at groundY=560 (visible bottom y=563, 3px overlap), depth 3",
+   "purpose": "Sole visible portal: Core/Projects -> Infrastructure/Skills. Trigger pipe projects-entry x=60 (arm zone 38..82) sits inside the visible opening (display x 35.7..143.4)"
+  },
+  {
+   "file": "portals/skills-return/f6.png",
+   "source": "portal gif frame 6",
+   "source_dims": "443x443",
+   "extracted_dims": "443x443",
+   "display_dims": "180x180",
+   "origin": "(0,1)",
+   "transparency": "RGBA transparent (bottom pad 24/443 rows)",
+   "world_position": "x=0, grounded at groundY=560 (visible bottom y=563, 3px overlap), depth 3",
+   "purpose": "Sole visible portal: Core/Projects -> Infrastructure/Skills. Trigger pipe projects-entry x=60 (arm zone 38..82) sits inside the visible opening (display x 35.7..143.4)"
+  },
+  {
+   "file": "portals/skills-return/f7.png",
+   "source": "portal gif frame 7",
+   "source_dims": "443x443",
+   "extracted_dims": "443x443",
+   "display_dims": "180x180",
+   "origin": "(0,1)",
+   "transparency": "RGBA transparent (bottom pad 24/443 rows)",
+   "world_position": "x=0, grounded at groundY=560 (visible bottom y=563, 3px overlap), depth 3",
+   "purpose": "Sole visible portal: Core/Projects -> Infrastructure/Skills. Trigger pipe projects-entry x=60 (arm zone 38..82) sits inside the visible opening (display x 35.7..143.4)"
+  },
+  {
+   "file": "projects/nifty100/idle.png",
+   "source": "hologram sheet row 1 col 1 (cell 579x339), union-cropped to keep idle/hover canvases identical",
+   "source_dims": "1159x1358 sheet",
+   "extracted_dims": "461x309",
+   "display_dims": "220x147",
+   "origin": "(0.5,1)",
+   "transparency": "RGBA transparent",
+   "world_position": "station nifty100-financial-analysis at y=560, grounded by opaque bounds + 3px overlap, depth 6",
+   "purpose": "NIFTY 100 Financial Analysis \u2014 idle hologram state"
+  },
+  {
+   "file": "projects/nifty100/hover.png",
+   "source": "hologram sheet row 1 col 2 (cell 579x339), union-cropped to keep idle/hover canvases identical",
+   "source_dims": "1159x1358 sheet",
+   "extracted_dims": "461x309",
+   "display_dims": "220x147",
+   "origin": "(0.5,1)",
+   "transparency": "RGBA transparent",
+   "world_position": "station nifty100-financial-analysis at y=560, grounded by opaque bounds + 3px overlap, depth 6",
+   "purpose": "NIFTY 100 Financial Analysis \u2014 hover hologram state"
+  },
+  {
+   "file": "projects/sql-warehouse/idle.png",
+   "source": "hologram sheet row 2 col 1 (cell 579x339), union-cropped to keep idle/hover canvases identical",
+   "source_dims": "1159x1358 sheet",
+   "extracted_dims": "461x308",
+   "display_dims": "220x147",
+   "origin": "(0.5,1)",
+   "transparency": "RGBA transparent",
+   "world_position": "station sql-data-warehouse at y=560, grounded by opaque bounds + 3px overlap, depth 6",
+   "purpose": "SQL Data Warehouse & ETL \u2014 idle hologram state"
+  },
+  {
+   "file": "projects/sql-warehouse/hover.png",
+   "source": "hologram sheet row 2 col 2 (cell 579x339), union-cropped to keep idle/hover canvases identical",
+   "source_dims": "1159x1358 sheet",
+   "extracted_dims": "461x308",
+   "display_dims": "220x147",
+   "origin": "(0.5,1)",
+   "transparency": "RGBA transparent",
+   "world_position": "station sql-data-warehouse at y=560, grounded by opaque bounds + 3px overlap, depth 6",
+   "purpose": "SQL Data Warehouse & ETL \u2014 hover hologram state"
+  },
+  {
+   "file": "projects/primetradeai/idle.png",
+   "source": "hologram sheet row 3 col 1 (cell 579x339), union-cropped to keep idle/hover canvases identical",
+   "source_dims": "1159x1358 sheet",
+   "extracted_dims": "467x310",
+   "display_dims": "220x146",
+   "origin": "(0.5,1)",
+   "transparency": "RGBA transparent",
+   "world_position": "station primetradeai at y=560, grounded by opaque bounds + 3px overlap, depth 6",
+   "purpose": "PRIMETradeAI \u2014 idle hologram state"
+  },
+  {
+   "file": "projects/primetradeai/hover.png",
+   "source": "hologram sheet row 3 col 2 (cell 579x339), union-cropped to keep idle/hover canvases identical",
+   "source_dims": "1159x1358 sheet",
+   "extracted_dims": "467x310",
+   "display_dims": "220x146",
+   "origin": "(0.5,1)",
+   "transparency": "RGBA transparent",
+   "world_position": "station primetradeai at y=560, grounded by opaque bounds + 3px overlap, depth 6",
+   "purpose": "PRIMETradeAI \u2014 hover hologram state"
+  },
+  {
+   "file": "projects/dashboards/idle.png",
+   "source": "hologram sheet row 4 col 1 (cell 579x339), union-cropped to keep idle/hover canvases identical",
+   "source_dims": "1159x1358 sheet",
+   "extracted_dims": "530x307",
+   "display_dims": "220x127",
+   "origin": "(0.5,1)",
+   "transparency": "RGBA transparent",
+   "world_position": "station data-analytics-dashboards at y=560, grounded by opaque bounds + 3px overlap, depth 6",
+   "purpose": "Data Analytics Dashboards \u2014 idle hologram state"
+  },
+  {
+   "file": "projects/dashboards/hover.png",
+   "source": "hologram sheet row 4 col 2 (cell 579x339), union-cropped to keep idle/hover canvases identical",
+   "source_dims": "1159x1358 sheet",
+   "extracted_dims": "530x307",
+   "display_dims": "220x127",
+   "origin": "(0.5,1)",
+   "transparency": "RGBA transparent",
+   "world_position": "station data-analytics-dashboards at y=560, grounded by opaque bounds + 3px overlap, depth 6",
+   "purpose": "Data Analytics Dashboards \u2014 hover hologram state"
+  },
+  {
+   "file": "platform/floor/slab-1.png",
+   "source": "kit component at (32, 21, 564, 183)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "532x162",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "left/main floor slab, top edge = walk surface"
+  },
+  {
+   "file": "platform/floor/slab-2.png",
+   "source": "kit component at (580, 36, 965, 183)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "385x147",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "main floor slab"
+  },
+  {
+   "file": "platform/floor/slab-3.png",
+   "source": "kit component at (982, 35, 1339, 183)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "357x148",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "main floor slab"
+  },
+  {
+   "file": "platform/floor/slab-4.png",
+   "source": "kit component at (1363, 35, 1742, 182)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "379x147",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "right floor slab (finished right edge)"
+  },
+  {
+   "file": "platform/floor/grate-1.png",
+   "source": "kit component at (30, 211, 391, 283)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "361x72",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "grated floor panel"
+  },
+  {
+   "file": "platform/floor/grate-2.png",
+   "source": "kit component at (1066, 210, 1430, 282)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "364x72",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "grated floor panel"
+  },
+  {
+   "file": "platform/structures/pillar-1.png",
+   "source": "kit component at (40, 410, 112, 585)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "72x175",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "support pillar (hangs below floor)"
+  },
+  {
+   "file": "platform/structures/pillar-2.png",
+   "source": "kit component at (135, 412, 207, 585)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "72x173",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "support pillar"
+  },
+  {
+   "file": "platform/structures/pillar-3.png",
+   "source": "kit component at (235, 410, 332, 586)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "97x176",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "support pillar"
+  },
+  {
+   "file": "platform/decorations/rack-1.png",
+   "source": "kit component at (566, 602, 778, 741)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "212x139",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "server rack beside the return portal"
+  },
+  {
+   "file": "platform/decorations/rack-2.png",
+   "source": "kit component at (1437, 596, 1723, 736)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "286x140",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "server rack at the right world boundary"
+  },
+  {
+   "file": "platform/decorations/accent-1.png",
+   "source": "kit component at (28, 758, 133, 865)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "105x107",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "small floor accent"
+  },
+  {
+   "file": "platform/decorations/accent-2.png",
+   "source": "kit component at (530, 758, 638, 865)",
+   "source_dims": "1774x887 sheet",
+   "extracted_dims": "108x107",
+   "display_dims": "see layout",
+   "origin": "see layout",
+   "transparency": "RGBA transparent",
+   "world_position": "see layout",
+   "purpose": "small floor accent"
+  }
+ ],
+ "layout": {
+  "world": "1500x900, groundY=560",
+  "portal": {
+   "art": "x=0, origin (0,1), 180x180, depth 3, spans 0..180; visible opening display x 35.7..143.4",
+   "trigger": "pipe projects-entry x=60 y=560; arm zone 38..82; near zone 8..112",
+   "spawn": "(144, 560) \u2014 outside the near zone, so arrival never re-triggers"
+  },
+  "floor": "slab-1..4 edge-to-edge at uniform scale 1500/1653 = 0.90746, top edge at y=560, depth 2",
+  "grates": [
+   {
+    "x": 250,
+    "scale": 0.5,
+    "origin": "(0,0) at (x,560)",
+    "depth": 2
+   },
+   {
+    "x": 760,
+    "scale": 0.5,
+    "origin": "(0,0) at (x,560)",
+    "depth": 2
+   }
+  ],
+  "pillars": [
+   {
+    "x": 300,
+    "scale": 0.8,
+    "origin": "(0.5,0) at (x,660)",
+    "depth": 1
+   },
+   {
+    "x": 750,
+    "scale": 0.8,
+    "origin": "(0.5,0) at (x,660)",
+    "depth": 1
+   },
+   {
+    "x": 1200,
+    "scale": 0.8,
+    "origin": "(0.5,0) at (x,660)",
+    "depth": 1
+   }
+  ],
+  "racks": [
+   {
+    "x": 210,
+    "scale": 0.55,
+    "grounded": true,
+    "depth": 2
+   },
+   {
+    "x": 1370,
+    "scale": 0.55,
+    "grounded": true,
+    "depth": 2
+   }
+  ],
+  "accents": [
+   {
+    "x": 560,
+    "scale": 0.4,
+    "grounded": true,
+    "depth": 2
+   },
+   {
+    "x": 1060,
+    "scale": 0.4,
+    "grounded": true,
+    "depth": 2
+   }
+  ],
+  "stations": [
+   {
+    "id": "nifty100-financial-analysis",
+    "x": 390,
+    "display": "220 wide, aspect preserved",
+    "hitbox": "full sprite rect",
+    "depth": 6
+   },
+   {
+    "id": "sql-data-warehouse",
+    "x": 640,
+    "display": "220 wide, aspect preserved",
+    "hitbox": "full sprite rect",
+    "depth": 6
+   },
+   {
+    "id": "primetradeai",
+    "x": 890,
+    "display": "220 wide, aspect preserved",
+    "hitbox": "full sprite rect",
+    "depth": 6
+   },
+   {
+    "id": "data-analytics-dashboards",
+    "x": 1140,
+    "display": "220 wide, aspect preserved",
+    "hitbox": "full sprite rect",
+    "depth": 6
+   }
+  ]
+ }
+}

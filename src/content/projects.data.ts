@@ -22,13 +22,13 @@ import type { Project } from './types';
 export const DATA_PROJECTS: readonly Project[] = [
   {
     id: 'nifty100-financial-analysis',
-    title: 'Nifty-100 Financial Analysis',
+    title: 'NIFTY 100 Financial Analysis',
     world: 'data',
     authorship: 'solo',
     contribution:
       'Designed the schema, built the validation rule engine, implemented the ratio and cash-flow analytics, and shipped the API and dashboard.',
     description:
-      'An end-to-end financial analysis pipeline over Nifty-100 company data: sources are validated against accounting rules, loaded into a relational model, analysed for profitability and solvency, then exposed through an API and a dashboard.',
+      'An end-to-end financial analysis pipeline over Nifty-100 company data: raw Excel exports are validated against 16 accounting rules, loaded into a 10-table SQLite database with 16 indexes, analysed for profitability, solvency and cash-flow KPIs, then exposed via a FastAPI service and a multi-page Streamlit dashboard.',
     technologies: [
       'Python',
       'pandas',
@@ -39,6 +39,12 @@ export const DATA_PROJECTS: readonly Project[] = [
       'pytest',
       'reportlab',
     ],
+    problem:
+      'Public company financials arrive as unstructured Excel/PDF exports with inconsistent schemas, missing values, and accounting errors — raw enough that automated ratio analysis breaks without a validation layer first.',
+    solution:
+      'A six-stage pipeline: ingest the Excel exports, validate them against 16 accounting-aware data-quality rules (DQ-01..DQ-16, including the balance-sheet identity and EPS sign checks), store them in a 10-table SQLite schema with 16 indexes and foreign keys, compute ROE, debt-to-equity, interest coverage, CAGR and cash-flow KPIs, run a winsorized multi-factor screener, and deliver everything through 8 FastAPI routers, a multi-page Streamlit dashboard, and reportlab tearsheets.',
+    impact:
+      'Recorded live run: 92 companies, 5,520 stock prices, 3,484 ratio rows. TCS FY2024 ratios cross-checked against published figures (ROE 50.94%, D/E 0.089, ICR 87.1). Test suite: 699 of 714 tests passing (the project pins pandas 2.3.3).',
     workflow: {
       metaphor: 'warehouse',
       stages: [
@@ -51,7 +57,7 @@ export const DATA_PROJECTS: readonly Project[] = [
         {
           id: 'store',
           label: 'Store',
-          detail: 'SQLite, 11 tables with 16 indexes and foreign keys',
+          detail: 'SQLite, 10 tables with 16 indexes and foreign keys (schema.sql verified; an earlier note said 11 — the observed count is 10)',
         },
         {
           id: 'analyse',
@@ -68,16 +74,16 @@ export const DATA_PROJECTS: readonly Project[] = [
       '699 of 714 tests pass',
     ],
     limitations: [
-      'The shipped ETL load is not idempotent and fails on 10 of 12 tables in its recorded run',
+      'The shipped ETL load is not idempotent; its recorded run fails on 10 tables (schema.sql defines exactly 10)',
       '14 of 714 tests fail under the installed pandas 3.0.5; the project pins 2.3.3',
       'scikit-learn is declared but was not executed in the audited environment',
     ],
-    github: 'https://github.com/yashmahajan11234567/Bluestock-fintech',
+    github: 'https://github.com/yashmahajan11234567/Bluestock-fintech/tree/main/nifty100-financial-analysis(Bluestock-fintech)',
     evidence: [
-      'db/schema.sql — 11-table schema with 16 indexes',
+      'db/schema.sql — 10-table schema with 16 indexes (count verified)',
       'validator.py — the 16 data-quality rules',
       'ratios.py — ratio formulas, live-validated against TCS FY2024',
-      'tests/ — 714 tests, 699 passing',
+      'tests/ — recorded run: 714 tests, 699 passing',
     ],
   },
   {
@@ -88,8 +94,14 @@ export const DATA_PROJECTS: readonly Project[] = [
     contribution:
       'Wrote the medallion pipeline, the dimensional modelling, and the data-quality test scripts.',
     description:
-      'A layered SQL Server warehouse built with the medallion pattern: raw bronze ingestion, deduplicated and windowed silver transforms, and a gold star schema, with data-quality tests at each layer.',
+      'A medallion-architecture SQL Server warehouse over CRM/ERP CSV sources: six bronze tables loaded via BULK INSERT, deduplicated and windowed in silver, then modelled as a three-view star schema in gold, with per-layer data-quality assertion scripts. Presented as a design and modelling artifact, not a portable running system.',
     technologies: ['T-SQL', 'SQL Server', 'BULK INSERT', 'Window Functions', 'Star Schema'],
+    problem:
+      'Operational CRM/ERP CSV extracts are duplicated, inconsistently keyed, and temporally gapped — they cannot support reliable reporting without a structured transformation layer on top.',
+    solution:
+      'A medallion architecture in eight T-SQL scripts on SQL Server: bronze loads 6 raw tables from CSVs via BULK INSERT; silver deduplicates with ROW_NUMBER() window functions and builds effective-date ranges with LEAD(); gold exposes a 3-view star schema (dim_customers, dim_products, fact_sales); per-layer quality-check scripts assert integrity at the silver and gold layers.',
+    impact:
+      'A complete, inspectable dimensional model: 6 bronze tables over 6 CSV sources, windowed silver transforms, and 3 gold star-schema views, with quality assertions at each layer. Known defects are stated plainly under Limitations — this is a design and modelling artifact, not a portable running system.',
     workflow: {
       metaphor: 'pipeline-vessel',
       stages: [
@@ -106,7 +118,6 @@ export const DATA_PROJECTS: readonly Project[] = [
     },
     limitations: [
       'Currently non-runnable: a silver procedure reads cst_marital_status while bronze declares cst_material_status',
-      'A centry typo in a column reference',
       'Hardcoded absolute local paths in the SQL scripts prevent portable execution',
       'Presented as a design and modelling artifact rather than a running system',
     ],
@@ -124,8 +135,14 @@ export const DATA_PROJECTS: readonly Project[] = [
     contribution:
       'Built the T-SQL analysis queries, the scikit-learn models, and the Streamlit dashboard.',
     description:
-      'A crypto-market analysis project that queries trade data with T-SQL, applies supervised and unsupervised learning, and presents the results in a Streamlit dashboard.',
-    technologies: ['T-SQL', 'Python', 'pandas', 'scikit-learn', 'Random Forest', 'KMeans', 'Streamlit'],
+      'Analysis of whether Bitcoin market sentiment (Fear & Greed Index) relates to Hyperliquid trader behavior and profitability — SQL preparation, supervised/unsupervised ML models, and a Streamlit dashboard. An analysis project, not a trading bot: no live-trading or backtest performance results are claimed.',
+    technologies: ['T-SQL', 'Python', 'pandas', 'scikit-learn', 'Streamlit'],
+    problem:
+      'Market sentiment indicators are widely cited but rarely tested against actual trader behavior. The question this project asks: does Bitcoin Fear & Greed sentiment relate to Hyperliquid trader profitability?',
+    solution:
+      'Part A consolidates the Fear & Greed Index and Hyperliquid trade data in SQL Server with nine analytical T-SQL queries (daily PnL, winrate, average trade size, leverage proxy, duplicates, missing values, row counts, timestamp conversion). Part B trains a RandomForestClassifier for prediction and KMeans for segmentation in a notebook. Part C presents six charts in a Streamlit dashboard over the consolidated analysis CSV.',
+    impact:
+      'A working sentiment-vs-behavior analysis pipeline over a committed 10,109-byte sample dataset. This is an analysis project, not a trading bot: no live-trading or backtest performance results exist, and because only the sample CSV is committed, the results are not reproducible from the repository.',
     workflow: {
       metaphor: 'analytics-terminal',
       stages: [
@@ -141,6 +158,15 @@ export const DATA_PROJECTS: readonly Project[] = [
     ],
     github: 'https://github.com/yashmahajan11234567/PRIMETradeAI',
     evidence: ['PartA/ — nine T-SQL queries', 'PartB/ — model notebook', 'PartC/app.py — Streamlit dashboard'],
+    previews: [
+      {
+        id: 'primetradeai-dashboard',
+        label: 'PRIMETradeAI — Streamlit dashboard preview (committed in the repo)',
+        path: '/assets/previews/primetradeai-dashboard.png',
+        alt: 'Screenshot of the PRIMETradeAI Streamlit dashboard showing sentiment versus trader behavior charts',
+        sourceUrl: 'https://github.com/yashmahajan11234567/PRIMETradeAI/blob/main/PartC/dashboard_preview.png',
+      },
+    ],
     },
     {
       id: 'data-analytics-dashboards',
@@ -150,8 +176,14 @@ export const DATA_PROJECTS: readonly Project[] = [
       contribution:
         'Built five dashboards across three BI tools, each committed with its source workbook or report file.',
       description:
-        'A collection of five interactive dashboards built in Excel, Tableau and Power BI. Each dashboard ships with its committed source file — a workbook, a .twbx, or a .pbix — so every figure on screen is reproducible from the repository rather than mocked up.',
+        'A collection of five interactive BI dashboards built in Excel, Tableau, and Power BI over public datasets. Each dashboard ships with its committed source workbook or report file (.xlsx, .twbx, .pbix) and a real preview PNG, so every figure on screen is reproducible from the repository. One repository = one project with five views.',
       technologies: ['Excel', 'Tableau', 'Power BI'],
+      problem:
+        'Dashboard claims are hard to verify from screenshots alone — a credible showcase must ship the actual workbook and report files so the calculations, filters, and drill-downs are inspectable, not just the rendered output.',
+      solution:
+        'Five interactive dashboards in one repository, each committed with its source file and a real preview image: Bike Sales (Excel .xlsx), COVID-19 (Tableau .twbx), HR Analytics (Tableau .twbx), and Netflix Content built twice — once in Tableau (.twbx) and once in Power BI (.pbix). Pipeline: collect a public dataset, model it in the tool the dashboard ships in, build interactive pages with filters and drill-down, and publish the source file alongside its preview.',
+      impact:
+        '5 dashboards across 3 BI tools, every one reproducible from the committed source file; previews render at their true aspect ratios. Findings are descriptive of each single public dataset, and packaged .twbx files are not fully inspectable — kept strictly separate from the Bluestock mutual-fund work, whose inputs are synthetic.',
       workflow: {
         metaphor: 'analytics-terminal',
         stages: [
