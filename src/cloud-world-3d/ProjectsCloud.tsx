@@ -33,14 +33,31 @@ import {
 // massive central upper cloud with crown tufts. Lobes overlap heavily and
 // the smooth-union SDF (k=1.2) blends them into ONE continuous fluffy
 // surface: scalloped outline with visible lobe bumps, no hard ball seams.
+//
+// 2026-11-19 calibration: added a low "skirt ring" (y≈2.2 lobes) so the base
+// is wide enough to conceal the interior floor rim (r=27.6 world) at ground
+// level, and extended the rear lobes (+z) so the whole rear of the interior
+// shell/gallery stays hidden from exterior viewpoints. Front base bumps keep
+// their original z so the frozen door corridor cut still opens the facade.
 type CloudLobe = { x: number; y: number; z: number; r: number; sy: number };
 const CLOUD_LOBES: CloudLobe[] = [
   // ---- base: wide, low, soft mass merging into the ground ----
-  { x: 0, y: 5, z: 2, r: 15, sy: 0.45 },
-  { x: -13, y: 6, z: 0, r: 8.5, sy: 0.6 },
-  { x: 13, y: 6, z: 0, r: 8.5, sy: 0.6 },
-  { x: -8.5, y: 6.5, z: -7, r: 7.5, sy: 0.65 },
-  { x: 8.5, y: 6.5, z: -7, r: 7.5, sy: 0.65 },
+  { x: 0, y: 4.5, z: 3, r: 17, sy: 0.42 },
+  // ---- low skirt ring: hides the interior floor/baseboard rim at ground level ----
+  { x: -16, y: 2.2, z: 0, r: 8.5, sy: 0.35 },
+  { x: 16, y: 2.2, z: 0, r: 8.5, sy: 0.35 },
+  { x: -10, y: 2.2, z: 7.5, r: 7.5, sy: 0.4 },
+  { x: 10, y: 2.2, z: 7.5, r: 7.5, sy: 0.4 },
+  { x: 0, y: 1.2, z: 13.5, r: 8, sy: 0.3 }, // rear skirt — covers floor rim at the back
+  { x: -15, y: 1.5, z: -9, r: 7, sy: 0.3 },
+  { x: 15, y: 1.5, z: -9, r: 7, sy: 0.3 },
+  { x: -10, y: 2.2, z: -7, r: 7, sy: 0.4 },
+  { x: 10, y: 2.2, z: -7, r: 7, sy: 0.4 },
+  // ---- mid sides ----
+  { x: -13, y: 6, z: 1, r: 8.5, sy: 0.6 },
+  { x: 13, y: 6, z: 1, r: 8.5, sy: 0.6 },
+  { x: -8.5, y: 6.5, z: -6, r: 7.5, sy: 0.65 },
+  { x: 8.5, y: 6.5, z: -6, r: 7.5, sy: 0.65 },
   // front base — three bumps framing the door (scalloped front rim)
   { x: -4.5, y: 6, z: -10, r: 5, sy: 0.7 },
   { x: 0, y: 6.5, z: -11, r: 5.5, sy: 0.65 },
@@ -48,18 +65,30 @@ const CLOUD_LOBES: CloudLobe[] = [
   // ---- lower side bulges (wide facade) ----
   { x: -18, y: 10.5, z: -2, r: 8, sy: 0.75 },
   { x: 18, y: 10.5, z: -2, r: 8, sy: 0.75 },
-  { x: -12, y: 12.5, z: 3, r: 8, sy: 0.8 },
-  { x: 12, y: 12.5, z: 3, r: 8, sy: 0.8 },
-  { x: 0, y: 13, z: 7, r: 8.5, sy: 0.75 }, // back mid
+  { x: -12, y: 12.5, z: 4, r: 8, sy: 0.8 },
+  { x: 12, y: 12.5, z: 4, r: 8, sy: 0.8 },
+  { x: 0, y: 13, z: 7.5, r: 8.5, sy: 0.75 }, // back mid — extended rearward
   // ---- upper-mid shoulders (scalloped) ----
-  { x: -6.5, y: 15, z: -5.5, r: 7, sy: 0.82 },
-  { x: 6.5, y: 15, z: -5.5, r: 7, sy: 0.82 },
-  { x: -9.5, y: 17.5, z: 1, r: 7.5, sy: 0.85 },
-  { x: 9.5, y: 17.5, z: 1, r: 7.5, sy: 0.85 },
-  { x: 0, y: 17.5, z: 6.5, r: 7, sy: 0.8 },
+  { x: -6.5, y: 15, z: -5.5, r: 7.5, sy: 0.82 },
+  { x: 6.5, y: 15, z: -5.5, r: 7.5, sy: 0.82 },
+  { x: -9.5, y: 17.5, z: 2, r: 8, sy: 0.85 },
+  { x: 9.5, y: 17.5, z: 2, r: 8, sy: 0.85 },
+  { x: 0, y: 17.5, z: 7, r: 7.5, sy: 0.8 }, // upper back — extended rearward
+  // ---- rear fill lobes: lowered and extended so no gap band remains between
+  //      the skirt and the upper lobes (hides displays/lanterns from behind) ----
+  { x: 0, y: 7.5, z: 10.5, r: 8.5, sy: 0.8 },
+  { x: -8, y: 9.5, z: 11, r: 8, sy: 0.8 },
+  { x: 8, y: 9.5, z: 11, r: 8, sy: 0.8 },
+  { x: 0, y: 17, z: 10, r: 6.5, sy: 0.8 },
+  { x: 0, y: 20, z: 6, r: 7, sy: 0.9 }, // rear crown scallop
+  // ---- rear low wedge: closes the sightline gap between skirt top and the
+  //      rear fill lobes so no rear camera angle sees into the gallery ----
+  { x: 0, y: 4, z: 14.5, r: 8.5, sy: 0.55 },
+  { x: -9, y: 5, z: 14, r: 7.5, sy: 0.6 },
+  { x: 9, y: 5, z: 14, r: 7.5, sy: 0.6 },
   // ---- one dominant central top mass (reference: a single big crown
   //      sphere, not multiple tufts) flanked by two smaller lobes ----
-  { x: 0, y: 21.5, z: 0, r: 10.5, sy: 1.0 },
+  { x: 0, y: 21.5, z: 1, r: 10.5, sy: 1.0 },
   { x: -5.5, y: 19.5, z: -1.5, r: 7.5, sy: 0.9 },
   { x: 5.5, y: 19.5, z: 1.5, r: 7.5, sy: 0.9 },
 ];
@@ -70,7 +99,10 @@ const CLOUD_LOBES: CloudLobe[] = [
 const CLOUD_DOMAIN = {
   xMin: -28, xMax: 28,
   yMin: -2, yMax: 36,
-  zMin: -24, zMax: 22,
+  // zMax=26: the rear closure lobes reach local z≈23; the sampling domain must
+  // extend past them or MarchingCubes cuts the surface open at the boundary
+  // (a hole in the rear that exposes the interior shell).
+  zMin: -24, zMax: 26,
 } as const;
 const CLOUD_HALF = {
   x: (CLOUD_DOMAIN.xMax - CLOUD_DOMAIN.xMin) / 2,
@@ -129,10 +161,10 @@ function generateAlbedoTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
-  // Base gradient: darker underside → bright crown
+  // Base gradient: darker underside → bright crown (kept subtle so no UV banding reads)
   const grad = ctx.createLinearGradient(0, size, 0, 0);
-  grad.addColorStop(0, '#F1E9DA'); // soft warm shade
-  grad.addColorStop(0.45, '#FBF8F1'); // cream
+  grad.addColorStop(0, '#F5F0E6'); // soft warm shade (less tan than before)
+  grad.addColorStop(0.45, '#FDFBF6'); // near-white cream
   grad.addColorStop(1, '#FFFFFF'); // bright crown — reference clouds read white, not tan
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
@@ -398,13 +430,13 @@ export function ProjectsCloud({
       map: albedo,
       roughnessMap: rough,
       normalMap: normal,
-      normalScale: new THREE.Vector2(1.0, 1.0),
+      normalScale: new THREE.Vector2(0.4, 0.4), // soft — avoids striation/crease artifacts at glancing angles
       roughness: 0.92,
       metalness: 0.0,
       // lift so the cloud reads white/cream under the warm sunset sun
       // (reference artwork shows near-white clouds, not tan)
       emissive: new THREE.Color('#EEF2FF'),
-      emissiveIntensity: 0.3,
+      emissiveIntensity: 0.22,
     });
   }, []);
 
