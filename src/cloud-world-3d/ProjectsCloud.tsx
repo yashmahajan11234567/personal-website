@@ -359,14 +359,30 @@ function roundedDoorLeafGeo(w: number, h: number): THREE.BufferGeometry {
 
 const FLOWER_COLORS = ['#FF8FB1', '#FFD166', '#FFFFFF', '#C77DFF'];
 
+// Door swing tuning (2026-11-19 entry/exit polish): the door starts opening
+// before the player arrives, swings less far and slower so it never becomes
+// the focus of the transition, and on exit stays open until the CAMERA has
+// cleared the doorway — so it never closes in front of the viewer.
+const DOOR_OPEN_DIST = 12; // world units from the door point
+const DOOR_OPEN_ANGLE = 1.2; // rad — target swing of each leaf
+const DOOR_SWING_RATE = 2.8; // 1/s — exponential approach rate
+const DOOR_CAM_CLEAR = 1.5; // u past the door plane the camera must reach before close
+const DOORWAY_FADE_BAND = 6; // u of camera travel over which the doorway plane fades —
+// wide enough that the plane never fills the frame while the camera is at the
+// threshold, but opacity stays 1 at normal outdoor follow distance
+
 export function ProjectsCloud({
   insideRef,
   avatarPosRef,
+  controlsRef,
 }: {
   /** true while the player is inside the cloud interior */
   insideRef: React.RefObject<boolean>;
   /** live avatar position, drives the door swing */
   avatarPosRef: React.RefObject<THREE.Vector3 | null>;
+  /** live OrbitControls instance — camera position drives the doorway fade and
+      the exit-close clearance (no new component coupling, same ref the rig uses) */
+  controlsRef: React.RefObject<any>;
 }) {
   const S = CLOUD_SCALE;
   const groundY = terrainHeight(PROJECTS_CLOUD_X, PROJECTS_CLOUD_Z);
@@ -492,7 +508,19 @@ export function ProjectsCloud({
     return items;
   }, [S]);
   const signTitleMat = useMemo(() => new THREE.MeshBasicMaterial({ map: signTex }), [signTex]);
-  const doorwayMat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#241812' }), []);
+  // Warm illuminated threshold plane (was near-black #241812, which read as a
+  // black rectangle and popped visibly when the inside flag flipped). Its
+  // opacity is faded by camera z in the useFrame below — never a hard toggle.
+  const doorwayMat = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        color: '#D9985A',
+        transparent: true,
+        opacity: 1,
+        depthWrite: false,
+      }),
+    [],
+  );
 
   // ---- Door swing logic — double door, both leaves swing together ----
   const doorPivotLRef = useRef<THREE.Group>(null);
@@ -501,18 +529,42 @@ export function ProjectsCloud({
   useFrame((_, delta) => {
     const avatar = avatarPosRef.current;
     const inside = insideRef.current;
+    const cam = controlsRef.current?.object as THREE.Camera | undefined;
+    const camZ = cam ? cam.position.z : null;
     let open = inside;
     if (avatar) {
       const d = Math.hypot(avatar.x - PROJECTS_CLOUD_X, avatar.z - CLOUD_DOOR_Z);
-      if (d < 7 * S) open = true;
+      if (d < DOOR_OPEN_DIST) open = true;
     }
+    // Exit lifecycle: leaves stay open until the camera has also cleared the
+    // door plane, so the door never closes in front of the viewer.
+    if (camZ != null && camZ > CLOUD_DOOR_Z + DOOR_CAM_CLEAR) open = true;
     if (doorPivotLRef.current && doorPivotRRef.current) {
-      const target = open ? -1.75 : 0;
-      const k = 1 - Math.exp(-6 * Math.min(delta, 1 / 30));
+      const target = open ? -DOOR_OPEN_ANGLE : 0;
+      const k = 1 - Math.exp(-DOOR_SWING_RATE * Math.min(delta, 1 / 30));
       doorPivotLRef.current.rotation.y += (target - doorPivotLRef.current.rotation.y) * k;
       doorPivotRRef.current.rotation.y += (-target - doorPivotRRef.current.rotation.y) * k;
     }
-    if (doorwayRef.current) doorwayRef.current.visible = !inside;
+    // Camera-aware doorway fade: opaque while the camera is outside the
+    // entrance, smoothstep to invisible across DOORWAY_FADE_BAND of camera
+    // travel through the plane, symmetric on exit. No pop, no black rectangle.
+    if (doorwayRef.current) {
+      const planeWorldZ = CLOUD_DOOR_Z + 0.6; // mesh sits at local doorZ + 0.6
+      const t =
+        camZ == null
+          ? 1
+          : THREE.MathUtils.clamp((planeWorldZ + DOORWAY_FADE_BAND - camZ) / (2 * DOORWAY_FADE_BAND), 0, 1);
+      const opacity = t * t * (3 - 2 * t);
+      doorwayMat.opacity = opacity;
+      doorwayRef.current.visible = opacity > 0.02;
+      if (typeof window !== 'undefined') {
+        (window as any).__cwDoorwayOpacity = +opacity.toFixed(3);
+        (window as any).__cwDoorAngles = [
+          doorPivotLRef.current ? +doorPivotLRef.current.rotation.y.toFixed(3) : null,
+          doorPivotRRef.current ? +doorPivotRRef.current.rotation.y.toFixed(3) : null,
+        ];
+      }
+    }
     // lantern pulse — never fully dark
     const t = performance.now() / 1000;
     lanternMat.emissiveIntensity = 1.4 + Math.sin(t * 1.4) * 0.25;

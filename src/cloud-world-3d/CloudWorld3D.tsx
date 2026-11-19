@@ -151,7 +151,8 @@ if (typeof window !== 'undefined') {
 }
 
 const FOLLOW_DISTANCE = 15; // u (outside)
-const FOLLOW_DISTANCE_INSIDE = 7.5; // u (inside the Projects Cloud gallery)
+const FOLLOW_DISTANCE_INSIDE = 11; // u (inside the Projects Cloud gallery) — kept close to
+// the outdoor distance so crossing the doorway never visibly swings the camera
 const FOLLOW_EASE_RATE = 1.2; // 1/s
 const FOLLOW_MAX_DELTA_SQUARED = 0.0025;
 function CameraTargetRig({
@@ -200,15 +201,23 @@ function CameraTargetRig({
 
     // Inside the Projects Cloud the camera tightens up: shorter follow
     // distance and a spring arm that keeps it inside the gallery shell.
+    // insideMix is one continuous eased value (avatar/doorway-crossing state is
+    // the primary signal via insideRef — never the camera position itself, so
+    // there is no circular dependency) and ramps slowly enough that crossing
+    // the doorway reads as one continuous movement, not a mode switch.
     const inside = insideRef.current;
+    const insideTarget = inside ? 1 : 0;
     insideMix.current +=
-      ((inside ? 1 : 0) - insideMix.current) * (1 - Math.exp(-4 * Math.min(delta, 1 / 30)));
+      (insideTarget - insideMix.current) * (1 - Math.exp(-2.5 * Math.min(delta, 1 / 30)));
     const followDist =
       FOLLOW_DISTANCE + (FOLLOW_DISTANCE_INSIDE - FOLLOW_DISTANCE) * insideMix.current;
 
-    // Ease orbit distance to the follow distance while moving.
+    // Ease orbit distance to the follow distance while moving OR while the
+    // inside/outside transition is still ramping, so the distance changes
+    // smoothly through the doorway instead of snapping when the player stops.
     const moving = velRef.current.lengthSq() > FOLLOW_MAX_DELTA_SQUARED;
-    if (moving) {
+    const transitioning = Math.abs(insideMix.current - insideTarget) > 0.02;
+    if (moving || transitioning) {
       const cam = controls.object as THREE.Camera;
       camOffset.copy(cam.position).sub(controls.target);
       const dist = camOffset.length();
@@ -400,7 +409,7 @@ export const CloudWorld3D = ({ onExit }: CloudWorld3DProps) => {
         {/* Projects Cloud building — the giant enterable destination that
             replaced the old Mountain Passage. Exterior + interior shells;
             displays inside open the project CloudCard via onProjectClick. */}
-        <ProjectsCloud insideRef={avatarInsideRef} avatarPosRef={avatarPosRef} />
+        <ProjectsCloud insideRef={avatarInsideRef} avatarPosRef={avatarPosRef} controlsRef={controlsRef} />
         <ProjectsCloudInterior onProjectClick={(id) => setCardData({ kind: 'project', id })} />
 
         {/* Skill and project markers (interactive, click → overlay).
