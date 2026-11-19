@@ -1,0 +1,51 @@
+{
+  "inRockCount": 0,
+  "samples": 24,
+  "worst": null,
+  "shots": [
+    {
+      "step": 0,
+      "file": "qa-screenshots-vis001-orbit/orbit-step00.png",
+      "inRock": false,
+      "cam": {
+        "t": 29083.6,
+        "x": 3.2706857695528924,
+        "y": 1.9266133018659226,
+        "z": 126.83760446806833
+      }
+    },
+    {
+      "step": 6,
+      "file": "qa-screenshots-vis001-orbit/orbit-step06.png",
+      "inRock": false,
+      "cam": {
+        "t": 39583.3,
+        "x": 3.358547177110483,
+        "y": 1.9827131439368746,
+        "z": 127.53731704258786
+      }
+    },
+    {
+      "step": 12,
+      "file": "qa-screenshots-vis001-orbit/orbit-step12.png",
+      "inRock": false,
+      "cam": {
+        "t": 49682.9,
+        "x": 3.358692555787844,
+        "y": 2.0802343827889405,
+        "z": 127.53917843578171
+      }
+    },
+    {
+      "step": 18,
+      "file": "qa-screenshots-vis001-orbit/orbit-step18.png",
+      "inRock": false,
+      "cam": {
+        "t": 58982.5,
+        "x": 3.3082614230771803,
+        "y": 2.2289951375130213,
+        "z": 127.53265913925608
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "idle": {
+    "camDistBefore": 18,
+    "camDistAfter": 18,
+    "avatarDrift": {
+      "dx": 0,
+      "dy": 0,
+      "dz": 0
+    }
+  },
+  "camera": {
+    "zoomedOutDist": 23.27,
+    "duringTravel": [
+      22.23,
+      22.62,
+      22.93,
+      23.05,
+      23.07,
+      23.12,
+      23.05,
+      23.04
+    ],
+    "settledDist": 18.67
+  },
+  "movement": {
+    "zBefore": 66.35,
+    "zAfter": 90.9,
+    "moved": true
+  },
+  "errors": []
+}

@@ -1,0 +1,37 @@
+{
+  "shots": [
+    {
+      "name": "j0-spawn.png",
+      "z": 0
+    },
+    {
+      "name": "j1-valley.png",
+      "z": 7.2
+    },
+    {
+      "name": "j2-passage-entry.png",
+      "z": 15.1
+    },
+    {
+      "name": "j3-passage-mid.png",
+      "z": 22
+    },
+    {
+      "name": "j4-passage-deep.png",
+      "z": 29.9
+    },
+    {
+      "name": "j5-passage-exit.png",
+      "z": 38.9
+    },
+    {
+      "name": "j6-sunset-entry.png",
+      "z": 48.2
+    },
+    {
+      "name": "j7-sunset-rings.png",
+      "z": 54.8
+    }
+  ],
+  "errors": []
+}

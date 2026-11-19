@@ -1,0 +1,20 @@
+{
+  "overlay": {
+    "title": "Cloud World",
+    "bodyExists": true,
+    "skillLabelCount": 6,
+    "exitButton": true
+  },
+  "overlayAfterClick": {
+    "title": "Cloud World",
+    "bodySnippet": "Journey through Skills Valley → Mountain Passage → Projects SunsetWASD / Arrow K"
+  },
+  "escapeExit": {
+    "canvasGone": true,
+    "heroText": "Yash Mahajan — Data Analyst, Data Engineer and Cloud DevOps Engineer",
+    "url": ""
+  },
+  "errors": [
+    "Failed to execute 'removeChild' on 'Node': The node to be removed is not a child of this node."
+  ]
+}

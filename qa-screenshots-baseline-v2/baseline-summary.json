@@ -1,0 +1,22 @@
+{
+  "base": "http://[::1]:4173/#/cloud-world",
+  "move": {
+    "from": {
+      "x": -1.64,
+      "z": 0
+    },
+    "to": {
+      "x": -1.45,
+      "z": 1.99
+    },
+    "distIn1s": 2
+  },
+  "consoleIssues": [
+    "[warning] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead.",
+    "[warning] THREE.WebGLShadowMap: PCFSoftShadowMap has been removed. Using PCFShadowMap instead.",
+    "[warning] [.WebGL-0xeb402296400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[warning] [.WebGL-0xeb402296400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[warning] [.WebGL-0xeb402296400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels",
+    "[warning] [.WebGL-0xeb402296400]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no lon"
+  ]
+}

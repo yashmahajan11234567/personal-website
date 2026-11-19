@@ -1,0 +1,21 @@
+{
+  "results": [
+    {
+      "name": "forward-traversal",
+      "pass": true
+    },
+    {
+      "name": "reverse-traversal",
+      "pass": true
+    },
+    {
+      "name": "path-lock",
+      "pass": true
+    }
+  ],
+  "lock": {
+    "maxOff": 0.315,
+    "samples": 400
+  },
+  "errors": []
+}

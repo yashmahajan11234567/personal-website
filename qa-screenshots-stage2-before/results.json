@@ -1,0 +1,19 @@
+{
+  "phase": "before",
+  "perf": {
+    "calls": 84,
+    "tris": 338300
+  },
+  "fps": 1.5,
+  "movement": {
+    "z0": 0,
+    "z1": -2.64,
+    "advanced": -2.64
+  },
+  "idleDrift": {
+    "dx": -0.2683,
+    "dy": 0,
+    "dz": 0.2319
+  },
+  "errors": []
+}

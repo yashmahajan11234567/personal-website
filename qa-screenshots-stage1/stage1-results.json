@@ -1,0 +1,54 @@
+{
+  "mode": "headed",
+  "keys": {
+    "w": {
+      "holdMs": 1107,
+      "distHold": 7.51,
+      "distDecay": 1.2
+    },
+    "a": {
+      "holdMs": 1285,
+      "distHold": 8.96,
+      "distDecay": 1.31
+    },
+    "s": {
+      "holdMs": 1099,
+      "distHold": 7.38,
+      "distDecay": 1.2
+    },
+    "d": {
+      "holdMs": 1100,
+      "distHold": 7.4,
+      "distDecay": 1.31
+    }
+  },
+  "keysCheck": {
+    "wHoldPerSec": 6.78,
+    "aHoldPerSec": 6.97,
+    "sHoldPerSec": 6.72,
+    "dHoldPerSec": 6.73
+  },
+  "diagonal": {
+    "straightRate": 6.78,
+    "diagonalRate": 6.96,
+    "within10pct": true
+  },
+  "reversal": {
+    "crossedWithin0p6s": false,
+    "crossTimeS": 1.12,
+    "maxSpeed": 7.79,
+    "withinCap": true
+  },
+  "peakSpeed": {
+    "maxWindowDisplacementPer0p5s": 4.03,
+    "windowsOverCap": 0,
+    "target": "≤ 4.89u per 0.5s window, 0 windows over",
+    "pass": true
+  },
+  "idle": {
+    "drift": 0,
+    "driftY": 0,
+    "stable": true
+  },
+  "errors": []
+}
