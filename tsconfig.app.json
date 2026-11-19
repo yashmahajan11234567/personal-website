@@ -19,6 +19,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
-  "exclude": ["src/cloud-world-25d-v2/**/*"]
+  "include": ["src"]
 }
