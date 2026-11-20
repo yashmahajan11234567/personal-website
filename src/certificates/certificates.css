@@ -21,7 +21,8 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .certs-section {
+  .certs-section,
+  .certs-lightbox {
     --certs-card-bg: #1f2028;
     --certs-stage: #26272e;
     --certs-border: #2e303a;
