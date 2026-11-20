@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { CinematicHero } from './components/Hero';
 import { WorldShell } from './components/WorldShell';
+import { CertificatesSection } from './certificates/CertificatesSection';
 import { destroyActiveTimeline } from './cinematic/timeline/activeTimeline';
 import { useGameStore } from './store/gameStore';
 import type { Path } from './store/gameStore';
@@ -264,6 +265,9 @@ function App() {
             <Suspense fallback={<div className="experience-loading" aria-hidden="true" />}>
               <ExperienceSection />
             </Suspense>
+            {/* Certificates & Achievements carousel — page-flow section after
+                Experience; world routes above are untouched. No heading by design. */}
+            <CertificatesSection />
           </>
         )}
         {currentWorld === 'data-world' && (
