@@ -32,6 +32,7 @@ const ExperienceSection = lazy(() =>
 const HASH_WORLDS = {
   '#/data-world': 'data-world',
   '#/cloud-world': 'cloud-world',
+  '#/activity-tower': 'activity-tower',
 } as const;
 
 type HashWorld = (typeof HASH_WORLDS)[keyof typeof HASH_WORLDS];
@@ -51,6 +52,13 @@ function worldForHash(hash: string): HashWorld | 'hero' {
 function isInPageAnchor(hash: string): boolean {
   return hash !== '' && !hash.startsWith('#/');
 }
+
+/*
+ * Activity Tower — 3D GitHub Activity Visualization (R3F, code-split).
+ */
+const ActivityTower = lazy(() =>
+  import('./activity-tower').then((m) => ({ default: m.ActivityTower })),
+);
 
 function App() {
   const currentWorld = useGameStore((s) => s.currentWorld);
@@ -259,6 +267,11 @@ function App() {
             fallback={<div className="cloud-world-loading" aria-hidden="true" />}
           >
             <CloudWorld3D key="cloud-world" onExit={returnToHero} />
+          </Suspense>
+        )}
+        {currentWorld === 'activity-tower' && (
+          <Suspense fallback={<div className="tower-loading" aria-hidden="true" />}>
+            <ActivityTower key="activity-tower" onExit={returnToHero} />
           </Suspense>
         )}
       </main>
